@@ -73,7 +73,7 @@ func GetVMInfo(vmname string) (GetVMResult, error) {
 		return GetVMResult{}, err
 	}
 	if rcode != 0 {
-		return GetVMResult{}, fmt.Errorf("GetVMInfo script failed, returncode %g: %q", rcode, rerr)
+		return GetVMResult{}, fmt.Errorf("GetVMInfo script failed, returncode %d: %q", rcode, rerr)
 	}
 
 	var res GetVMResult
@@ -113,7 +113,7 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
 		return ReconcileVMResult{}, err
 	}
 	if rcode != 0 {
-		return ReconcileVMResult{}, fmt.Errorf("ReconcileVM script failed, returncode %g: %q", rcode, rerr)
+		return ReconcileVMResult{}, fmt.Errorf("ReconcileVM script failed, returncode %d: %q", rcode, rerr)
 	}
 
 	var res ReconcileVMResult
