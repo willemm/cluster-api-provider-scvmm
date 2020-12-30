@@ -28,9 +28,10 @@ type ScvmmMachineSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	ProviderID string `json:"providerID"`
+	Cloud      string `json:"cloud"`
 	VMName     string `json:"vmName"`
 	DiskSize   string `json:"diskSize"`
-	CPUs       string `json:"cpus"`
+	CPUCount   string `json:"cpuCount"`
 	Memory     string `json:"memory"`
 	VMNetwork  string `json:"vmNetwork"`
 }
@@ -41,6 +42,7 @@ type ScvmmMachineStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Ready          bool   `json:"ready"`
 	VMHost         string `json:"vmHost,omitempty"`
+	VMStatus       string `json:"vmStatus,omitempty"`
 	FailureReason  string `json:"failureReason,omitempty"`
 	FailureMessage string `json:"failureMessage,omitempty"`
 }
