@@ -22,11 +22,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 
         "io/ioutil"
         "encoding/json"
+	"github.com/masterzen/winrm"
+	"fmt"
+	"os"
 )
 
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
@@ -34,15 +38,15 @@ type ScvmmMachineReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+}
+
+var (
 	ScvmmHost string
 	ScvmmExecHost string
 	ScvmmUsername string
 	ScvmmPassword string
         ScriptDir string
-}
-
-var (
-        functionScript string
+        FunctionScript string
 )
 
 type GetVMResult struct {
@@ -54,7 +58,7 @@ type GetVMResult struct {
   VirtualNetwork string
 }
 
-func GetVMInfo(vmname string) (GetVMResult, error) {
+func GetVMInfo(vmname string) (*GetVMResult, error) {
   endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
   params := winrm.DefaultParameters
   params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
@@ -63,12 +67,12 @@ func GetVMInfo(vmname string) (GetVMResult, error) {
   if err != nil {
     return nil,err
   }
-  rout, rerr, rcode, err := client.RunPSWithString(functionScript+"GetVM "+vmname, "")
+  rout, rerr, rcode, err := client.RunPSWithString(FunctionScript+"GetVM "+vmname, "")
   if err != nil {
     return nil,err
   }
   if rcode != 0 {
-    return nil,"Returncode not 0"
+    return nil,fmt.Errorf("GetVMInfo script failed, returncode %g: %s", rcode, rerr)
   }
 
   var res GetVMResult
@@ -76,7 +80,7 @@ func GetVMInfo(vmname string) (GetVMResult, error) {
   if err != nil {
     return nil,err
   }
-  return res,nil
+  return &res,nil
 }
 
 type ReconcileVMResult struct {
@@ -88,7 +92,7 @@ type ReconcileVMResult struct {
   VirtualNetwork string
 }
 
-func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string, memory string, cpucount string) (ReconcileVMResult, error) {
+func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string, memory string, cpucount string) (*ReconcileVMResult, error) {
   endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
   params := winrm.DefaultParameters
   params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
@@ -97,7 +101,7 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
   if err != nil {
     return nil,err
   }
-  rout, rerr, rcode, err := client.RunPSWithString(functionScript+
+  rout, rerr, rcode, err := client.RunPSWithString(FunctionScript+
     "ReconcileVM -Cloud '"+cloud+
     "' -VMName '"+vmname+
     "' -Memory '"+memory+
@@ -108,7 +112,7 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
     return nil,err
   }
   if rcode != 0 {
-    return nil,"Returncode not 0"
+    return nil,fmt.Errorf("ReconcileVM script failed, returncode %g: %s", rcode, rerr)
   }
 
   var res ReconcileVMResult
@@ -116,14 +120,14 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
   if err != nil {
     return nil,err
   }
-  return res,nil
+  return &res,nil
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines/status,verbs=get;update;patch
 
 func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	ctx := context.Background()
 	_ = r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
 	var scMachine infrastructurev1alpha1.ScvmmMachine
@@ -138,9 +142,23 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
-func (
-
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ScvmmHost := os.Getenv("SCVMM_HOST")
+	if ScvmmHost == "" {
+		return fmt.Errorf("missing required env SCVMM_HOST")
+	}
+	ScvmmExecHost := os.Getenv("SCVMM_EXECHOST")
+	ScriptDir := os.Getenv("SCRIPT_DIR")
+
+	ScvmmUsername := os.Getenv("SCVMM_USERNAME")
+	if ScvmmUsername == "" {
+		return fmt.Errorf("missing required env SCVMM_USERNAME")
+	}
+	ScvmmPassword := os.Getenv("SCVMM_PASSWORD")
+	if ScvmmPassword == "" {
+		return fmt.Errorf("missing required env SCVMM_PASSWORD")
+	}
+
         initScript := ""
         if ScvmmExecHost != "" {
           data, err := ioutil.ReadFile(ScriptDir+"/init.ps1")
@@ -161,11 +179,11 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
         } else {
           ScvmmExecHost = ScvmmHost
         }
-        data, err = ioutil.ReadFile(ScriptDir+"/functions.ps1")
+	data, err := ioutil.ReadFile(ScriptDir+"/functions.ps1")
         if err != nil {
           return err
         }
-        functionScript = initScript + string(data)
+        FunctionScript = initScript + string(data)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrastructurev1alpha1.ScvmmMachine{}).
 		Complete(r)
