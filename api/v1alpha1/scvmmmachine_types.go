@@ -27,14 +27,22 @@ type ScvmmMachineSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ScvmmMachine. Edit ScvmmMachine_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	ProviderID string `json:"providerID"`
+	VMName     string `json:"vmName"`
+	DiskSize   string `json:"diskSize"`
+	CPUs       string `json:"cpus"`
+	Memory     string `json:"memory"`
+	VMNetwork  string `json:"vmNetwork"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
 type ScvmmMachineStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Ready          bool   `json:"ready"`
+	VMHost         string `json:"vmHost,omitempty"`
+	FailureReason  string `json:"failureReason,omitempty"`
+	FailureMessage string `json:"failureMessage,omitempty"`
 }
 
 // +kubebuilder:subresource:status
