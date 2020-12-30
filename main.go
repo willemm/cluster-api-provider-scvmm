@@ -69,6 +69,9 @@ func main() {
 		setupLog.Info("missing required env SCVMM_HOST")
 		os.Exit(1)
 	}
+	scvmmHost := os.Getenv("SCVMM_EXECHOST")
+	scriptDir := os.Getenv("SCRIPT_DIR")
+
 	scvmmUsername := os.Getenv("SCVMM_USERNAME")
 	if vmmUsername == "" {
 		setupLog.Info("missing required env SCVMM_USERNAME")
@@ -85,8 +88,10 @@ func main() {
 		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmMachine"),
 		Scheme: mgr.GetScheme(),
 		ScvmmHost: scvmmHost,
+		ScvmmExecHost: scvmmExecHost,
 		ScvmmUsername: scvmmUsername,
 		ScvmmPassword: scvmmPassword,
+                ScriptDir: scriptDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmMachine")
 		os.Exit(1)
