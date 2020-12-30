@@ -10,11 +10,11 @@ function CreateVM($cloud, $vmname, $memory, $cpucount, $disksize, $vmnetwork) {
   $JobGroupID = [GUID]::NewGuid().ToString()
   New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ([int]$disksize * 1024) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem
 
-  $HardwareProfile = Get-SCHardwareProfile | where {$_.Name -eq "Server Gen 2 - Medium" }
-  $LinuxOS = Get-SCOperatingSystem | where {$_.name -eq 'Other Linux (64 bit)'}
+  $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
+  $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
 
   $VMNetwork = Get-SCVMNetwork -Name $vmnetwork
-  $VMSubnet = $VMNetwork.VMSubnet
+  $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
   Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
   $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $template -Name $vmname -VMHostGroup 'SO'
