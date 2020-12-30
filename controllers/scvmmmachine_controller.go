@@ -31,6 +31,9 @@ type ScvmmMachineReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	ScvmmHost string
+	ScvmmUsername string
+	ScvmmPassword string
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines,verbs=get;list;watch;create;update;patch;delete
@@ -40,6 +43,13 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	_ = context.Background()
 	_ = r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
+	var scMachine infrastructurev1alpha1.ScvmmMachine
+	if err := r.Get(ctx, req.NamespacedName, &scMachine); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
 	// your logic here
 
 	return ctrl.Result{}, nil

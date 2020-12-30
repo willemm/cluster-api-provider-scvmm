@@ -64,10 +64,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	scvmmHost := os.Getenv("SCVMM_HOST")
+	if vmmHost == "" {
+		setupLog.Info("missing required env SCVMM_HOST")
+		os.Exit(1)
+	}
+	scvmmUsername := os.Getenv("SCVMM_USERNAME")
+	if vmmUsername == "" {
+		setupLog.Info("missing required env SCVMM_USERNAME")
+		os.Exit(1)
+	}
+	scvmmPassword := os.Getenv("SCVMM_PASSWORD")
+	if vmmPassword == "" {
+		setupLog.Info("missing required env SCVMM_PASSWORD")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.ScvmmMachineReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmMachine"),
 		Scheme: mgr.GetScheme(),
+		ScvmmHost: scvmmHost,
+		ScvmmUsername: scvmmUsername,
+		ScvmmPassword: scvmmPassword,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmMachine")
 		os.Exit(1)
