@@ -13,11 +13,13 @@ function CreateVM($cloud, $vmname, $memory, $cpucount, $disksize, $vmnetwork) {
   $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
   $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
 
+  $VMTemplate = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
+
   $VMNetwork = Get-SCVMNetwork -Name $vmnetwork
   $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
   Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
-  $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $template -Name $vmname -VMHostGroup 'SO'
+  $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplate -Name $vmname -VMHostGroup 'SO'
   $SCCloud = Get-SCCloud -Name $cloud
   New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "SaveVM" -DynamicMemoryEnabled $false -MemoryMB [int]$memory -CPUCount [int]$cpucount -ReturnImmediately
 
