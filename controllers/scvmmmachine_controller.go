@@ -57,6 +57,7 @@ type GetVMResult struct {
 	Memory         int
 	CpuCount       int
 	VirtualNetwork string
+	Errors	       string
 }
 
 func GetVMInfo(vmname string) (GetVMResult, error) {
@@ -81,6 +82,7 @@ func GetVMInfo(vmname string) (GetVMResult, error) {
 	if err != nil {
 		return GetVMResult{}, err
 	}
+	res.Errors = rerr
 	return res, nil
 }
 
@@ -91,6 +93,7 @@ type ReconcileVMResult struct {
 	Memory         int
 	CpuCount       int
 	VirtualNetwork string
+	Errors	       string
 }
 
 func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string, memory string, cpucount string) (ReconcileVMResult, error) {
@@ -121,6 +124,7 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
 	if err != nil {
 		return ReconcileVMResult{}, err
 	}
+	res.Errors = rerr
 	return res, nil
 }
 
@@ -150,6 +154,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 	scMachine.Status.Ready = true
 	scMachine.Status.VMStatus = vm.Status
+	scMachine.Status.FailureMessage = vm.Errors
 	if err := helper.Patch(ctx, &scMachine); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -158,18 +163,18 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 }
 
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	ScvmmHost := os.Getenv("SCVMM_HOST")
+	ScvmmHost = os.Getenv("SCVMM_HOST")
 	if ScvmmHost == "" {
 		return fmt.Errorf("missing required env SCVMM_HOST")
 	}
-	ScvmmExecHost := os.Getenv("SCVMM_EXECHOST")
-	ScriptDir := os.Getenv("SCRIPT_DIR")
+	ScvmmExecHost = os.Getenv("SCVMM_EXECHOST")
+	ScriptDir = os.Getenv("SCRIPT_DIR")
 
-	ScvmmUsername := os.Getenv("SCVMM_USERNAME")
+	ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	if ScvmmUsername == "" {
 		return fmt.Errorf("missing required env SCVMM_USERNAME")
 	}
-	ScvmmPassword := os.Getenv("SCVMM_PASSWORD")
+	ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
 	if ScvmmPassword == "" {
 		return fmt.Errorf("missing required env SCVMM_PASSWORD")
 	}
