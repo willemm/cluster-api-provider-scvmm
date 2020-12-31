@@ -8,6 +8,15 @@ metadata:
   creationTimestamp: null
   name: scvmmmachines.infrastructure.cluster.x-k8s.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.vmStatus
+    description: Virtual Machine Status
+    name: STATUS
+    type: string
+  - JSONPath: .status.biosGuid
+    description: Virtual Machine BIS GUID
+    name: GUID
+    type: string
   group: infrastructure.cluster.x-k8s.io
   names:
     kind: ScvmmMachine

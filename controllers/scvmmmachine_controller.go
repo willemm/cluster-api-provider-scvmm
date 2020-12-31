@@ -31,6 +31,7 @@ import (
 	"github.com/masterzen/winrm"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
@@ -195,8 +196,9 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if err := helper.Patch(ctx, scMachine); err != nil {
 			return ctrl.Result{}, err
 		}
-
-		return ctrl.Result{}, nil
+		if vm.Status != "Running" {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
 	} else {
 		// We are being deleted
 		if containsString(scMachine.ObjectMeta.Finalizers, finalizerName) {
@@ -214,6 +216,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					log.Error(err, "Failed to remove finalizer")
 					return ctrl.Result{}, err
 				}
+				return ctrl.Result{}, nil
 			} else {
 				scMachine.Status.VMStatus = vm.Status
 				scMachine.Status.CreationTime = vm.CreationTime
@@ -230,11 +233,11 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					log.Error(err, "Failed to update status")
 					return ctrl.Result{}, err
 				}
+				return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 			}
-
 		}
-		return ctrl.Result{}, nil
 	}
+	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
 }
 
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
