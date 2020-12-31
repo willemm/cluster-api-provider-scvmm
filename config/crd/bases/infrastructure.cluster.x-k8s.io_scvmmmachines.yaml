@@ -70,7 +70,6 @@ spec:
           - cpuCount
           - diskSize
           - memory
-          - providerID
           - vmName
           - vmNetwork
           type: object
@@ -99,7 +98,6 @@ spec:
               description: Status string as given by SCVMM
               type: string
           required:
-          - biosGuid
           - ready
           type: object
       type: object

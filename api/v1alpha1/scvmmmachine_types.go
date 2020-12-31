@@ -26,7 +26,7 @@ import (
 
 type ScvmmMachineSpec struct {
 	// ProviderID is scvmm plus bios-guid
-	ProviderID string `json:"providerID"`
+	ProviderID string `json:"providerID,omitempty"`
 	// VMM cloud to run VM on
 	Cloud string `json:"cloud"`
 	// Name of the VM
@@ -48,7 +48,7 @@ type ScvmmMachineStatus struct {
 	// Status string as given by SCVMM
 	VMStatus string `json:"vmStatus,omitempty"`
 	// BiosGuid as reposted by SVCMM
-	BiosGuid string `json:"biosGuid"`
+	BiosGuid string `json:"biosGuid,omitempty"`
 	// Reason for failures
 	FailureReason string `json:"failureReason,omitempty"`
 	// Description of failure

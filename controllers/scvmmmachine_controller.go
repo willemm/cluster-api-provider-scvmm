@@ -74,7 +74,7 @@ func GetVMInfo(vmname string) (VMResult, error) {
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString(FunctionScript+"GetVM "+vmname, "")
+	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+"GetVM "+vmname)
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -100,13 +100,13 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString(FunctionScript+
+	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+
 		"ReconcileVM -Cloud '"+cloud+
 		"' -VMName '"+vmname+
 		"' -Memory '"+memory+
 		"' -CPUCount '"+cpucount+
 		"' -DiskSize '"+disksize+
-		"' -VMNetwork '"+vmnetwork+"'", "")
+		"' -VMNetwork '"+vmnetwork+"'")
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -132,8 +132,8 @@ func RemoveVM(vmname string) (VMResult, error) {
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString(FunctionScript+
-		"RemoveVM -VMName '"+vmname, "")
+	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+
+		"RemoveVM -VMName '"+vmname)
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -157,8 +157,8 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	ctx := context.Background()
 	log := r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
-	var scMachine *infrastructurev1alpha1.ScvmmMachine
-	if err := r.Get(ctx, req.NamespacedName, scMachine); err != nil {
+	var scMachine infrastructurev1alpha1.ScvmmMachine
+	if err := r.Get(ctx, req.NamespacedName, &scMachine); err != nil {
 		log.Error(err, "unable to fetch ScvmmMachine")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -167,7 +167,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if !containsString(scMachine.ObjectMeta.Finalizers, finalizerName) {
 			log.Info("Adding finalizer to ScvmmMachine")
 			scMachine.ObjectMeta.Finalizers = append(scMachine.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(ctx, scMachine); err != nil {
+			if err := r.Update(ctx, &scMachine); err != nil {
 				log.Error(err, "Failed to add finalizer")
 				return ctrl.Result{}, err
 			}
@@ -178,7 +178,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, err
 		}
 
-		helper, err := patch.NewHelper(scMachine, r.Client)
+		helper, err := patch.NewHelper(&scMachine, r.Client)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -193,7 +193,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			scMachine.Status.FailureReason = vm.Message
 			scMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
 		}
-		if err := helper.Patch(ctx, scMachine); err != nil {
+		if err := helper.Patch(ctx, &scMachine); err != nil {
 			return ctrl.Result{}, err
 		}
 		if vm.Status != "Running" {
@@ -212,7 +212,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			if vm.Message == "Removed" {
 				scMachine.Status.FailureReason = vm.Message
 				scMachine.ObjectMeta.Finalizers = removeString(scMachine.ObjectMeta.Finalizers, finalizerName)
-				if err := r.Update(ctx, scMachine); err != nil {
+				if err := r.Update(ctx, &scMachine); err != nil {
 					log.Error(err, "Failed to remove finalizer")
 					return ctrl.Result{}, err
 				}
@@ -225,11 +225,11 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					scMachine.Status.FailureReason = vm.Message
 					scMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
 				}
-				helper, err := patch.NewHelper(scMachine, r.Client)
+				helper, err := patch.NewHelper(&scMachine, r.Client)
 				if err != nil {
 					return ctrl.Result{}, err
 				}
-				if err := helper.Patch(ctx, scMachine); err != nil {
+				if err := helper.Patch(ctx, &scMachine); err != nil {
 					log.Error(err, "Failed to update status")
 					return ctrl.Result{}, err
 				}
