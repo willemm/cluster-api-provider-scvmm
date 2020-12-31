@@ -23,28 +23,40 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ScvmmMachineSpec defines the desired state of ScvmmMachine
-type ScvmmMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 
+type ScvmmMachineSpec struct {
+	// ProviderID is scvmm plus bios-guid
 	ProviderID string `json:"providerID"`
-	Cloud      string `json:"cloud"`
-	VMName     string `json:"vmName"`
-	DiskSize   string `json:"diskSize"`
-	CPUCount   string `json:"cpuCount"`
-	Memory     string `json:"memory"`
-	VMNetwork  string `json:"vmNetwork"`
+	// VMM cloud to run VM on
+	Cloud string `json:"cloud"`
+	// Name of the VM
+	VMName string `json:"vmName"`
+	// Disk size in gigabytes
+	DiskSize string `json:"diskSize"`
+	// Number of CPU's
+	CPUCount string `json:"cpuCount"`
+	// Memory in Megabytes
+	Memory string `json:"memory"`
+	// Virtual Network identifier
+	VMNetwork string `json:"vmNetwork"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
 type ScvmmMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Ready          bool   `json:"ready"`
-	VMHost         string `json:"vmHost,omitempty"`
-	VMStatus       string `json:"vmStatus,omitempty"`
-	FailureReason  string `json:"failureReason,omitempty"`
+	// Mandatory field, is machine ready
+	Ready bool `json:"ready"`
+	// Status string as given by SCVMM
+	VMStatus string `json:"vmStatus,omitempty"`
+	// BiosGuid as reposted by SVCMM
+	BiosGuid string `json:"biosGuid"`
+	// Reason for failures
+	FailureReason string `json:"failureReason,omitempty"`
+	// Description of failure
 	FailureMessage string `json:"failureMessage,omitempty"`
+	// Creation as given by SCVMM
+	CreationTime string `json:"creationTime,omitempty"`
+	// Modification as given by SCVMM
+	ModifiedTime string `json:"modifiedTime,omitempty"`
 }
 
 // +kubebuilder:subresource:status

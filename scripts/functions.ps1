@@ -1,9 +1,29 @@
-function VMToJson($vm) {
-  $vm | %{ @{Cloud = $_.Cloud.Name; Name = $_.Name; Status = "$($_.Status)"; Memory = $_.Memory; CpuCount = $_.CpuCount; VirtualNetwork = $_.VirtualNetworkAdapters.VMNetwork.Name } } | convertto-json
+function VMToJson($vm, $message = "") {
+  @{
+    Cloud = $vm.Cloud.Name
+    Name = $vm.Name
+    Status = "$($vm.Status)"
+    Memory = $vm.Memory
+    CpuCount = $vm.CpuCount
+    VirtualNetwork = $vm.VirtualNetworkAdapters.VMNetwork.Name
+    Guid = $vm.BiosGuid
+    CreationTime = $vm.CreationTime
+    ModifiedTime = $vm.ModifiedTime
+    Message = $message
+  } | convertto-json
 }
 
-function GetVM($vmname) {
-  VMToJson((Get-SCVirtualMachine -Name $vmname))
+function ErrorToJson($what,$err) {
+  @{
+    Message = "$($what) Failed: $($err.Exception.Message)"
+    Error = "$($err.Exception)"
+  } | convertto-json
+}
+
+function MessageToJson($message) {
+  @{
+    Message = "$($message)"
+  } | convertto-json
 }
 
 function CreateVM($cloud, $vmname, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork) {
@@ -26,10 +46,63 @@ function CreateVM($cloud, $vmname, [int]$memory, [int]$cpucount, [int]$disksize,
   Get-SCVirtualMachine -name $vmname
 }
 
-function ReconcileVM($cloud, $vmname, $memory, $cpucount, $disksize, $vmnetwork) {
-  $vm = Get-SCVirtualMachine -Name $vmname
-  if (-not $vm) {
-    $vm = CreateVM -cloud $cloud -vmname $vmname -memory $memory -cpucount $cpucount -disksize $disksize -vmnetwork $vmnetwork
+function GetVM($vmname) {
+  try {
+    VMToJson((Get-SCVirtualMachine -Name $vmname))
+  } catch {
+    ErrorToJson('Get VM',$_)
   }
-  VMToJson($vm)
+}
+
+function ReconcileVM($cloud, $vmname, $memory, $cpucount, $disksize, $vmnetwork) {
+  try {
+    $vm = Get-SCVirtualMachine -Name $vmname
+    if (-not $vm) {
+      $vm = CreateVM -cloud $cloud -vmname $vmname -memory $memory -cpucount $cpucount -disksize $disksize -vmnetwork $vmnetwork
+      return VMToJson($vm, "Creating")
+    }
+    if ($vm.Status -eq "PowerOff") {
+      $vm = Start-SCVirtualMachine -VM $vm
+      return VMToJson($vm, "Starting")
+    }
+    return VMToJson($vm)
+  } catch {
+    ErrorToJson('Reconcile VM', $_)
+  }
+}
+
+function RemoveVM($vmname) {
+  try {
+    $vm = Get-SCVirtualMachine $vmname
+    if (-not $vm) {
+      return (@{ Message = "Removed" } | convertto-json)
+    }
+    if ($vm.Status -eq 'PowerOff') {
+      $vm = Remove-SCVirtualMachine $vmname
+      VMToJson($vm, "Removing")
+    } else {
+      $vm = Stop-SCVirtualmachine $vm
+      VMToJson($vm, "Stopping")
+    }
+  } catch {
+    ErrorToJson('Remove VM', $_)
+  }
+}
+
+function StartVM($vmname) {
+  try {
+    $vm = Start-SCVirtualMachine $vmname
+    VMToJson($vm, "Started")
+  } catch {
+    ErrorToJson('Start VM', $_)
+  }
+}
+
+function StopVM($vmname) {
+  try {
+    $vm = Stop-SCVirtualMachine $vmname
+    VMToJson($vm, "Stopped")
+  } catch {
+    ErrorToJson('Stop VM', $_)
+  }
 }

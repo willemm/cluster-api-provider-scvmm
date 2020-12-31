@@ -34,21 +34,27 @@ spec:
         metadata:
           type: object
         spec:
-          description: ScvmmMachineSpec defines the desired state of ScvmmMachine
           properties:
             cloud:
+              description: VMM cloud to run VM on
               type: string
             cpuCount:
+              description: Number of CPU's
               type: string
             diskSize:
+              description: Disk size in gigabytes
               type: string
             memory:
+              description: Memory in Megabytes
               type: string
             providerID:
+              description: ProviderID is scvmm plus bios-guid
               type: string
             vmName:
+              description: Name of the VM
               type: string
             vmNetwork:
+              description: Virtual Network identifier
               type: string
           required:
           - cloud
@@ -62,20 +68,29 @@ spec:
         status:
           description: ScvmmMachineStatus defines the observed state of ScvmmMachine
           properties:
+            biosGuid:
+              description: BiosGuid as reposted by SVCMM
+              type: string
+            creationTime:
+              description: Creation as given by SCVMM
+              type: string
             failureMessage:
+              description: Description of failure
               type: string
             failureReason:
+              description: Reason for failures
+              type: string
+            modifiedTime:
+              description: Modification as given by SCVMM
               type: string
             ready:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
+              description: Mandatory field, is machine ready
               type: boolean
-            vmHost:
-              type: string
             vmStatus:
+              description: Status string as given by SCVMM
               type: string
           required:
+          - biosGuid
           - ready
           type: object
       type: object
