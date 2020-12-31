@@ -108,7 +108,7 @@ func RemoveVM(vmname string) (VMResult, error) {
 		return VMResult{}, err
 	}
 	rout, rerr, rcode, err := client.RunPSWithString(RemoveScript+
-		"RemoveVM -VMName '"+vmname, "")
+		"RemoveVM -VMName '"+vmname+"'", "")
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -134,7 +134,6 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	var scMachine infrastructurev1alpha1.ScvmmMachine
 	if err := r.Get(ctx, req.NamespacedName, &scMachine); err != nil {
-		log.Error(err, "unable to fetch ScvmmMachine")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	finalizerName := "scvmmmachines.finalizers.cluster.x-k8s.io"
