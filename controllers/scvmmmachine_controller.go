@@ -42,12 +42,13 @@ type ScvmmMachineReconciler struct {
 }
 
 var (
-	ScvmmHost      string
-	ScvmmExecHost  string
-	ScvmmUsername  string
-	ScvmmPassword  string
-	ScriptDir      string
-	FunctionScript string
+	ScvmmHost       string
+	ScvmmExecHost   string
+	ScvmmUsername   string
+	ScvmmPassword   string
+	ScriptDir       string
+	ReconcileScript string
+	RemoveScript    string
 )
 
 type VMResult struct {
@@ -65,32 +66,6 @@ type VMResult struct {
 	ModifiedTime   string
 }
 
-func GetVMInfo(vmname string) (VMResult, error) {
-	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
-	params := winrm.DefaultParameters
-	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-
-	client, err := winrm.NewClientWithParameters(endpoint, ScvmmUsername, ScvmmPassword, params)
-	if err != nil {
-		return VMResult{}, err
-	}
-	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+"GetVM "+vmname)
-	if err != nil {
-		return VMResult{}, err
-	}
-	if rcode != 0 {
-		return VMResult{}, fmt.Errorf("GetVMInfo script failed, returncode %d: %q", rcode, rerr)
-	}
-
-	var res VMResult
-	err = json.Unmarshal([]byte(rout), &res)
-	if err != nil {
-		return VMResult{}, err
-	}
-	res.ScriptErrors = rerr
-	return res, nil
-}
-
 func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string, memory string, cpucount string) (VMResult, error) {
 	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
@@ -100,13 +75,13 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+
+	rout, rerr, rcode, err := client.RunPSWithString(ReconcileScript+
 		"ReconcileVM -Cloud '"+cloud+
 		"' -VMName '"+vmname+
 		"' -Memory '"+memory+
 		"' -CPUCount '"+cpucount+
 		"' -DiskSize '"+disksize+
-		"' -VMNetwork '"+vmnetwork+"'")
+		"' -VMNetwork '"+vmnetwork+"'", "")
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -132,8 +107,8 @@ func RemoveVM(vmname string) (VMResult, error) {
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString("$Input|Invoke-Expression", FunctionScript+
-		"RemoveVM -VMName '"+vmname)
+	rout, rerr, rcode, err := client.RunPSWithString(RemoveScript+
+		"RemoveVM -VMName '"+vmname, "")
 	if err != nil {
 		return VMResult{}, err
 	}
@@ -281,7 +256,19 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	FunctionScript = initScript + string(data)
+	initScript = initScript + string(data)
+
+	data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
+	if err != nil {
+		return err
+	}
+	ReconcileScript = initScript + string(data)
+
+	data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
+	if err != nil {
+		return err
+	}
+	RemoveScript = initScript + string(data)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrastructurev1alpha1.ScvmmMachine{}).
 		Complete(r)
