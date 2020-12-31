@@ -97,8 +97,6 @@ spec:
             vmStatus:
               description: Status string as given by SCVMM
               type: string
-          required:
-          - ready
           type: object
       type: object
   version: v1alpha1

@@ -44,7 +44,7 @@ type ScvmmMachineSpec struct {
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
 type ScvmmMachineStatus struct {
 	// Mandatory field, is machine ready
-	Ready bool `json:"ready"`
+	Ready bool `json:"ready,omitempty"`
 	// Status string as given by SCVMM
 	VMStatus string `json:"vmStatus,omitempty"`
 	// BiosGuid as reposted by SVCMM
