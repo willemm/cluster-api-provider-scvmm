@@ -7,8 +7,8 @@ function VMToJson($vm, $message = "") {
     CpuCount = $vm.CpuCount
     VirtualNetwork = $vm.VirtualNetworkAdapters.VMNetwork.Name
     Guid = $vm.BiosGuid
-    CreationTime = $vm.CreationTime
-    ModifiedTime = $vm.ModifiedTime
+    CreationTime = $vm.CreationTime.ToString('o')
+    ModifiedTime = $vm.ModifiedTime.ToString('o')
     Message = $message
   } | convertto-json
 }
