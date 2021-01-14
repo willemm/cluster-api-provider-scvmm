@@ -16,6 +16,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,11 +33,11 @@ type ScvmmMachineSpec struct {
 	// Name of the VM
 	VMName string `json:"vmName"`
 	// Disk size in gigabytes
-	DiskSize string `json:"diskSize"`
+	DiskSize resource.Quantity `json:"diskSize"`
 	// Number of CPU's
-	CPUCount string `json:"cpuCount"`
+	CPUCount int `json:"cpuCount"`
 	// Memory in Megabytes
-	Memory string `json:"memory"`
+	Memory resource.Quantity `json:"memory"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
 }
@@ -54,9 +55,9 @@ type ScvmmMachineStatus struct {
 	// Description of failure
 	FailureMessage string `json:"failureMessage,omitempty"`
 	// Creation as given by SCVMM
-	CreationTime string `json:"creationTime,omitempty"`
+	CreationTime metav1.Time `json:"creationTime,omitempty"`
 	// Modification as given by SCVMM
-	ModifiedTime string `json:"modifiedTime,omitempty"`
+	ModifiedTime metav1.Time `json:"modifiedTime,omitempty"`
 }
 
 // +kubebuilder:subresource:status

@@ -49,7 +49,7 @@ spec:
               type: string
             cpuCount:
               description: Number of CPU's
-              type: string
+              type: integer
             diskSize:
               description: Disk size in gigabytes
               type: string
@@ -81,6 +81,7 @@ spec:
               type: string
             creationTime:
               description: Creation as given by SCVMM
+              format: date-time
               type: string
             failureMessage:
               description: Description of failure
@@ -90,6 +91,7 @@ spec:
               type: string
             modifiedTime:
               description: Modification as given by SCVMM
+              format: date-time
               type: string
             ready:
               description: Mandatory field, is machine ready

@@ -25,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"encoding/json"
 	"fmt"
@@ -62,11 +64,11 @@ type VMResult struct {
 	Error          string
 	ScriptErrors   string
 	Message        string
-	CreationTime   string
-	ModifiedTime   string
+	CreationTime   metav1.Time
+	ModifiedTime   metav1.Time
 }
 
-func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string, memory string, cpucount string) (VMResult, error) {
+func ReconcileVM(cloud string, vmname string, disksize resource.Quantity, vmnetwork string, memory resource.Quantity, cpucount int) (VMResult, error) {
 	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
@@ -78,9 +80,9 @@ func ReconcileVM(cloud string, vmname string, disksize string, vmnetwork string,
 	rout, rerr, rcode, err := client.RunPSWithString(ReconcileScript+
 		"ReconcileVM -Cloud '"+cloud+
 		"' -VMName '"+vmname+
-		"' -Memory '"+memory+
-		"' -CPUCount '"+cpucount+
-		"' -DiskSize '"+disksize+
+		"' -Memory '"+string(memory.Value()/1024/1024)+
+		"' -CPUCount '"+string(cpucount)+
+		"' -DiskSize '"+string(disksize.Value()/1024/1024)+
 		"' -VMNetwork '"+vmnetwork+"'", "")
 	if err != nil {
 		return VMResult{}, err
