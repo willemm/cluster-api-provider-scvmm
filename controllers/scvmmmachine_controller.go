@@ -77,13 +77,11 @@ func ReconcileVM(cloud string, vmname string, disksize resource.Quantity, vmnetw
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString(ReconcileScript+
-		"ReconcileVM -Cloud '"+cloud+
-		"' -VMName '"+vmname+
-		"' -Memory '"+string(memory.Value()/1024/1024)+
-		"' -CPUCount '"+string(cpucount)+
-		"' -DiskSize '"+string(disksize.Value()/1024/1024)+
-		"' -VMNetwork '"+vmnetwork+"'", "")
+	rout, rerr, rcode, err := client.RunPSWithString(ReconcileScript+fmt.Sprintf(
+		"ReconcileVM -Cloud '%s' -VMName '%s' -Memory %d "+
+			"-CPUCount %d -DiskSize %d -VMNetwork '%s'",
+		cloud, vmname, (memory.Value()/1024/1024),
+		cpucount, (disksize.Value()/1024/1024), vmnetwork), "")
 	if err != nil {
 		return VMResult{}, err
 	}
