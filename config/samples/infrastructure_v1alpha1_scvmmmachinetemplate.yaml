@@ -1,0 +1,7 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ScvmmMachineTemplate
+metadata:
+  name: scvmmmachinetemplate-sample
+spec:
+  # Add fields here
+  foo: bar

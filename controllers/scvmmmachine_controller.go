@@ -273,7 +273,6 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
                 return ctrl.Result{}, nil
         }
         // We are being deleted
-        // HERE.I.AM
 	patchHelper, err := patch.NewHelper(scvmmMachine, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
