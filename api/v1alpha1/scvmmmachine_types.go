@@ -80,6 +80,14 @@ type ScvmmMachine struct {
 	Status ScvmmMachineStatus `json:"status,omitempty"`
 }
 
+func (c *ScvmmMachine) GetConditions() clusterv1.Conditions {
+	return c.Status.Conditions
+}
+
+func (c *ScvmmMachine) SetConditions(conditions clusterv1.Conditions) {
+	c.Status.Conditions = conditions
+}
+
 // +kubebuilder:object:root=true
 
 // ScvmmMachineList contains a list of ScvmmMachine

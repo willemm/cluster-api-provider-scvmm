@@ -18,7 +18,7 @@ package controllers
 import (
 	"context"
 
-	"errors"
+	"github.com/pkg/errors"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/util"
@@ -157,8 +157,8 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	log := r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
         // Fetch the instance
-	var scvmmMachine infrav1.ScvmmMachine
-	if err := r.Get(ctx, req.NamespacedName, &scvmmMachine); err != nil {
+	scvmmMachine := &infrav1.ScvmmMachine{}
+	if err := r.Get(ctx, req.NamespacedName, scvmmMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -239,8 +239,9 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 }
 
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (res ctrl.Result, retErr error) {
-	log := r.Log.WithValues("scvmmmachine", req.NamespacedName)
+	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
 
+        log.Info("Doing reconciliation of ScvmmMachine")
         vm, err := ReconcileVM(scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.DiskSize,
                 scvmmMachine.Spec.VMNetwork, scvmmMachine.Spec.Memory, scvmmMachine.Spec.CPUCount)
         if err != nil {
@@ -254,8 +255,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
         scvmmMachine.Status.CreationTime = vm.CreationTime
         scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
         if vm.Message != "" {
-                scvmmMachine.Status.FailureReason = vm.Message
-                scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+                // scvmmMachine.Status.FailureReason = vm.Message
+                // scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
         }
         // Wait for machine to get running state
         if vm.Status != "Running" {
@@ -265,6 +266,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
+
         // If there's no finalizer do nothing
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
                 return ctrl.Result{}, nil
@@ -277,7 +280,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 	}
 	conditions.MarkFalse(scvmmMachine, VmCreated, VmDeletingReason, clusterv1.ConditionSeverityInfo, "")
 	if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmMachine")
+		return ctrl.Result{}, errors.Wrapf(err, "failed to patch ScvmmMachine")
 	}
 
         log.Info("Doing removal of ScvmmMachine")
@@ -287,26 +290,22 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
                 return ctrl.Result{}, err
         }
         if vm.Message == "Removed" {
-                scvmmMachine.Status.FailureReason = vm.Message
-                scvmmMachine.ObjectMeta.Finalizers = removeString(scvmmMachine.ObjectMeta.Finalizers, finalizerName)
-                if err := r.Update(ctx, &scvmmMachine); err != nil {
-                        log.Error(err, "Failed to remove finalizer")
-                        return ctrl.Result{}, err
-                }
+                // scvmmMachine.Status.FailureReason = vm.Message
+                controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
                 return ctrl.Result{}, nil
         } else {
                 scvmmMachine.Status.VMStatus = vm.Status
                 scvmmMachine.Status.CreationTime = vm.CreationTime
                 scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
                 if vm.Message != "" {
-                        scvmmMachine.Status.FailureReason = vm.Message
-                        scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+                        // scvmmMachine.Status.FailureReason = vm.Message
+                        // scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
                 }
-                helper, err := patch.NewHelper(&scvmmMachine, r.Client)
+                helper, err := patch.NewHelper(scvmmMachine, r.Client)
                 if err != nil {
                         return ctrl.Result{}, err
                 }
-                if err := helper.Patch(ctx, &scvmmMachine); err != nil {
+                if err := helper.Patch(ctx, scvmmMachine); err != nil {
                         log.Error(err, "Failed to update status")
                         return ctrl.Result{}, err
                 }
