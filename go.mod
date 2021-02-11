@@ -13,3 +13,5 @@ require (
 	sigs.k8s.io/cluster-api v0.3.14
 	sigs.k8s.io/controller-runtime v0.5.14
 )
+
+replace github.com/masterzen/winrm => ../winrm
