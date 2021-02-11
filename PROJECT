@@ -1,13 +1,13 @@
-version: "2"
 domain: cluster.x-k8s.io
 repo: github.com/willemm/cluster-api-provider-scvmm
 resources:
 - group: infrastructure
-  version: v1alpha1
   kind: ScvmmMachine
-- group: infrastructure
   version: v1alpha1
+- group: infrastructure
   kind: ScvmmCluster
-- group: infrastructure
   version: v1alpha1
+- group: infrastructure
   kind: ScvmmMachineTemplate
+  version: v1alpha1
+version: "2"

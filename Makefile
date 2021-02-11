@@ -29,6 +29,10 @@ run: generate fmt vet manifests
 install: manifests
 	kustomize build config/crd | kubectl apply -f -
 
+# Uninstall CRDs from a cluster
+uninstall: manifests
+	kustomize build config/crd | kubectl delete -f -
+
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
@@ -48,7 +52,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
 docker-build: test
@@ -67,7 +71,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen

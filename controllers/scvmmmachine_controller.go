@@ -1,5 +1,6 @@
 /*
 
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -21,12 +22,13 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -47,6 +49,7 @@ const (
 	// VM running
 	VmRunning clusterv1.ConditionType = "VmRunning"
 
+	// Cluster-Api related statuses
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
 	WaitingForBootstrapDataReason         = "WaitingForBootstrapData"
 
@@ -65,6 +68,7 @@ type ScvmmMachineReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// Are global variables bad? Dunno.  These hold data for the lifetime of the controller.
 var (
 	ScvmmHost       string
 	ScvmmExecHost   string
@@ -76,6 +80,7 @@ var (
 	FunctionScript  []byte
 )
 
+// The result (passed as json) of a call to Scvmm scripts
 type VMResult struct {
 	Cloud          string
 	Name           string
@@ -245,7 +250,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 }
 
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (res ctrl.Result, retErr error) {
-	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
+	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
 	vm, err := ReconcileVM(scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.DiskSize,
@@ -272,7 +277,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
+	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	// If there's no finalizer do nothing
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
@@ -376,6 +381,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	RemoveScript = initScript + string(data)
 	funcScript = funcScript + string(data)
 	FunctionScript = []byte(funcScript)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
 		Complete(r)

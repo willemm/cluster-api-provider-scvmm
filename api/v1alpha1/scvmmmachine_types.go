@@ -1,5 +1,6 @@
 /*
 
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -22,9 +23,9 @@ import (
 )
 
 // ScvmmMachineSpec defines the desired state of ScvmmMachine
-
 type ScvmmMachineSpec struct {
 	// ProviderID is scvmm plus bios-guid
+	// +optional
 	ProviderID string `json:"providerID,omitempty"`
 	// VMM cloud to run VM on
 	Cloud string `json:"cloud"`

@@ -6,31 +6,22 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: scvmmmachines.infrastructure.cluster.x-k8s.io
+  name: scvmmclusters.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
     - cluster-api
-    kind: ScvmmMachine
-    listKind: ScvmmMachineList
-    plural: scvmmmachines
-    singular: scvmmmachine
+    kind: ScvmmCluster
+    listKind: ScvmmClusterList
+    plural: scvmmclusters
+    singular: scvmmcluster
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - description: Virtual Machine Status
-      jsonPath: .status.vmStatus
-      name: STATUS
-      type: string
-    - description: Virtual Machine BIS GUID
-      jsonPath: .status.biosGuid
-      name: GUID
-      type: string
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ScvmmMachine is the Schema for the scvmmmachines API
+        description: ScvmmCluster is the Schema for the scvmmclusters API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -45,72 +36,28 @@ spec:
           metadata:
             type: object
           spec:
-            description: ScvmmMachineSpec defines the desired state of ScvmmMachine
+            description: ScvmmClusterSpec defines the desired state of ScvmmCluster
             properties:
-              cloud:
-                description: VMM cloud to run VM on
-                type: string
-              cpuCount:
-                description: Number of CPU's
-                type: integer
-              diskSize:
-                anyOf:
-                - type: integer
-                - type: string
-                description: Disk size in gigabytes
-                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                x-kubernetes-int-or-string: true
-              memory:
-                anyOf:
-                - type: integer
-                - type: string
-                description: Memory in Megabytes
-                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                x-kubernetes-int-or-string: true
-              providerID:
-                description: ProviderID is scvmm plus bios-guid
-                type: string
-              vmName:
-                description: Name of the VM
-                type: string
-              vmNetwork:
-                description: Virtual Network identifier
-                type: string
-            required:
-            - cloud
-            - cpuCount
-            - diskSize
-            - memory
-            - vmName
-            - vmNetwork
+              controlPlaneEndpoint:
+                description: ControlPlaneEndpoint represents the endpoint used to
+                  communicate with the control plane.
+                properties:
+                  host:
+                    description: Host is the hostname on which the API server is serving.
+                    type: string
+                  port:
+                    description: Port is the port on which the API server is serving.
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
             type: object
           status:
-            description: ScvmmMachineStatus defines the observed state of ScvmmMachine
+            description: ScvmmClusterStatus defines the observed state of ScvmmCluster
             properties:
-              addresses:
-                description: Addresses contains the associated addresses for the virtual
-                  machine
-                items:
-                  description: MachineAddress contains information for the node's
-                    address.
-                  properties:
-                    address:
-                      description: The machine address.
-                      type: string
-                    type:
-                      description: Machine address type, one of Hostname, ExternalIP
-                        or InternalIP.
-                      type: string
-                  required:
-                  - address
-                  - type
-                  type: object
-                type: array
-              biosGuid:
-                description: BiosGuid as reported by SVCMM
-                type: string
               conditions:
-                description: Conditions defines current service state of the ScvmmMachine.
+                description: Conditions defines current service state of the DockerCluster.
                 items:
                   description: Condition defines an observation of a Cluster API resource
                     operational state.
@@ -153,20 +100,10 @@ spec:
                   - type
                   type: object
                 type: array
-              creationTime:
-                description: Creation time as given by SCVMM
-                format: date-time
-                type: string
-              modifiedTime:
-                description: Modification time as given by SCVMM
-                format: date-time
-                type: string
               ready:
-                description: Mandatory field, is machine ready
+                description: Ready denotes that the docker cluster (infrastructure)
+                  is ready.
                 type: boolean
-              vmStatus:
-                description: Status string as given by SCVMM
-                type: string
             required:
             - ready
             type: object
