@@ -15,4 +15,4 @@ require (
 	sigs.k8s.io/controller-runtime v0.5.14
 )
 
-replace github.com/masterzen/winrm => ../winrm
+replace github.com/masterzen/winrm => ./winrm
