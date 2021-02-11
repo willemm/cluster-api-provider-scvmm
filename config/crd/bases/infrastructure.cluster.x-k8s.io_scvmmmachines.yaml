@@ -19,11 +19,13 @@ spec:
     type: string
   group: infrastructure.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: ScvmmMachine
     listKind: ScvmmMachineList
     plural: scvmmmachines
     singular: scvmmmachine
-  scope: ""
+  scope: Namespaced
   subresources:
     status: {}
   validation:
@@ -76,21 +78,24 @@ spec:
         status:
           description: ScvmmMachineStatus defines the observed state of ScvmmMachine
           properties:
+            addresses:
+              description: Addresses contains the associated addresses for the virtual
+                machine
+              items:
+                $ref: '#/definitions/sigs.k8s.io~1cluster-api~1api~1v1alpha3~0MachineAddress'
+              type: array
             biosGuid:
-              description: BiosGuid as reposted by SVCMM
+              description: BiosGuid as reported by SVCMM
               type: string
+            conditions:
+              $ref: '#/definitions/sigs.k8s.io~1cluster-api~1api~1v1alpha3~0Conditions'
+              description: Conditions defines current service state of the ScvmmMachine.
             creationTime:
-              description: Creation as given by SCVMM
+              description: Creation time as given by SCVMM
               format: date-time
               type: string
-            failureMessage:
-              description: Description of failure
-              type: string
-            failureReason:
-              description: Reason for failures
-              type: string
             modifiedTime:
-              description: Modification as given by SCVMM
+              description: Modification time as given by SCVMM
               format: date-time
               type: string
             ready:
@@ -99,6 +104,8 @@ spec:
             vmStatus:
               description: Status string as given by SCVMM
               type: string
+          required:
+          - ready
           type: object
       type: object
   version: v1alpha1

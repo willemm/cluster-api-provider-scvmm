@@ -45,16 +45,16 @@ type ScvmmMachineStatus struct {
 	// Mandatory field, is machine ready
 	Ready bool `json:"ready"`
 	// Status string as given by SCVMM
-        // +optional
+	// +optional
 	VMStatus string `json:"vmStatus,omitempty"`
 	// BiosGuid as reported by SVCMM
-        // +optional
+	// +optional
 	BiosGuid string `json:"biosGuid,omitempty"`
 	// Creation time as given by SCVMM
-        // +optional
+	// +optional
 	CreationTime metav1.Time `json:"creationTime,omitempty"`
 	// Modification time as given by SCVMM
-        // +optional
+	// +optional
 	ModifiedTime metav1.Time `json:"modifiedTime,omitempty"`
 	// Addresses contains the associated addresses for the virtual machine
 	// +optional

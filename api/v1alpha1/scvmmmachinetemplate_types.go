@@ -21,7 +21,7 @@ import (
 
 // ScvmmMachineTemplateSpec defines the desired state of ScvmmMachineTemplate
 type ScvmmMachineTemplateSpec struct {
-        Template ScvmmMachineTemplateResource `json:"template"`
+	Template ScvmmMachineTemplateResource `json:"template"`
 }
 
 // +kubebuilder:object:root=true
@@ -33,7 +33,7 @@ type ScvmmMachineTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ScvmmMachineTemplateSpec   `json:"spec,omitempty"`
+	Spec ScvmmMachineTemplateSpec `json:"spec,omitempty"`
 }
 
 // +kubebuilder:object:root=true

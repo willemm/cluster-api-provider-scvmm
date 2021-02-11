@@ -18,8 +18,8 @@ package controllers
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -28,10 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-        clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
 	"encoding/json"
 	"fmt"
@@ -42,18 +42,18 @@ import (
 )
 
 const (
-        // Creation started
+	// Creation started
 	VmCreated clusterv1.ConditionType = "VmCreated"
-        // VM running
+	// VM running
 	VmRunning clusterv1.ConditionType = "VmRunning"
 
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
-	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
+	WaitingForBootstrapDataReason         = "WaitingForBootstrapData"
 
 	VmCreatingReason = "VmCreating"
 	VmStartingReason = "VmStarting"
 	VmDeletingReason = "VmDeleting"
-	VmFailedReason = "VmCreationFailed"
+	VmFailedReason   = "VmCreationFailed"
 
 	MachineFinalizer = "scvmmmachine.finalizers.cluster.x-k8s.io"
 )
@@ -73,6 +73,7 @@ var (
 	ScriptDir       string
 	ReconcileScript string
 	RemoveScript    string
+	FunctionScript  []byte
 )
 
 type VMResult struct {
@@ -99,24 +100,29 @@ func ReconcileVM(cloud string, vmname string, disksize resource.Quantity, vmnetw
 	if err != nil {
 		return VMResult{}, err
 	}
-	rout, rerr, rcode, err := client.RunPSWithString(ReconcileScript+fmt.Sprintf(
-		"ReconcileVM -Cloud '%s' -VMName '%s' -Memory %d "+
-			"-CPUCount %d -DiskSize %d -VMNetwork '%s'",
-		cloud, vmname, (memory.Value()/1024/1024),
-		cpucount, (disksize.Value()/1024/1024), vmnetwork), "")
+	shell, err := client.CreateShell()
 	if err != nil {
 		return VMResult{}, err
 	}
-	if rcode != 0 {
-		return VMResult{}, fmt.Errorf("ReconcileVM script failed, returncode %d: %q", rcode, rerr)
+	defer shell.Close()
+	cmd, err := shell.Execute("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
+	if err != nil {
+		return VMResult{}, err
 	}
+	defer cmd.Close()
+	cmd.Stdin.Write(FunctionScript)
+
+	fmt.Fprintf(cmd.Stdin, "ReconcileVM -Cloud %q -CMName %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q",
+		cloud, vmname, (memory.Value() / 1024 / 1024),
+		cpucount, (disksize.Value() / 1024 / 1024), vmnetwork)
+
+	decoder := json.NewDecoder(cmd.Stdout)
 
 	var res VMResult
-	err = json.Unmarshal([]byte(rout), &res)
+	err = decoder.Decode(&res)
 	if err != nil {
 		return VMResult{}, err
 	}
-	res.ScriptErrors = rerr
 	return res, nil
 }
 
@@ -156,7 +162,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	ctx := context.Background()
 	log := r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
-        // Fetch the instance
+	// Fetch the instance
 	scvmmMachine := &infrav1.ScvmmMachine{}
 	if err := r.Get(ctx, req.NamespacedName, scvmmMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -213,15 +219,15 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 		}
 	}()
 
-        // Handle deleted machines
-        // NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
-        //     because AIUI that could lead to trying to add a finalizer to a resource being deleted
+	// Handle deleted machines
+	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
+	//     because AIUI that could lead to trying to add a finalizer to a resource being deleted
 	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, machine, scvmmMachine)
 	}
 
 	// Add finalizer.  Apparently we should return here to avoid a race condition
-        // (Presumably the change/patch will trigger another reconciliation so it continues)
+	// (Presumably the change/patch will trigger another reconciliation so it continues)
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
 		controllerutil.AddFinalizer(scvmmMachine, MachineFinalizer)
 		return ctrl.Result{}, nil
@@ -241,38 +247,38 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (res ctrl.Result, retErr error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
 
-        log.Info("Doing reconciliation of ScvmmMachine")
-        vm, err := ReconcileVM(scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.DiskSize,
-                scvmmMachine.Spec.VMNetwork, scvmmMachine.Spec.Memory, scvmmMachine.Spec.CPUCount)
-        if err != nil {
-                return ctrl.Result{}, err
-        }
+	log.Info("Doing reconciliation of ScvmmMachine")
+	vm, err := ReconcileVM(scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.DiskSize,
+		scvmmMachine.Spec.VMNetwork, scvmmMachine.Spec.Memory, scvmmMachine.Spec.CPUCount)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
-        scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
-        scvmmMachine.Status.Ready = (vm.Status == "Running")
-        scvmmMachine.Status.VMStatus = vm.Status
-        scvmmMachine.Status.BiosGuid = vm.Guid
-        scvmmMachine.Status.CreationTime = vm.CreationTime
-        scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-        if vm.Message != "" {
-                // scvmmMachine.Status.FailureReason = vm.Message
-                // scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
-        }
-        // Wait for machine to get running state
-        if vm.Status != "Running" {
-                return ctrl.Result{RequeueAfter: time.Second * 30}, nil
-        }
-        return ctrl.Result{}, nil
+	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
+	scvmmMachine.Status.Ready = (vm.Status == "Running")
+	scvmmMachine.Status.VMStatus = vm.Status
+	scvmmMachine.Status.BiosGuid = vm.Guid
+	scvmmMachine.Status.CreationTime = vm.CreationTime
+	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+	if vm.Message != "" {
+		// scvmmMachine.Status.FailureReason = vm.Message
+		// scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+	}
+	// Wait for machine to get running state
+	if vm.Status != "Running" {
+		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+	}
+	return ctrl.Result{}, nil
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.ObjectMeta.Name)
 
-        // If there's no finalizer do nothing
+	// If there's no finalizer do nothing
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
-                return ctrl.Result{}, nil
-        }
-        // We are being deleted
+		return ctrl.Result{}, nil
+	}
+	// We are being deleted
 	patchHelper, err := patch.NewHelper(scvmmMachine, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -282,35 +288,34 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 		return ctrl.Result{}, errors.Wrapf(err, "failed to patch ScvmmMachine")
 	}
 
-        log.Info("Doing removal of ScvmmMachine")
-        vm, err := RemoveVM(scvmmMachine.Spec.VMName)
-        if err != nil {
-                log.Error(err, "Removal failed")
-                return ctrl.Result{}, err
-        }
-        if vm.Message == "Removed" {
-                // scvmmMachine.Status.FailureReason = vm.Message
-                controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
-                return ctrl.Result{}, nil
-        } else {
-                scvmmMachine.Status.VMStatus = vm.Status
-                scvmmMachine.Status.CreationTime = vm.CreationTime
-                scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-                if vm.Message != "" {
-                        // scvmmMachine.Status.FailureReason = vm.Message
-                        // scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
-                }
-                helper, err := patch.NewHelper(scvmmMachine, r.Client)
-                if err != nil {
-                        return ctrl.Result{}, err
-                }
-                if err := helper.Patch(ctx, scvmmMachine); err != nil {
-                        log.Error(err, "Failed to update status")
-                        return ctrl.Result{}, err
-                }
-                return ctrl.Result{RequeueAfter: time.Second * 30}, nil
-        }
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	log.Info("Doing removal of ScvmmMachine")
+	vm, err := RemoveVM(scvmmMachine.Spec.VMName)
+	if err != nil {
+		log.Error(err, "Removal failed")
+		return ctrl.Result{}, err
+	}
+	if vm.Message == "Removed" {
+		// scvmmMachine.Status.FailureReason = vm.Message
+		controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
+		return ctrl.Result{}, nil
+	} else {
+		scvmmMachine.Status.VMStatus = vm.Status
+		scvmmMachine.Status.CreationTime = vm.CreationTime
+		scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+		if vm.Message != "" {
+			// scvmmMachine.Status.FailureReason = vm.Message
+			// scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+		}
+		helper, err := patch.NewHelper(scvmmMachine, r.Client)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := helper.Patch(ctx, scvmmMachine); err != nil {
+			log.Error(err, "Failed to update status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+	}
 }
 
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -355,41 +360,25 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	initScript = initScript + string(data)
+	funcScript := initScript
 
 	data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
 	if err != nil {
 		return err
 	}
 	ReconcileScript = initScript + string(data)
+	funcScript = funcScript + string(data)
 
 	data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
 	if err != nil {
 		return err
 	}
 	RemoveScript = initScript + string(data)
+	funcScript = funcScript + string(data)
+	FunctionScript = []byte(funcScript)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
 		Complete(r)
-}
-
-// Helper functions to check and remove string from a slice of strings.
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
 }
 
 func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
