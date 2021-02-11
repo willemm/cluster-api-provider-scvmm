@@ -72,6 +72,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmMachine")
 		os.Exit(1)
 	}
+	if err = (&controllers.ScvmmClusterReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmCluster"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScvmmCluster")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

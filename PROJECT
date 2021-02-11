@@ -5,3 +5,9 @@ resources:
 - group: infrastructure
   version: v1alpha1
   kind: ScvmmMachine
+- group: infrastructure
+  version: v1alpha1
+  kind: ScvmmCluster
+- group: infrastructure
+  version: v1alpha1
+  kind: ScvmmMachineTemplate

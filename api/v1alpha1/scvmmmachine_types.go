@@ -18,10 +18,8 @@ package v1alpha1
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ScvmmMachineSpec defines the desired state of ScvmmMachine
 
@@ -45,23 +43,31 @@ type ScvmmMachineSpec struct {
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
 type ScvmmMachineStatus struct {
 	// Mandatory field, is machine ready
-	Ready bool `json:"ready,omitempty"`
+	Ready bool `json:"ready"`
 	// Status string as given by SCVMM
+        // +optional
 	VMStatus string `json:"vmStatus,omitempty"`
-	// BiosGuid as reposted by SVCMM
+	// BiosGuid as reported by SVCMM
+        // +optional
 	BiosGuid string `json:"biosGuid,omitempty"`
-	// Reason for failures
-	FailureReason string `json:"failureReason,omitempty"`
-	// Description of failure
-	FailureMessage string `json:"failureMessage,omitempty"`
-	// Creation as given by SCVMM
+	// Creation time as given by SCVMM
+        // +optional
 	CreationTime metav1.Time `json:"creationTime,omitempty"`
-	// Modification as given by SCVMM
+	// Modification time as given by SCVMM
+        // +optional
 	ModifiedTime metav1.Time `json:"modifiedTime,omitempty"`
+	// Addresses contains the associated addresses for the virtual machine
+	// +optional
+	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
+	// Conditions defines current service state of the ScvmmMachine.
+	// +optional
+	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
-// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=scvmmmachines,scope=Namespaced,categories=cluster-api
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.vmStatus",type="string",name="STATUS",description="Virtual Machine Status"
 // +kubebuilder:printcolumn:JSONPath=".status.biosGuid",type="string",name="GUID",description="Virtual Machine BIS GUID"
 
