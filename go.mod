@@ -8,6 +8,7 @@ require (
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
+	k8s.io/api v0.17.9
 	k8s.io/apimachinery v0.17.9
 	k8s.io/client-go v0.17.9
 	sigs.k8s.io/cluster-api v0.3.14

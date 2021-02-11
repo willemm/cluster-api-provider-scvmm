@@ -31,10 +31,12 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	// "k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/masterzen/winrm"
@@ -70,14 +72,14 @@ type ScvmmMachineReconciler struct {
 
 // Are global variables bad? Dunno.  These hold data for the lifetime of the controller.
 var (
-	ScvmmHost       string
-	ScvmmExecHost   string
-	ScvmmUsername   string
-	ScvmmPassword   string
-	ScriptDir       string
-	ReconcileScript string
-	RemoveScript    string
-	FunctionScript  []byte
+	ScvmmHost     string
+	ScvmmExecHost string
+	ScvmmUsername string
+	ScvmmPassword string
+	ScriptDir     string
+	// ReconcileScript string
+	// RemoveScript    string
+	FunctionScript []byte
 )
 
 // The result (passed as json) of a call to Scvmm scripts
@@ -96,65 +98,37 @@ type VMResult struct {
 	ModifiedTime   metav1.Time
 }
 
-func ReconcileVM(cloud string, vmname string, disksize resource.Quantity, vmnetwork string, memory resource.Quantity, cpucount int) (VMResult, error) {
+// Create a winrm powershell session and seed with the function script
+func CreateWinrmCmd() (*winrm.Command, error) {
 	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
 
 	client, err := winrm.NewClientWithParameters(endpoint, ScvmmUsername, ScvmmPassword, params)
 	if err != nil {
-		return VMResult{}, err
+		return &winrm.Command{}, err
 	}
 	shell, err := client.CreateShell()
 	if err != nil {
-		return VMResult{}, err
+		return &winrm.Command{}, err
 	}
 	defer shell.Close()
 	cmd, err := shell.Execute("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
 	if err != nil {
-		return VMResult{}, err
+		return &winrm.Command{}, err
 	}
-	defer cmd.Close()
 	cmd.Stdin.Write(FunctionScript)
+	return cmd, nil
+}
 
-	fmt.Fprintf(cmd.Stdin, "ReconcileVM -Cloud %q -CMName %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q",
-		cloud, vmname, (memory.Value() / 1024 / 1024),
-		cpucount, (disksize.Value() / 1024 / 1024), vmnetwork)
-
+func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	decoder := json.NewDecoder(cmd.Stdout)
 
 	var res VMResult
-	err = decoder.Decode(&res)
+	err := decoder.Decode(&res)
 	if err != nil {
 		return VMResult{}, err
 	}
-	return res, nil
-}
-
-func RemoveVM(vmname string) (VMResult, error) {
-	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
-	params := winrm.DefaultParameters
-	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-
-	client, err := winrm.NewClientWithParameters(endpoint, ScvmmUsername, ScvmmPassword, params)
-	if err != nil {
-		return VMResult{}, err
-	}
-	rout, rerr, rcode, err := client.RunPSWithString(RemoveScript+
-		"RemoveVM -VMName '"+vmname+"'", "")
-	if err != nil {
-		return VMResult{}, err
-	}
-	if rcode != 0 {
-		return VMResult{}, fmt.Errorf("RemoveVM script failed, returncode %d: %q", rcode, rerr)
-	}
-
-	var res VMResult
-	err = json.Unmarshal([]byte(rout), &res)
-	if err != nil {
-		return VMResult{}, err
-	}
-	res.ScriptErrors = rerr
 	return res, nil
 }
 
@@ -253,11 +227,42 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
-	vm, err := ReconcileVM(scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.DiskSize,
-		scvmmMachine.Spec.VMNetwork, scvmmMachine.Spec.Memory, scvmmMachine.Spec.CPUCount)
+	cmd, err := CreateWinrmCmd()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	defer cmd.Close()
+	fmt.Fprintf(cmd.Stdin, "GetVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := GetWinrmResult(cmd)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrapf(err, "Failed to get vm")
+	}
+	if vm.Name == "" {
+		bootstrapData, err := r.getBootstrapData(ctx, machine)
+		if err != nil {
+			r.Log.Error(err, "failed to get bootstrap data")
+			return ctrl.Result{}, err
+		}
+		fmt.Fprintf(cmd.Stdin, "CreateVM -Cloud %q -VMName %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -BootstrapData %q",
+			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
+			scvmmMachine.Spec.CPUCount, (scvmmMachine.Spec.DiskSize.Value() / 1024 / 1024),
+			scvmmMachine.Spec.VMNetwork, bootstrapData)
+		vm, err = GetWinrmResult(cmd)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrapf(err, "Failed to create vm")
+		}
+
+		conditions.MarkFalse(scvmmMachine, VmCreated, VmCreatingReason, clusterv1.ConditionSeverityInfo, "")
+
+		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
+		scvmmMachine.Status.Ready = false
+		scvmmMachine.Status.VMStatus = vm.Status
+		scvmmMachine.Status.BiosGuid = vm.Guid
+		scvmmMachine.Status.CreationTime = vm.CreationTime
+		scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+		return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+	}
+	conditions.MarkTrue(scvmmMachine, VmCreated)
 
 	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
 	scvmmMachine.Status.Ready = (vm.Status == "Running")
@@ -265,14 +270,22 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	scvmmMachine.Status.BiosGuid = vm.Guid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-	if vm.Message != "" {
-		// scvmmMachine.Status.FailureReason = vm.Message
-		// scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+
+	if vm.Status == "PowerOff" {
+		conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
+		fmt.Fprintf(cmd.Stdin, "StartVM -VMName %q", scvmmMachine.Spec.VMName)
+		vm, err = GetWinrmResult(cmd)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrapf(err, "Failed to start vm")
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 10}, nil
 	}
+
 	// Wait for machine to get running state
 	if vm.Status != "Running" {
 		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 	}
+	conditions.MarkTrue(scvmmMachine, VmRunning)
 	return ctrl.Result{}, nil
 }
 
@@ -294,10 +307,16 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 	}
 
 	log.Info("Doing removal of ScvmmMachine")
-	vm, err := RemoveVM(scvmmMachine.Spec.VMName)
+	cmd, err := CreateWinrmCmd()
 	if err != nil {
-		log.Error(err, "Removal failed")
 		return ctrl.Result{}, err
+	}
+	defer cmd.Close()
+
+	fmt.Fprintf(cmd.Stdin, "RemoveVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := GetWinrmResult(cmd)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrapf(err, "Failed to remove vm")
 	}
 	if vm.Message == "Removed" {
 		// scvmmMachine.Status.FailureReason = vm.Message
@@ -307,18 +326,10 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 		scvmmMachine.Status.VMStatus = vm.Status
 		scvmmMachine.Status.CreationTime = vm.CreationTime
 		scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-		if vm.Message != "" {
-			// scvmmMachine.Status.FailureReason = vm.Message
-			// scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
-		}
-		helper, err := patch.NewHelper(scvmmMachine, r.Client)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if err := helper.Patch(ctx, scvmmMachine); err != nil {
-			log.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
-		}
+		// if vm.Message != "" {
+		//         scvmmMachine.Status.FailureReason = vm.Message
+		//         scvmmMachine.Status.FailureMessage = vm.Error + vm.ScriptErrors
+		// }
 		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 	}
 }
@@ -366,20 +377,22 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	initScript = initScript + string(data)
 	funcScript := initScript
+	/*
 
-	data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
-	if err != nil {
-		return err
-	}
-	ReconcileScript = initScript + string(data)
-	funcScript = funcScript + string(data)
+		data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
+		if err != nil {
+			return err
+		}
+		ReconcileScript = initScript + string(data)
+		funcScript = funcScript + string(data)
 
-	data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
-	if err != nil {
-		return err
-	}
-	RemoveScript = initScript + string(data)
-	funcScript = funcScript + string(data)
+		data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
+		if err != nil {
+			return err
+		}
+		RemoveScript = initScript + string(data)
+		funcScript = funcScript + string(data)
+	*/
 	FunctionScript = []byte(funcScript)
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -408,4 +421,23 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 			VmRunning,
 		}},
 	)
+}
+
+func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
+	if machine.Spec.Bootstrap.DataSecretName == nil {
+		return "", errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
+
+	s := &corev1.Secret{}
+	key := client.ObjectKey{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
+	if err := r.Client.Get(ctx, key, s); err != nil {
+		return "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
+	}
+
+	value, ok := s.Data["value"]
+	if !ok {
+		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return base64.StdEncoding.EncodeToString(value), nil
 }
