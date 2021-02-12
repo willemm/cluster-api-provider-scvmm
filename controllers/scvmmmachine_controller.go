@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 	// "k8s.io/apimachinery/pkg/api/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -27,7 +27,7 @@ spec:
       jsonPath: .status.biosGuid
       name: GUID
       type: string
-    name: v1alpha1
+    name: v1alpha3
     schema:
       openAPIV3Schema:
         description: ScvmmMachine is the Schema for the scvmmmachines API

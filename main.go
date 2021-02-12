@@ -26,7 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 	"github.com/willemm/cluster-api-provider-scvmm/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -39,7 +39,7 @@ var (
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
-	_ = infrastructurev1alpha1.AddToScheme(scheme)
+	_ = infrav1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

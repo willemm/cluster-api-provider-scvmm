@@ -3,11 +3,11 @@ repo: github.com/willemm/cluster-api-provider-scvmm
 resources:
 - group: infrastructure
   kind: ScvmmMachine
-  version: v1alpha1
+  version: v1alpha3
 - group: infrastructure
   kind: ScvmmCluster
-  version: v1alpha1
+  version: v1alpha3
 - group: infrastructure
   kind: ScvmmMachineTemplate
-  version: v1alpha1
+  version: v1alpha3
 version: "2"

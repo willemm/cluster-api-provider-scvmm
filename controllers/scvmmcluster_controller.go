@@ -24,7 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 )
 
 // ScvmmClusterReconciler reconciles a ScvmmCluster object
@@ -48,6 +48,6 @@ func (r *ScvmmClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.ScvmmCluster{}).
+		For(&infrav1.ScvmmCluster{}).
 		Complete(r)
 }
