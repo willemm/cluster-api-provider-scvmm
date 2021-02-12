@@ -30,10 +30,11 @@ type ScvmmClusterSpec struct {
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster
 type ScvmmClusterStatus struct {
-	// Ready denotes that the docker cluster (infrastructure) is ready.
-	Ready bool `json:"ready"`
+	// Ready denotes that the scvmm cluster (infrastructure) is ready.
+	// +optional
+	Ready bool `json:"ready,omitempty"`
 
-	// Conditions defines current service state of the DockerCluster.
+	// Conditions defines current service state of the ScvmmCluster.
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }

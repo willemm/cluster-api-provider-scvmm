@@ -106,16 +106,16 @@ func CreateWinrmCmd() (*winrm.Command, error) {
 
 	client, err := winrm.NewClientWithParameters(endpoint, ScvmmUsername, ScvmmPassword, params)
 	if err != nil {
-		return &winrm.Command{}, err
+		return &winrm.Command{}, errors.Wrapf(err, "Creating winrm client")
 	}
 	shell, err := client.CreateShell()
 	if err != nil {
-		return &winrm.Command{}, err
+		return &winrm.Command{}, errors.Wrapf(err, "Creating winrm shell")
 	}
 	defer shell.Close()
 	cmd, err := shell.Execute("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
 	if err != nil {
-		return &winrm.Command{}, err
+		return &winrm.Command{}, errors.Wrapf(err, "Creating winrm powershell")
 	}
 	cmd.Stdin.Write(FunctionScript)
 	return cmd, nil
@@ -127,7 +127,7 @@ func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	var res VMResult
 	err := decoder.Decode(&res)
 	if err != nil {
-		return VMResult{}, err
+		return VMResult{}, errors.Wrapf(err, "Decoding script result")
 	}
 	return res, nil
 }
@@ -150,7 +150,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, scvmmMachine.ObjectMeta)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "Get owner machine")
 	}
 	if machine == nil {
 		log.Info("Waiting for Machine Controller to set OwnerRef on ScvmmMachine")
@@ -163,7 +163,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
 		log.Info("ScvmmMachine owner Machine is missing cluster label or cluster does not exist")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "Get cluster")
 	}
 	if cluster == nil {
 		log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName))
@@ -185,19 +185,19 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 
 	log = log.WithValues("scvmm-cluster", scvmmCluster.Name)
 
+	scvmmMachine.Status.Ready = false
 	patchHelper, err := patch.NewHelper(scvmmMachine, r)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "Get scvmm-cluster")
 	}
 	defer func() {
 		if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
 			log.Error(err, "failed to patch ScvmmMachine")
 			if retErr == nil {
-				retErr = err
+				retErr = errors.Wrapf(err, "Patch scvmmMachine")
 			}
 		}
 	}()
-	scvmmMachine.Status.Ready = false
 
 	// Handle deleted machines
 	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
@@ -230,7 +230,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	log.Info("Doing reconciliation of ScvmmMachine")
 	cmd, err := CreateWinrmCmd()
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "Winrm")
 	}
 	defer cmd.Close()
 	fmt.Fprintf(cmd.Stdin, "GetVM -VMName %q", scvmmMachine.Spec.VMName)
@@ -242,7 +242,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 		bootstrapData, err := r.getBootstrapData(ctx, machine)
 		if err != nil {
 			r.Log.Error(err, "failed to get bootstrap data")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Wrapf(err, "Get bootstrap data")
 		}
 		fmt.Fprintf(cmd.Stdin, "CreateVM -Cloud %q -VMName %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -BootstrapData %q",
 			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
@@ -300,7 +300,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 	// We are being deleted
 	patchHelper, err := patch.NewHelper(scvmmMachine, r.Client)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "patch helper")
 	}
 	conditions.MarkFalse(scvmmMachine, VmCreated, VmDeletingReason, clusterv1.ConditionSeverityInfo, "")
 	if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
@@ -310,7 +310,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *c
 	log.Info("Doing removal of ScvmmMachine")
 	cmd, err := CreateWinrmCmd()
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, "Winrm")
 	}
 	defer cmd.Close()
 
@@ -356,7 +356,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if ScvmmExecHost != "" {
 		data, err := ioutil.ReadFile(ScriptDir + "/init.ps1")
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "Read init.ps1")
 		}
 		initScript = os.Expand(string(data), func(key string) string {
 			switch key {
@@ -374,7 +374,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	data, err := ioutil.ReadFile(ScriptDir + "/functions.ps1")
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "Read functions.ps1")
 	}
 	initScript = initScript + string(data)
 	funcScript := initScript
@@ -382,14 +382,14 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 		data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "Read reconcile.ps1")
 		}
 		ReconcileScript = initScript + string(data)
 		funcScript = funcScript + string(data)
 
 		data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "Read remove.ps1")
 		}
 		RemoveScript = initScript + string(data)
 		funcScript = funcScript + string(data)
