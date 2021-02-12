@@ -197,6 +197,7 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 			}
 		}
 	}()
+	scvmmMachine.Status.Ready = false
 
 	// Handle deleted machines
 	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn

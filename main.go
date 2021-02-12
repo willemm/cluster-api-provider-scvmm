@@ -28,6 +28,7 @@ import (
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 	"github.com/willemm/cluster-api-provider-scvmm/controllers"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -40,6 +41,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = infrav1.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
