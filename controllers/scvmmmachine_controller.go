@@ -53,6 +53,7 @@ const (
 
 	// Cluster-Api related statuses
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
+	WaitingForControlPlaneAvailableReason = "WaitingForControlplaneAvailable"
 	WaitingForBootstrapDataReason         = "WaitingForBootstrapData"
 
 	VmCreatingReason = "VmCreating"
@@ -159,6 +160,29 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	log.V(1).Info("Set ready to false")
+	scvmmMachine.Status.Ready = false
+	patchHelper, err := patch.NewHelper(scvmmMachine, r)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
+	}
+	defer func() {
+		log.V(1).Info("Patch scvmmMachine", "scvmmmachine", scvmmMachine)
+		if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
+			log.Error(err, "failed to patch ScvmmMachine")
+			if retErr == nil {
+				retErr = errors.Wrap(err, "Patch scvmmMachine")
+			}
+		}
+	}()
+
+	// Handle deleted machines
+	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
+	//     because it could be that the machine, cluster, etc is gone and also it tries to add finalizers
+	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, scvmmMachine)
+	}
+
 	log.V(1).Info("Fetching machine")
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, scvmmMachine.ObjectMeta)
@@ -200,28 +224,6 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 
 	log = log.WithValues("scvmm-cluster", scvmmCluster.Name)
 
-	log.V(1).Info("Set ready to false")
-	scvmmMachine.Status.Ready = false
-	patchHelper, err := patch.NewHelper(scvmmMachine, r)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
-	}
-	defer func() {
-		if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
-			log.Error(err, "failed to patch ScvmmMachine")
-			if retErr == nil {
-				retErr = errors.Wrap(err, "Patch scvmmMachine")
-			}
-		}
-	}()
-
-	// Handle deleted machines
-	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
-	//     because AIUI that could lead to trying to add a finalizer to a resource being deleted
-	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, machine, scvmmMachine)
-	}
-
 	log.V(1).Info("Check finalizer")
 	// Add finalizer.  Apparently we should return here to avoid a race condition
 	// (Presumably the change/patch will trigger another reconciliation so it continues)
@@ -258,6 +260,16 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	}
 	log.V(1).Info("GetVM result", "vm", vm)
 	if vm.Name == "" {
+		if machine.Spec.Bootstrap.DataSecretName == nil {
+			if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
+				log.Info("Waiting for the control plane to be initialized")
+				conditions.MarkFalse(scvmmMachine, VmCreated, WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
+				return ctrl.Result{}, nil
+			}
+			log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+			conditions.MarkFalse(scvmmMachine, VmCreated, WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
+			return ctrl.Result{}, nil
+		}
 		log.V(1).Info("Get bootstrap data")
 		bootstrapData, err := r.getBootstrapData(ctx, machine)
 		if err != nil {
@@ -320,7 +332,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	return ctrl.Result{}, nil
 }
 
-func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.V(1).Info("Do delete reconciliation")
@@ -388,13 +400,13 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("missing required env SCVMM_PASSWORD")
 	}
 
-	initScript := ""
+	funcScript := ""
 	if ScvmmExecHost != "" {
 		data, err := ioutil.ReadFile(ScriptDir + "/init.ps1")
 		if err != nil {
 			return errors.Wrap(err, "Read init.ps1")
 		}
-		initScript = os.Expand(string(data), func(key string) string {
+		funcScript = os.Expand(string(data), func(key string) string {
 			switch key {
 			case "SCVMM_USERNAME":
 				return ScvmmUsername
@@ -412,24 +424,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return errors.Wrap(err, "Read functions.ps1")
 	}
-	initScript = initScript + string(data)
-	funcScript := initScript
-	/*
-
-		data, err = ioutil.ReadFile(ScriptDir + "/reconcile.ps1")
-		if err != nil {
-			return errors.Wrap(err, "Read reconcile.ps1")
-		}
-		ReconcileScript = initScript + string(data)
-		funcScript = funcScript + string(data)
-
-		data, err = ioutil.ReadFile(ScriptDir + "/remove.ps1")
-		if err != nil {
-			return errors.Wrap(err, "Read remove.ps1")
-		}
-		RemoveScript = initScript + string(data)
-		funcScript = funcScript + string(data)
-	*/
+	funcScript = funcScript + string(data)
 	FunctionScript = []byte(funcScript)
 
 	return ctrl.NewControllerManagedBy(mgr).
