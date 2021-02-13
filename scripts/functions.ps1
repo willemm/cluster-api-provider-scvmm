@@ -48,9 +48,8 @@ function CreateVM($cloud, $vmname, [int]$memory, [int]$cpucount, [int]$disksize,
     Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
     $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplate -Name $vmname -VMHostGroup 'SO'
     $SCCloud = Get-SCCloud -Name $cloud
-    New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -ReturnImmediately
+    $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously
 
-    $vm = Get-SCVirtualMachine -name $vmname
     return VMToJson($vm, "Creating")
   } catch {
     ErrorToJson('Create VM', $_)
@@ -59,16 +58,16 @@ function CreateVM($cloud, $vmname, [int]$memory, [int]$cpucount, [int]$disksize,
 
 function StartVM($vmname) {
   try {
-    $vm = Start-SCVirtualMachine -VM $vmname
+    $vm = Start-SCVirtualMachine -VM $vmname -RunAsynchronously
     return VMToJson($vm, "Starting")
   } catch {
     ErrorToJson('Start VM', $_)
   }
 }
 
-function Stop($vmname) {
+function StopVM($vmname) {
   try {
-    $vm = Stop-SCVirtualMachine -VM $vmname
+    $vm = Stop-SCVirtualMachine -VM $vmname -RunAsynchronously
     return VMToJson($vm, "Stopping")
   } catch {
     ErrorToJson('Stop VM', $_)
@@ -82,10 +81,10 @@ function RemoveVM($vmname) {
       return (@{ Message = "Removed" } | convertto-json)
     }
     if ($vm.Status -eq 'PowerOff') {
-      $vm = Remove-SCVirtualMachine $vmname
+      $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
       VMToJson($vm, "Removing")
     } else {
-      $vm = Stop-SCVirtualmachine $vm
+      $vm = Stop-SCVirtualmachine $vm -RunAsynchronously
       VMToJson($vm, "Stopping")
     }
   } catch {
