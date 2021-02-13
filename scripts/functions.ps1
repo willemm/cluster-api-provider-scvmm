@@ -1,16 +1,16 @@
 function VMToJson($vm, $message = "") {
-  @{
-    Cloud = $vm.Cloud.Name
-    Name = $vm.Name
-    Status = "$($vm.Status)"
-    Memory = $vm.Memory
-    CpuCount = $vm.CpuCount
-    VirtualNetwork = $vm.VirtualNetworkAdapters.VMNetwork.Name
-    Guid = $vm.BiosGuid
-    CreationTime = $vm.CreationTime.ToString('o')
-    ModifiedTime = $vm.ModifiedTime.ToString('o')
-    Message = $message
-  } | convertto-json
+  $vmjson = @{}
+  if ($vm.Cloud) { $vmjson.Cloud = $vm.Cloud.Name }
+  if ($vm.Name) { $vmjson.Name = $vm.Name }
+  if ($vm.Status) { $vmjson.Status = $vm.Status }
+  if ($vm.Memory) { $vmjson.Memory = $vm.Memory }
+  if ($vm.CpuCount) { $vmjson.CpuCount = $vm.CpuCount }
+  if ($vm.VirtualNetworkAdapters) { $vmjson.CirtualNetwork = $vm.VirtualNetworkAdapters.VMNetwork.Name }
+  if ($vm.Guid) { $vmjson.Guid = $vm.Guid }
+  if ($vm.CreationTime) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
+  if ($vm.ModifiedTime) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToString('o') }
+  if ($message) { $vmjson.Message = $message }
+  $vmjson | convertto-json
 }
 
 function ErrorToJson($what,$err) {
