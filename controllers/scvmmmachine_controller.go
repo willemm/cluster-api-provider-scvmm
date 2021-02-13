@@ -136,7 +136,8 @@ func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
 }
 
 func SendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args ...interface{}) (VMResult, error) {
-	log.V(1).Info("Sending WinRM command", "command", command, "args", args)
+	log.V(1).Info("Sending WinRM command", "command", command, "args", args,
+		"cmdline", fmt.Sprintf(command+"\r\n", args...))
 	_, err := fmt.Fprintf(cmd.Stdin, command+"\r\n", args...)
 	if err != nil {
 		return VMResult{}, err
