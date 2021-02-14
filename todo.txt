@@ -1,8 +1,8 @@
 BBugs:
 v Fails when reconciling delete: It doesn't work when the cluster is not there etc etc
 v Errors out when trying to get bootstrapdata if it's not there
-- Doesn't seem to update the status when erroring out (!!)
-- CreateVM takes too long and hits a winrm timeout
+v Doesn't seem to update the status when erroring out (!!)
+v CreateVM takes too long and hits a winrm timeout
     (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
 
 Todo:

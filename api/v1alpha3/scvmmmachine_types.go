@@ -31,6 +31,8 @@ type ScvmmMachineSpec struct {
 	Cloud string `json:"cloud"`
 	// Name of the VM
 	VMName string `json:"vmName"`
+	// VM template to use
+	VMTemplate string `json:"vmTemplate"`
 	// Disk size in gigabytes
 	DiskSize resource.Quantity `json:"diskSize"`
 	// Number of CPU's

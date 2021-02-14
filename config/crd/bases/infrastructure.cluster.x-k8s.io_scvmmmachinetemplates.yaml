@@ -76,6 +76,9 @@ spec:
                       vmNetwork:
                         description: Virtual Network identifier
                         type: string
+                      vmTemplate:
+                        description: VM template to use
+                        type: string
                     required:
                     - cloud
                     - cpuCount
@@ -83,6 +86,7 @@ spec:
                     - memory
                     - vmName
                     - vmNetwork
+                    - vmTemplate
                     type: object
                 required:
                 - spec
