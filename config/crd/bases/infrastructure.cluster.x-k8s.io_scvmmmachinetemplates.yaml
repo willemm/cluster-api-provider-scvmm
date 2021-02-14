@@ -86,7 +86,6 @@ spec:
                     - memory
                     - vmName
                     - vmNetwork
-                    - vmTemplate
                     type: object
                 required:
                 - spec
