@@ -138,7 +138,9 @@ func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	var res VMResult
 	err := decoder.Decode(&res)
 	if err != nil {
-		return VMResult{}, errors.Wrap(err, "Decoding script result")
+		outb := make([]byte, 1024)
+		n, _ := cmd.Stdout.Read(outb)
+		return VMResult{}, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
 	}
 	return res, nil
 }
@@ -289,9 +291,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
 		}
 		log.V(1).Info("Call CreateVM")
-		vm, err = SendWinrmCommand(log, cmd, "CreateVM -Cloud %q -VMName %q -Template %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -BootstrapData %q",
+		vm, err = SendWinrmCommand(log, cmd, "CreateVM -Cloud %q -VMName %q -VMTemplate %q -VHDisk %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -BootstrapData %q",
 			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.VMTemplate,
-			(scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
+			scvmmMachine.Spec.VHDisk, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
 			scvmmMachine.Spec.CPUCount, (scvmmMachine.Spec.DiskSize.Value() / 1024 / 1024),
 			scvmmMachine.Spec.VMNetwork, bootstrapData)
 		if err != nil {

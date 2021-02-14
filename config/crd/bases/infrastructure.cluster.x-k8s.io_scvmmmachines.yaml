@@ -70,6 +70,9 @@ spec:
               providerID:
                 description: ProviderID is scvmm plus bios-guid
                 type: string
+              vhDisk:
+                description: Virtual Harddisk to use
+                type: string
               vmName:
                 description: Name of the VM
                 type: string

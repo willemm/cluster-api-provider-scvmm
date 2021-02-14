@@ -32,13 +32,13 @@ function GetVM($vmname) {
   }
 }
 
-function CreateVM($cloud, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $bootstrapdata) {
+function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $bootstrapdata) {
   try {
     $JobGroupID = [GUID]::NewGuid().ToString()
-    if ($vmtemplate) {
-      $VirtualHardDisk = Get-SCVirtualHardDisk -name $vmtemplate
+    if ($vhdisk) {
+      $VirtualHardDisk = Get-SCVirtualHardDisk -name $vhdisk
       if (-not $VirtualHardDisk) {
-        throw "VHD $($vmtemplate) not found"
+        throw "VHD $($vhdisk) not found"
       }
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem -VirtualHardDisk $VirtualHardDisk
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 1 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_2" -VolumeType System
@@ -49,13 +49,17 @@ function CreateVM($cloud, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, [i
     $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
     $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
 
-    $VMTemplate = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
+    if ($vmtemplate) {
+      $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
+    } else {
+      $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
+    }
 
     $VMNetwork = Get-SCVMNetwork -Name $vmnetwork
     $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
     Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
-    $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplate -Name $vmname -VMHostGroup 'SO'
+    $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup 'SO'
     $SCCloud = Get-SCCloud -Name $cloud
     $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously
 
