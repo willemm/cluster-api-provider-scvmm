@@ -16,7 +16,7 @@ function VMToJson($vm, $message = "") {
 function ErrorToJson($what,$err) {
   @{
     Message = "$($what) Failed: $($err.Exception.Message)"
-    Error = "$($err.Exception)"
+    Error = "$($err) $($err.ScriptStackTrace)"
   } | convertto-json
 }
 
@@ -26,9 +26,9 @@ function GetVM($vmname) {
     if (-not $vm) {
       return @{ Message = "VM $($vmname) not found" } | convertto-json
     }
-    return VMToJson($vm)
+    return VMToJson $vm
   } catch {
-    ErrorToJson('Get VM', $_)
+    ErrorToJson 'Get VM' $_
   }
 }
 
@@ -40,7 +40,7 @@ function CreateVM($cloud, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, [i
       if (-not $VirtualHardDisk) {
         throw "VHD $($vmtemplate) not found"
       }
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem -VirtualHardDisk $VirtualHardDisk
+      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem -VirtualHardDisk $VirtualHardDisk
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 1 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_2" -VolumeType System
     } else {
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem
@@ -49,7 +49,7 @@ function CreateVM($cloud, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, [i
     $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
     $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
 
-    New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
+    $VMTemplate = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
 
     $VMNetwork = Get-SCVMNetwork -Name $vmnetwork
     $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
@@ -59,27 +59,27 @@ function CreateVM($cloud, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, [i
     $SCCloud = Get-SCCloud -Name $cloud
     $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously
 
-    return VMToJson($vm, "Creating")
+    return VMToJson $vm "Creating"
   } catch {
-    ErrorToJson('Create VM', $_)
+    ErrorToJson 'Create VM' $_
   }
 }
 
 function StartVM($vmname) {
   try {
     $vm = Start-SCVirtualMachine -VM $vmname -RunAsynchronously
-    return VMToJson($vm, "Starting")
+    return VMToJson $vm "Starting"
   } catch {
-    ErrorToJson('Start VM', $_)
+    ErrorToJson 'Start VM' $_
   }
 }
 
 function StopVM($vmname) {
   try {
     $vm = Stop-SCVirtualMachine -VM $vmname -RunAsynchronously
-    return VMToJson($vm, "Stopping")
+    return VMToJson $vm "Stopping"
   } catch {
-    ErrorToJson('Stop VM', $_)
+    ErrorToJson 'Stop VM' $_
   }
 }
 
@@ -91,13 +91,13 @@ function RemoveVM($vmname) {
     }
     if ($vm.Status -eq 'PowerOff') {
       $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
-      VMToJson($vm, "Removing")
+      VMToJson $vm "Removing"
     } else {
       $vm = Stop-SCVirtualmachine $vm -RunAsynchronously
-      VMToJson($vm, "Stopping")
+      VMToJson $vm "Stopping"
     }
   } catch {
-    ErrorToJson('Remove VM', $_)
+    ErrorToJson 'Remove VM' $_
   }
 }
 
