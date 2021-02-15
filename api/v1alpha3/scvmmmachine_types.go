@@ -45,6 +45,20 @@ type ScvmmMachineSpec struct {
 	Memory resource.Quantity `json:"memory"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
+	// Network settings
+	// +optional
+	Networking *ScvmmMachineNetworking `json:"networking"`
+}
+
+type ScvmmMachineNetworking struct {
+	// IP Address
+	IPAddress string `json:"ipAddress"`
+	// Gateway
+	Gateway string `json:"gateway"`
+	// Nameservers
+	Nameservers []string `json:"nameservers"`
+	// Domain
+	Domain string `json:"domain"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine

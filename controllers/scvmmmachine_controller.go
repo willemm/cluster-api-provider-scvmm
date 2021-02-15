@@ -167,7 +167,7 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
-func writeCloudInit(log logr.Logger, sharePath string, bootstrapData []byte) error {
+func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData []byte, networking *infrav1.ScvmmMachineNetworking) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
@@ -203,10 +203,26 @@ func writeCloudInit(log logr.Logger, sharePath string, bootstrapData []byte) err
 	if err != nil {
 		return err
 	}
+	metadata := "instance-id: scvmm-capi\n" +
+		"hostname: " + hostname + "\n"
+	if networking != nil {
+		metadata += "network-config: |\n" +
+			"  version: 2\n" +
+			"  ethernets:\n" +
+			"    eth0:\n" +
+			"      addresses:\n" +
+			"      - " + networking.IPAddress + "\n" +
+			"      gateway4: " + networking.Gateway + "\n" +
+			"      nameservers:\n" +
+			"        search:\n" +
+			"        - " + networking.Domain + "\n" +
+			"        addresses:\n" +
+			"        - " + strings.Join(networking.Nameservers, "\n        - ") + "\n"
+	}
 	files := make([]CloudInitFile, 2)
 	files[0] = CloudInitFile{
 		"meta-data",
-		[]byte("instance-id: abc-xyz\nlocal-hostname: xyzzy\n"),
+		[]byte(metadata),
 	}
 	files[1] = CloudInitFile{
 		"user-data",
@@ -499,7 +515,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		log.V(1).Info("Create cloudinit")
 		isoName := scvmmMachine.Spec.VMName + "-cloud-init.iso"
-		if err := writeCloudInit(log, ScvmmLibraryShare+"/ISOs/"+isoName, bootstrapData); err != nil {
+		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, ScvmmLibraryShare+"/ISOs/"+isoName, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
 			r.Log.Error(err, "failed to create cloud init")
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 		}

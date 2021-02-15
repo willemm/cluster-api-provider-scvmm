@@ -67,6 +67,29 @@ spec:
                         description: Memory in Megabytes
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
+                      networking:
+                        description: Network settings
+                        properties:
+                          domain:
+                            description: Domain
+                            type: string
+                          gateway:
+                            description: Gateway
+                            type: string
+                          ipAddress:
+                            description: IP Address
+                            type: string
+                          nameservers:
+                            description: Nameservers
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - domain
+                        - gateway
+                        - ipAddress
+                        - nameservers
+                        type: object
                       providerID:
                         description: ProviderID is scvmm plus bios-guid
                         type: string
