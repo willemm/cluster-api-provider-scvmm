@@ -644,6 +644,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	ScvmmExecHost = os.Getenv("SCVMM_EXECHOST")
 	ScriptDir = os.Getenv("SCRIPT_DIR")
+	ScvmmLibraryShare = os.Getenv("SCVMM_LIBRARY")
 
 	ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	if ScvmmUsername == "" {

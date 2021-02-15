@@ -32,7 +32,7 @@ function GetVM($vmname) {
   }
 }
 
-function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $isopath)
+function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $isopath) {
   try {
     if ($isopath) {
       $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
