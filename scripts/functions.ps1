@@ -32,8 +32,20 @@ function GetVM($vmname) {
   }
 }
 
-function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $bootstrapdata) {
+function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $isopath)
   try {
+    if ($isopath) {
+      $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
+      if (-not $shr) {
+        throw "Library share containing $isopath not found"
+      }
+      $pdir = $isopath -replace $shr.Path, '' -replace '/.*$', ''
+      Read-SCLibraryShare -LibraryShare $shr -Path $pdir
+      $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | select -first 1
+      if (-not $ISO) {
+        throw "Isofile $isopath not found"
+      }
+    }
     $JobGroupID = [GUID]::NewGuid().ToString()
     if ($vhdisk) {
       $VirtualHardDisk = Get-SCVirtualHardDisk -name $vhdisk
@@ -62,6 +74,11 @@ function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpu
     $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup 'SO'
     $SCCloud = Get-SCCloud -Name $cloud
     $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously
+    if ($isopath) {
+      $DVDDrive = Get-SCVirtualDVDrive -VM $vm | select -first 1
+      Set-SCVirtualDVDrive $DVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO
+      Remove-SCISO -ISO $ISO -Force -RunAsynchronously
+    }
 
     return VMToJson $vm "Creating"
   } catch {

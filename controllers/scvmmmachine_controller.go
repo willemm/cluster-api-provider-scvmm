@@ -36,13 +36,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
-	"encoding/base64"
+	// "encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/masterzen/winrm"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/hirochachacha/go-smb2"
+	"net"
 )
 
 const (
@@ -85,6 +90,8 @@ var (
 	ScvmmUsername string
 	// Password for running the scripts
 	ScvmmPassword string
+	// Location of Scvmm Library Share
+	ScvmmLibraryShare string
 	// Location of the powershell script files
 	ScriptDir string
 	// Holds the powershell script-functions (will be executed at the start of each remote shell)
@@ -108,7 +115,7 @@ type VMResult struct {
 }
 
 // Create a winrm powershell session and seed with the function script
-func CreateWinrmCmd() (*winrm.Command, error) {
+func createWinrmCmd() (*winrm.Command, error) {
 	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
@@ -132,7 +139,7 @@ func CreateWinrmCmd() (*winrm.Command, error) {
 	return cmd, nil
 }
 
-func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
+func getWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	decoder := json.NewDecoder(cmd.Stdout)
 
 	var res VMResult
@@ -145,14 +152,227 @@ func GetWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	return res, nil
 }
 
-func SendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args ...interface{}) (VMResult, error) {
+func sendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args ...interface{}) (VMResult, error) {
 	log.V(1).Info("Sending WinRM command", "command", command, "args", args,
 		"cmdline", fmt.Sprintf(command+"\r\n", args...))
 	_, err := fmt.Fprintf(cmd.Stdin, command+"\r\n", args...)
 	if err != nil {
 		return VMResult{}, err
 	}
-	return GetWinrmResult(cmd)
+	return getWinrmResult(cmd)
+}
+
+type CloudInitFile struct {
+	Filename string
+	Contents []byte
+}
+
+func writeCloudInit(log logr.Logger, sharePath string, bootstrapData []byte) error {
+	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
+	// Parse share path into hostname, sharename, path
+	shareParts := strings.Split(sharePath, "\\")
+	host := shareParts[2]
+	share := shareParts[3]
+	path := strings.Join(shareParts[4:], "/")
+
+	conn, err := net.Dial("tcp", host+":445")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	d := &smb2.Dialer{
+		Initiator: &smb2.NTLMInitiator{
+			User:     "USERNAME",
+			Password: "PASSWORD",
+		},
+	}
+
+	s, err := d.Dial(conn)
+	if err != nil {
+		return err
+	}
+	defer s.Logoff()
+
+	fs, err := s.Mount(share)
+	if err != nil {
+		return err
+	}
+	defer fs.Umount()
+	fh, err := fs.Create(path)
+	if err != nil {
+		return err
+	}
+	files := make([]CloudInitFile, 2)
+	files[0] = CloudInitFile{
+		"meta-data",
+		[]byte("instance-id: abc-xyz\nlocal-hostname: xyzzy\n"),
+	}
+	files[1] = CloudInitFile{
+		"user-data",
+		bootstrapData,
+	}
+	if err := writeISO9660(fh, files); err != nil {
+		fh.Close()
+		fs.Remove(path)
+		return err
+	}
+	fh.Close()
+	return nil
+}
+
+func putString(buf []byte, text string) {
+	const padString = "                                                                                                                                "
+	copy(buf, []byte(text+padString))
+}
+
+func putU16(buf []byte, value uint16) {
+	binary.LittleEndian.PutUint16(buf[0:2], value)
+	binary.BigEndian.PutUint16(buf[2:4], value)
+}
+
+func putU32(buf []byte, value uint32) {
+	binary.LittleEndian.PutUint32(buf[0:4], value)
+	binary.BigEndian.PutUint32(buf[4:8], value)
+}
+
+func putDate(buf []byte, value time.Time) {
+	if value.IsZero() {
+		copy(buf[0:16], []byte("0000000000000000"))
+	} else {
+		copy(buf[0:16], []byte(value.UTC().Format("2006010215040500")))
+	}
+	buf[16] = 0
+}
+
+type isoDirent struct {
+	Location      int
+	Length        int
+	RecordingDate time.Time
+	FileFlags     byte
+	Identifier    string
+}
+
+func putDirent(sector []byte, offset int, dirent *isoDirent) int {
+	identLen := len(dirent.Identifier)
+	totlen := (33 + identLen | 1) + 1 // Pad to even length
+	if offset+totlen > 2048 {
+		return -1
+	}
+	buf := sector[offset : offset+totlen]
+	buf[0] = byte(totlen)
+	putU32(buf[2:10], uint32(dirent.Location))
+	putU32(buf[10:18], uint32(dirent.Length))
+
+	year, month, day := dirent.RecordingDate.UTC().Date()
+	hour, minute, second := dirent.RecordingDate.UTC().Clock()
+	buf[18] = byte(year - 1900)
+	buf[19] = byte(month)
+	buf[20] = byte(day)
+	buf[21] = byte(hour)
+	buf[22] = byte(minute)
+	buf[23] = byte(second)
+
+	buf[25] = dirent.FileFlags
+	putU16(buf[28:32], 1) // Volume sequence number
+	buf[32] = byte(identLen)
+	if identLen > 0 {
+		copy(buf[33:256], []byte(dirent.Identifier))
+	}
+	return offset + totlen
+}
+
+func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
+	sector := make([]byte, 2048)
+	now := time.Now()
+
+	// Calculate the total size
+	// NB: Assumes all files are in the root and the dirent will not exceed one sector
+	// 16,17 = volume identifiers, 18 = directory
+	lastSector := 19
+	for cif := range files {
+		// Round up to sector size
+		fsz := ((len(files[cif].Contents) - 1) / 2048) + 1
+		lastSector = lastSector + fsz
+	}
+
+	// Start with 32K of zeroes
+	for i := 0; i < 16; i++ {
+		if _, err := fh.Write(sector); err != nil {
+			return err
+		}
+	}
+	// Write Primary Volume Descriptor (sector 16)
+	sector[0] = 1
+	putString(sector[1:6], "CD001")
+	sector[7] = 1
+	putString(sector[8:40], "LINUX")                                        // System identifier
+	putString(sector[40:72], "cidata")                                      // Volume identifier
+	putU32(sector[80:88], uint32(lastSector))                               // Volume Space Size
+	putU16(sector[120:124], 1)                                              // Volume Set Size
+	putU16(sector[124:128], 1)                                              // Sequence Number
+	putU16(sector[128:132], 2048)                                           // Logical Block Size
+	putDirent(sector, 156, &isoDirent{18, 2048, now, 2, string([]byte{0})}) // Root directory entry
+	putString(sector[190:318], "")                                          // Volume Set
+	putString(sector[318:446], "")                                          // Publisher
+	putString(sector[446:574], "")                                          // Data Preparer
+	putString(sector[574:702], "cluster-api-provider-scvmm")                // Application
+	putString(sector[702:740], "")                                          // Copyright File
+	putString(sector[740:776], "")                                          // Abstract File
+	putString(sector[776:813], "")                                          // Bibliographic File
+	putDate(sector[813:830], now)                                           // Volume Creation
+	putDate(sector[830:847], now)                                           // Volume Modification
+	putDate(sector[847:864], time.Time{})                                   // Volume Expiration
+	putDate(sector[864:881], now)                                           // Volume Effective
+	sector[881] = 1                                                         // File Structure Version
+	if _, err := fh.Write(sector); err != nil {
+		return err
+	}
+
+	for i := range sector {
+		sector[i] = 0
+	}
+	// Write Terminator VD (sector 17)
+	sector[0] = 255                    // Type
+	copy(sector[1:6], []byte("CD001")) // Identifier
+	sector[6] = 1                      // Version
+	if _, err := fh.Write(sector); err != nil {
+		return err
+	}
+	for i := range sector {
+		sector[i] = 0
+	}
+
+	// Write directory (sector 18)
+	curOff := 0
+	curOff = putDirent(sector, curOff, &isoDirent{18, 2048, now, 2, string([]byte{0})}) // Own directory entry
+	curOff = putDirent(sector, curOff, &isoDirent{18, 2048, now, 2, string([]byte{1})}) // Parent directory entry
+
+	// Write directory entries
+	fileSector := 19
+	for cif := range files {
+		flen := len(files[cif].Contents)
+		curOff = putDirent(sector, curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename})
+		fileSector = fileSector + ((flen - 1) / 2048) + 1
+	}
+	if _, err := fh.Write(sector); err != nil {
+		return err
+	}
+	for i := range sector {
+		sector[i] = 0
+	}
+	for cif := range files {
+		if _, err := fh.Write(files[cif].Contents); err != nil {
+			return err
+		}
+		padlen := (2048 - (len(files[cif].Contents) % 2048)) % 2048
+		if padlen > 0 {
+			if _, err := fh.Write(sector[:padlen]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines,verbs=get;list;watch;create;update;patch;delete
@@ -171,23 +391,10 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.V(1).Info("Set ready to false")
-	// scvmmMachine.Status.Ready = false
 	patchHelper, err := patch.NewHelper(scvmmMachine, r)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
 	}
-	/*
-		defer func() {
-			log.V(1).Info("Patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
-				log.Error(err, "failed to patch ScvmmMachine")
-				if retErr == nil {
-					retErr = errors.Wrap(err, "Patch scvmmMachine")
-				}
-			}
-		}()
-	*/
 
 	// Handle deleted machines
 	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
@@ -264,13 +471,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
-	cmd, err := CreateWinrmCmd()
+	cmd, err := createWinrmCmd()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
 	}
 	defer cmd.Close()
 	log.V(1).Info("Running GetVM")
-	vm, err := SendWinrmCommand(log, cmd, "GetVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := sendWinrmCommand(log, cmd, "GetVM -VMName %q", scvmmMachine.Spec.VMName)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
 	}
@@ -290,12 +497,18 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			r.Log.Error(err, "failed to get bootstrap data")
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
 		}
+		log.V(1).Info("Create cloudinit")
+		isoName := scvmmMachine.Spec.VMName + "-cloud-init.iso"
+		if err := writeCloudInit(log, ScvmmLibraryShare+"/ISOs/"+isoName, bootstrapData); err != nil {
+			r.Log.Error(err, "failed to create cloud init")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
+		}
 		log.V(1).Info("Call CreateVM")
-		vm, err = SendWinrmCommand(log, cmd, "CreateVM -Cloud %q -VMName %q -VMTemplate %q -VHDisk %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -BootstrapData %q",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud %q -VMName %q -VMTemplate %q -VHDisk %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -ISOName %q",
 			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.VMTemplate,
 			scvmmMachine.Spec.VHDisk, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
 			scvmmMachine.Spec.CPUCount, (scvmmMachine.Spec.DiskSize.Value() / 1024 / 1024),
-			scvmmMachine.Spec.VMNetwork, bootstrapData)
+			scvmmMachine.Spec.VMNetwork, isoName)
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
@@ -330,7 +543,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, err
 		}
-		vm, err = SendWinrmCommand(log, cmd, "StartVM -VMName %q", scvmmMachine.Spec.VMName)
+		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName %q", scvmmMachine.Spec.VMName)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 		}
@@ -375,14 +588,14 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	}
 
 	log.Info("Doing removal of ScvmmMachine")
-	cmd, err := CreateWinrmCmd()
+	cmd, err := createWinrmCmd()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
 	}
 	defer cmd.Close()
 
 	log.V(1).Info("Call RemoveVM")
-	vm, err := SendWinrmCommand(log, cmd, "RemoveVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName %q", scvmmMachine.Spec.VMName)
 	if err != nil {
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to delete VM")
 	}
@@ -505,21 +718,21 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 	)
 }
 
-func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
+func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) ([]byte, error) {
 	if machine.Spec.Bootstrap.DataSecretName == nil {
-		return "", errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
 	}
 
 	s := &corev1.Secret{}
 	key := client.ObjectKey{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
 	if err := r.Client.Get(ctx, key, s); err != nil {
-		return "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
 	}
 
 	value, ok := s.Data["value"]
 	if !ok {
-		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
+		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
 	}
 
-	return base64.StdEncoding.EncodeToString(value), nil
+	return value, nil
 }

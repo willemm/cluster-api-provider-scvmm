@@ -9,3 +9,12 @@ Todo:
 - Actually send the bootstrap data (mount as iso image)  <- This is the big one
 - Set a template (needs a field in the spec)
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
+
+
+Uploading an ISO:
+- Create iso (using go library and then compres and send as base64, or using the powershell script?)
+- Get-SCLibrarySHare -Name <???> (probably env var to determine which?)
+- Upload iso to library share (libraryshare.Path \ISOs) (also env var?)
+- Read-SCLibraryShare -LibraryShare <libraryshare> -Path <...\ISOs> (Re-scans the library)
+- Get-SCISO -Name <uploaded file>
+- New-SCVirtualDVDDrive with iso

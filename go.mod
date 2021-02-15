@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/go-logr/logr v0.1.0
+	github.com/hirochachacha/go-smb2 v1.0.3
 	github.com/masterzen/winrm v0.0.0-20201030141608-56ca5c5f2380
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.1
