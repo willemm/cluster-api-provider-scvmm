@@ -10,6 +10,12 @@ Todo:
 - Set a template (needs a field in the spec)
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
 
+- Add to api/Spec: 
+  - Hardware Profile
+  - Host Group
+  - Description
+  - StartAction, StopAction
+
 
 Uploading an ISO:
 - Create iso (using go library and then compres and send as base64, or using the powershell script?)

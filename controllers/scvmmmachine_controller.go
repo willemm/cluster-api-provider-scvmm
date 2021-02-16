@@ -506,32 +506,12 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	log.V(1).Info("GetVM result", "vm", vm)
 	if vm.Name == "" {
-		if machine.Spec.Bootstrap.DataSecretName == nil {
-			if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
-				log.Info("Waiting for the control plane to be initialized")
-				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
-			}
-			log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
-		}
-		log.V(1).Info("Get bootstrap data")
-		bootstrapData, err := r.getBootstrapData(ctx, machine)
-		if err != nil {
-			r.Log.Error(err, "failed to get bootstrap data")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
-		}
-		log.V(1).Info("Create cloudinit")
-		isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
-		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
-			r.Log.Error(err, "failed to create cloud init")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
-		}
 		log.V(1).Info("Call CreateVM")
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s' -ISOPath '%s'",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s'",
 			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.VMTemplate,
 			scvmmMachine.Spec.VHDisk, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
 			scvmmMachine.Spec.CPUCount, (scvmmMachine.Spec.DiskSize.Value() / 1024 / 1024),
-			scvmmMachine.Spec.VMNetwork, isoPath)
+			scvmmMachine.Spec.VMNetwork)
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
@@ -560,17 +540,37 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
 	if vm.Status == "PowerOff" {
-		log.V(1).Info("Call StartVM")
+		if machine.Spec.Bootstrap.DataSecretName == nil {
+			if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
+				log.Info("Waiting for the control plane to be initialized")
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
+			}
+			log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
+		}
+		log.V(1).Info("Get bootstrap data")
+		bootstrapData, err := r.getBootstrapData(ctx, machine)
+		if err != nil {
+			r.Log.Error(err, "failed to get bootstrap data")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
+		}
+		log.V(1).Info("Create cloudinit")
+		isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
+		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
+			r.Log.Error(err, "failed to create cloud init")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
+		}
 		conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, err
 		}
-		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'", scvmmMachine.Spec.VMName)
+		log.V(1).Info("Call AddIsoToVM")
+		vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'", scvmmMachine.Spec.VMName, isoPath)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 		}
-		log.V(1).Info("StartVM result", "vm", vm)
+		log.V(1).Info("AddIsoToVM result", "vm", vm)
 		scvmmMachine.Status.VMStatus = vm.Status
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)

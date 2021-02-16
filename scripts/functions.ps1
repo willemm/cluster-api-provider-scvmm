@@ -34,18 +34,6 @@ function GetVM($vmname) {
 
 function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $isopath) {
   try {
-    if ($isopath) {
-      $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
-      if (-not $shr) {
-        throw "Library share containing $isopath not found"
-      }
-      $pdir = split-path ($isopath.Remove(0,$shr.Path.length+1))
-      Read-SCLibraryShare -LibraryShare $shr -Path $pdir
-      $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | select -first 1
-      if (-not $ISO) {
-        throw "Isofile $isopath not found"
-      }
-    }
     $JobGroupID = [GUID]::NewGuid().ToString()
     if ($vhdisk) {
       $VirtualHardDisk = Get-SCVirtualHardDisk -name $vhdisk
@@ -58,12 +46,12 @@ function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpu
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem
     }
 
-    $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
-    $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
-
     if ($vmtemplate) {
       $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
     } else {
+      $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq "Server Gen 2 - Medium" }
+      $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
+
       $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation 2 -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization
     }
 
@@ -74,15 +62,36 @@ function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpu
     $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup 'SO'
     $SCCloud = Get-SCCloud -Name $cloud
     $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description "SO||talostest||manual" -JobGroup $JobGroupID -StartAction "NeverAutoTurnOnVM" -StopAction "ShutdownGuestOS" -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously
-    if ($isopath) {
-      $DVDDrive = Get-SCVirtualDVDrive -VM $vm | select -first 1
-      Set-SCVirtualDVDrive $DVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO
-      Remove-SCISO -ISO $ISO -Force -RunAsynchronously
-    }
 
     return VMToJson $vm "Creating"
   } catch {
     ErrorToJson 'Create VM' $_
+  }
+}
+
+function AddIsoToVM($vmname, $isopath) {
+  try {
+    $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
+    if (-not $shr) {
+      throw "Library share containing $isopath not found"
+    }
+    $pdir = split-path ($isopath.Remove(0,$shr.Path.length+1))
+    Read-SCLibraryShare -LibraryShare $shr -Path $pdir | out-null
+    $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | select -first 1
+    if (-not $ISO) {
+      throw "Isofile $isopath not found"
+    }
+    $vm = Get-SCVirtualMachine -Name $vmname
+    if (-not $vm) {
+      throw "Virtual Machine $vmname not found"
+    }
+    $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | select -first 1
+    Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO
+
+    $vm = Start-SCVirtualMachine -VM $vm -RunAsynchronously
+    return VMToJson $vm "Starting"
+  } catch {
+    ErrorToJson 'Add ISO to VM' $_
   }
 }
 
