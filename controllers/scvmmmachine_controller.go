@@ -175,6 +175,7 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData [
 	share := shareParts[3]
 	path := strings.Join(shareParts[4:], "/")
 
+	log.V(1).Info("smb2 Connecting", "host", host, "port", 445)
 	conn, err := net.Dial("tcp", host+":445")
 	if err != nil {
 		return err
@@ -183,22 +184,25 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData [
 
 	d := &smb2.Dialer{
 		Initiator: &smb2.NTLMInitiator{
-			User:     "USERNAME",
-			Password: "PASSWORD",
+			User:     ScvmmUsername,
+			Password: ScvmmPassword,
 		},
 	}
 
+	log.V(1).Info("smb2 Dialing", "user", ScvmmUsername)
 	s, err := d.Dial(conn)
 	if err != nil {
 		return err
 	}
 	defer s.Logoff()
 
+	log.V(1).Info("smb2 Mounting share", "share", share)
 	fs, err := s.Mount(share)
 	if err != nil {
 		return err
 	}
 	defer fs.Umount()
+	log.V(1).Info("smb2 Creating file", "path", path)
 	fh, err := fs.Create(path)
 	if err != nil {
 		return err
@@ -228,11 +232,14 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData [
 		"user-data",
 		bootstrapData,
 	}
+	log.V(1).Info("smb2 Writing ISO", "path", path)
 	if err := writeISO9660(fh, files); err != nil {
+		log.Error(err, "Writing ISO file", "host", host, "share", share, "path", path)
 		fh.Close()
 		fs.Remove(path)
 		return err
 	}
+	log.V(1).Info("smb2 Closing file")
 	fh.Close()
 	return nil
 }
@@ -368,7 +375,7 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
 	fileSector := 19
 	for cif := range files {
 		flen := len(files[cif].Contents)
-		curOff = putDirent(sector, curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename})
+		curOff = putDirent(sector, curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename + ";1"})
 		fileSector = fileSector + ((flen - 1) / 2048) + 1
 	}
 	if _, err := fh.Write(sector); err != nil {
@@ -493,7 +500,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	defer cmd.Close()
 	log.V(1).Info("Running GetVM")
-	vm, err := sendWinrmCommand(log, cmd, "GetVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", scvmmMachine.Spec.VMName)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
 	}
@@ -514,17 +521,17 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
 		}
 		log.V(1).Info("Create cloudinit")
-		isoName := scvmmMachine.Spec.VMName + "-cloud-init.iso"
-		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, ScvmmLibraryShare+"\\ISOs\\"+isoName, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
+		isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
+		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
 			r.Log.Error(err, "failed to create cloud init")
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 		}
 		log.V(1).Info("Call CreateVM")
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud %q -VMName %q -VMTemplate %q -VHDisk %q -Memory %d -CPUCount %d -DiskSize %d -VMNetwork %q -ISOName %q",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s' -ISOPath '%s'",
 			scvmmMachine.Spec.Cloud, scvmmMachine.Spec.VMName, scvmmMachine.Spec.VMTemplate,
 			scvmmMachine.Spec.VHDisk, (scvmmMachine.Spec.Memory.Value() / 1024 / 1024),
 			scvmmMachine.Spec.CPUCount, (scvmmMachine.Spec.DiskSize.Value() / 1024 / 1024),
-			scvmmMachine.Spec.VMNetwork, isoName)
+			scvmmMachine.Spec.VMNetwork, isoPath)
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
@@ -559,7 +566,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, err
 		}
-		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName %q", scvmmMachine.Spec.VMName)
+		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'", scvmmMachine.Spec.VMName)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 		}
@@ -611,7 +618,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	defer cmd.Close()
 
 	log.V(1).Info("Call RemoveVM")
-	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName %q", scvmmMachine.Spec.VMName)
+	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName '%s'", scvmmMachine.Spec.VMName)
 	if err != nil {
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to delete VM")
 	}

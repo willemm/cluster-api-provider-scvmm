@@ -39,7 +39,7 @@ function CreateVM($cloud, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpu
       if (-not $shr) {
         throw "Library share containing $isopath not found"
       }
-      $pdir = $isopath -replace $shr.Path, '' -replace '/.*$', ''
+      $pdir = split-path ($isopath.Remove(0,$shr.Path.length+1))
       Read-SCLibraryShare -LibraryShare $shr -Path $pdir
       $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | select -first 1
       if (-not $ISO) {
