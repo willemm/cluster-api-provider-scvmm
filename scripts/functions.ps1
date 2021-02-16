@@ -86,7 +86,7 @@ function AddIsoToVM($vmname, $isopath) {
       throw "Virtual Machine $vmname not found"
     }
     $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | select -first 1
-    Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO
+    Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO -Link | out-null
 
     $vm = Start-SCVirtualMachine -VM $vm -RunAsynchronously
     return VMToJson $vm "Starting"

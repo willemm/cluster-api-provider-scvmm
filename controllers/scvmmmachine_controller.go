@@ -575,7 +575,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		if metaData != nil || bootstrapData != nil {
 			log.V(1).Info("Create cloudinit")
-			isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
+			isoPath := ScvmmLibraryShare + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 			if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, metaData, scvmmMachine.Spec.Networking); err != nil {
 				r.Log.Error(err, "failed to create cloud init")
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
