@@ -106,6 +106,7 @@ type VMResult struct {
 	Memory         int
 	CpuCount       int
 	VirtualNetwork string
+	IPv4Addresses  []string
 	Guid           string
 	Error          string
 	ScriptErrors   string
@@ -223,7 +224,7 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData, 
 			"      search:\n" +
 			"      - " + networking.Domain + "\n" +
 			"      addresses:\n" +
-			"      - " + strings.Join(networking.Nameservers, "\n        - ") + "\n"
+			"      - " + strings.Join(networking.Nameservers, "\n      - ") + "\n"
 		networkConfig = []byte(data)
 	}
 	numFiles := 2
@@ -631,6 +632,15 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	log.V(1).Info("Running, set status true")
 	scvmmMachine.Status.Ready = true
+	if vm.IPv4Addresses != nil {
+		scvmmMachine.Status.Addresses = make([]clusterv1.MachineAddress, len(vm.IPv4Addresses))
+		for i := range vm.IPv4Addresses {
+			scvmmMachine.Status.Addresses[i] = clusterv1.MachineAddress{
+				Type:    clusterv1.MachineInternalIP,
+				Address: vm.IPv4Addresses[i],
+			}
+		}
+	}
 	conditions.MarkTrue(scvmmMachine, VmRunning)
 	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)

@@ -9,13 +9,17 @@ Todo:
 v Actually send the bootstrap data (mount as iso image)  <- This is the big one
 v Set a template (needs a field in the spec)
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
+- Some kind of domain join action?
+- Pluggable script to determine IP addresses
 
 - Add to api/Spec: 
-  - Hardware Profile
-  - Host Group
-  - Description
-  - StartAction, StopAction
+  v Hardware Profile
+  v Host Group
+  v Description
+  v StartAction, StopAction
 
+- Add to Status:
+  - IP address(es)
 
 Uploading an ISO:
 - Create iso (using go library and then compres and send as base64, or using the powershell script?)
