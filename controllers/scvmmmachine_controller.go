@@ -167,7 +167,7 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
-func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData []byte, networking *infrav1.ScvmmMachineNetworking) error {
+func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData []byte, metaData []byte, networking *infrav1.ScvmmMachineNetworking) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
@@ -207,26 +207,29 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData [
 	if err != nil {
 		return err
 	}
-	metadata := "instance-id: scvmm-capi\n" +
-		"hostname: " + hostname + "\n"
-	if networking != nil {
-		metadata += "network-config: |\n" +
-			"  version: 2\n" +
-			"  ethernets:\n" +
-			"    eth0:\n" +
-			"      addresses:\n" +
-			"      - " + networking.IPAddress + "\n" +
-			"      gateway4: " + networking.Gateway + "\n" +
-			"      nameservers:\n" +
-			"        search:\n" +
-			"        - " + networking.Domain + "\n" +
-			"        addresses:\n" +
-			"        - " + strings.Join(networking.Nameservers, "\n        - ") + "\n"
+	if metaData == nil {
+		data := "instance-id: scvmm-capi\n" +
+			"hostname: " + hostname + "\n"
+		if networking != nil {
+			data += "network-config: |\n" +
+				"  version: 2\n" +
+				"  ethernets:\n" +
+				"    eth0:\n" +
+				"      addresses:\n" +
+				"      - " + networking.IPAddress + "\n" +
+				"      gateway4: " + networking.Gateway + "\n" +
+				"      nameservers:\n" +
+				"        search:\n" +
+				"        - " + networking.Domain + "\n" +
+				"        addresses:\n" +
+				"        - " + strings.Join(networking.Nameservers, "\n        - ") + "\n"
+		}
+		metaData = []byte(data)
 	}
 	files := make([]CloudInitFile, 2)
 	files[0] = CloudInitFile{
 		"meta-data",
-		[]byte(metadata),
+		metaData,
 	}
 	files[1] = CloudInitFile{
 		"user-data",
@@ -426,46 +429,58 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return r.reconcileDelete(ctx, patchHelper, scvmmMachine)
 	}
 
-	log.V(1).Info("Fetching machine")
-	// Fetch the Machine.
-	machine, err := util.GetOwnerMachine(ctx, r.Client, scvmmMachine.ObjectMeta)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Get owner machine")
-	}
-	if machine == nil {
-		log.Info("Waiting for Machine Controller to set OwnerRef on ScvmmMachine")
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForOwnerReason, "")
-	}
+	var cluster *clusterv1.Cluster
+	var machine *clusterv1.Machine
+	// If the user provides a cloudInit section in the machine, assume it's a standalone machine
+	// Otherwise get the owning machine, cluster, etc.
+	if scvmmMachine.Spec.CloudInit == nil {
+		log.V(1).Info("Fetching machine")
+		// Fetch the Machine.
+		machine, err = util.GetOwnerMachine(ctx, r.Client, scvmmMachine.ObjectMeta)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Get owner machine")
+		}
+		if machine == nil {
+			log.Info("Waiting for Machine Controller to set OwnerRef on ScvmmMachine")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForOwnerReason, "")
+		}
 
-	log = log.WithValues("machine", machine.Name)
+		log = log.WithValues("machine", machine.Name)
 
-	log.V(1).Info("Fetching cluster")
-	// Fetch the Cluster.
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
-	if err != nil {
-		log.Info("ScvmmMachine owner Machine is missing cluster label or cluster does not exist")
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, MissingClusterReason, "ScvmmMachine owner Machine is missing cluster label or cluster does not exist")
-	}
-	if cluster == nil {
-		log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName))
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, MissingClusterReason, "Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName)
-	}
+		log.V(1).Info("Fetching cluster")
+		// Fetch the Cluster.
+		cluster, err = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+		if err != nil {
+			log.Info("ScvmmMachine owner Machine is missing cluster label or cluster does not exist")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, MissingClusterReason, "ScvmmMachine owner Machine is missing cluster label or cluster does not exist")
+		}
+		if cluster == nil {
+			log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName))
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, MissingClusterReason, "Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName)
+		}
 
-	log = log.WithValues("cluster", cluster.Name)
+		log = log.WithValues("cluster", cluster.Name)
 
-	log.V(1).Info("Fetching scvmmcluster")
-	// Fetch the Scvmm Cluster.
-	scvmmCluster := &infrav1.ScvmmCluster{}
-	scvmmClusterName := client.ObjectKey{
-		Namespace: scvmmMachine.Namespace,
-		Name:      cluster.Spec.InfrastructureRef.Name,
-	}
-	if err := r.Client.Get(ctx, scvmmClusterName, scvmmCluster); err != nil {
-		log.Info("ScvmmCluster is not available yet")
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
-	}
+		log.V(1).Info("Fetching scvmmcluster")
+		// Fetch the Scvmm Cluster.
+		scvmmCluster := &infrav1.ScvmmCluster{}
+		scvmmClusterName := client.ObjectKey{
+			Namespace: scvmmMachine.Namespace,
+			Name:      cluster.Spec.InfrastructureRef.Name,
+		}
+		if err := r.Client.Get(ctx, scvmmClusterName, scvmmCluster); err != nil {
+			log.Info("ScvmmCluster is not available yet")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
+		}
 
-	log = log.WithValues("scvmm-cluster", scvmmCluster.Name)
+		log = log.WithValues("scvmm-cluster", scvmmCluster.Name)
+
+		// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
+		if !cluster.Status.InfrastructureReady {
+			log.Info("Waiting for ScvmmCluster Controller to create cluster infrastructure")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForClusterInfrastructureReason, "")
+		}
+	}
 
 	log.V(1).Info("Check finalizer")
 	// Add finalizer.  Apparently we should return here to avoid a race condition
@@ -478,12 +493,6 @@ func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
-	}
-
-	// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
-	if !cluster.Status.InfrastructureReady {
-		log.Info("Waiting for ScvmmCluster Controller to create cluster infrastructure")
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForClusterInfrastructureReason, "")
 	}
 
 	// Handle non-deleted machines
@@ -540,37 +549,56 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
 	if vm.Status == "PowerOff" {
-		if machine.Spec.Bootstrap.DataSecretName == nil {
-			if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
-				log.Info("Waiting for the control plane to be initialized")
-				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
+		var bootstrapData, metaData []byte
+		if machine != nil {
+			if machine.Spec.Bootstrap.DataSecretName == nil {
+				if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
+					log.Info("Waiting for the control plane to be initialized")
+					return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
+				}
+				log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
 			}
-			log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
+			log.V(1).Info("Get bootstrap data")
+			bootstrapData, err = r.getBootstrapData(ctx, machine)
+			if err != nil {
+				r.Log.Error(err, "failed to get bootstrap data")
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
+			}
+		} else if scvmmMachine.Spec.CloudInit != nil {
+			if scvmmMachine.Spec.CloudInit.UserData != "" {
+				bootstrapData = []byte(scvmmMachine.Spec.CloudInit.UserData)
+			}
+			if scvmmMachine.Spec.CloudInit.MetaData != "" {
+				metaData = []byte(scvmmMachine.Spec.CloudInit.MetaData)
+			}
 		}
-		log.V(1).Info("Get bootstrap data")
-		bootstrapData, err := r.getBootstrapData(ctx, machine)
-		if err != nil {
-			r.Log.Error(err, "failed to get bootstrap data")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
+		if metaData != nil || bootstrapData != nil {
+			log.V(1).Info("Create cloudinit")
+			isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
+			if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, metaData, scvmmMachine.Spec.Networking); err != nil {
+				r.Log.Error(err, "failed to create cloud init")
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
+			}
+			conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
+			if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+				log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+				return ctrl.Result{}, err
+			}
+			log.V(1).Info("Call AddIsoToVM")
+			vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'", scvmmMachine.Spec.VMName, isoPath)
+			if err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
+			}
+			log.V(1).Info("AddIsoToVM result", "vm", vm)
+		} else {
+			log.V(1).Info("Call StartVM")
+			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'", scvmmMachine.Spec.VMName)
+			if err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
+			}
+			log.V(1).Info("StartVM result", "vm", vm)
 		}
-		log.V(1).Info("Create cloudinit")
-		isoPath := ScvmmLibraryShare + "\\ISOs\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
-		if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, scvmmMachine.Spec.Networking); err != nil {
-			r.Log.Error(err, "failed to create cloud init")
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
-		}
-		conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
-		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			return ctrl.Result{}, err
-		}
-		log.V(1).Info("Call AddIsoToVM")
-		vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'", scvmmMachine.Spec.VMName, isoPath)
-		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
-		}
-		log.V(1).Info("AddIsoToVM result", "vm", vm)
 		scvmmMachine.Status.VMStatus = vm.Status
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)

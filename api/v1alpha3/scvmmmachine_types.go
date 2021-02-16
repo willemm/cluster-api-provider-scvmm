@@ -48,11 +48,11 @@ type ScvmmMachineSpec struct {
 	// Network settings
 	// +optional
 	Networking *ScvmmMachineNetworking `json:"networking,omitempty"`
-        // Cloud-Init data
-        // This triggers the controller to create the machine without a (cluster-api) cluster
-        // For testing purposes, or just for creating VMs
-        // +optional
-        CloudInit *ScvmmMachineCloudInit `json:"cloudInit,omitempty"`
+	// Cloud-Init data
+	// This triggers the controller to create the machine without a (cluster-api) cluster
+	// For testing purposes, or just for creating VMs
+	// +optional
+	CloudInit *ScvmmMachineCloudInit `json:"cloudInit,omitempty"`
 }
 
 type ScvmmMachineNetworking struct {
@@ -69,12 +69,12 @@ type ScvmmMachineNetworking struct {
 // NoCloud cloud-init data (user-data and meta-data file contents)
 // This triggers the machine to be created without a cluster
 type ScvmmMachineCloudInit struct {
-        // Meta-data file contents
-        // +optional
-        MetaData string `json:"metaData,omitempty"`
-        // User-data file contents
-        // +optional
-        UserData string `json:"userData,omitempty"`
+	// Meta-data file contents
+	// +optional
+	MetaData string `json:"metaData,omitempty"`
+	// User-data file contents
+	// +optional
+	UserData string `json:"userData,omitempty"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
