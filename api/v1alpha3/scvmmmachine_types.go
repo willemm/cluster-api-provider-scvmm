@@ -29,6 +29,8 @@ type ScvmmMachineSpec struct {
 	ProviderID string `json:"providerID,omitempty"`
 	// VMM cloud to run VM on
 	Cloud string `json:"cloud"`
+	// Host Group to run VM in
+	HostGroup string `json:"hostGroup"`
 	// Name of the VM
 	VMName string `json:"vmName"`
 	// VM template to use
@@ -45,6 +47,19 @@ type ScvmmMachineSpec struct {
 	Memory resource.Quantity `json:"memory"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
+	// Hardware profile
+	HardwareProfile string `json:"hardwareProfile"`
+	// Description
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Start Action
+	// +optional
+	// +kubebuilder:validation:Enum=NeverAutoTurnOnVM;AlwaysAutoTurnOnVM;TurnOnVMIfRunningWhenVSStopped
+	StartAction string `json:"startAction,omitempty"`
+	// Stop Action
+	// +optional
+	// +kubebuilder:validation:Enum=ShutdownGuestOS;TurnOffVM;SaveVM
+	StopAction string `json:"stopAction,omitempty"`
 	// Network settings
 	// +optional
 	Networking *ScvmmMachineNetworking `json:"networking,omitempty"`
@@ -75,6 +90,9 @@ type ScvmmMachineCloudInit struct {
 	// User-data file contents
 	// +optional
 	UserData string `json:"userData,omitempty"`
+	// Network-config file contents
+	// +optional
+	NetworkConfig string `json:"networkConfig,omitempty"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine

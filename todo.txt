@@ -6,8 +6,8 @@ v CreateVM takes too long and hits a winrm timeout
     (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
 
 Todo:
-- Actually send the bootstrap data (mount as iso image)  <- This is the big one
-- Set a template (needs a field in the spec)
+v Actually send the bootstrap data (mount as iso image)  <- This is the big one
+v Set a template (needs a field in the spec)
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
 
 - Add to api/Spec: 
