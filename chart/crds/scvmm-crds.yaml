@@ -1,0 +1,436 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-scvmm
+    cluster.x-k8s.io/v1alpha3: v1alpha3
+    clusterctl.cluster.x-k8s.io: ""
+    clusterctl.cluster.x-k8s.io/lifecycle: shared
+  name: scvmmclusters.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: ScvmmCluster
+    listKind: ScvmmClusterList
+    plural: scvmmclusters
+    singular: scvmmcluster
+  scope: Namespaced
+  versions:
+  - name: v1alpha3
+    schema:
+      openAPIV3Schema:
+        description: ScvmmCluster is the Schema for the scvmmclusters API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScvmmClusterSpec defines the desired state of ScvmmCluster
+            properties:
+              controlPlaneEndpoint:
+                description: ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+                properties:
+                  host:
+                    description: Host is the hostname on which the API server is serving.
+                    type: string
+                  port:
+                    description: Port is the port on which the API server is serving.
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
+            type: object
+          status:
+            description: ScvmmClusterStatus defines the observed state of ScvmmCluster
+            properties:
+              conditions:
+                description: Conditions defines current service state of the ScvmmCluster.
+                items:
+                  description: Condition defines an observation of a Cluster API resource operational state.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status to another. This should be when the underlying condition changed. If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about the transition. This field may be empty.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition in CamelCase. The specific API may choose whether or not this field is considered a guaranteed API. This field may not be empty.
+                      type: string
+                    severity:
+                      description: Severity provides an explicit classification of Reason code, so the users or machines can immediately understand the current situation and act accordingly. The Severity field MUST be set only when Status=False.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of condition in CamelCase or in foo.example.com/CamelCase. Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              ready:
+                description: Ready denotes that the scvmm cluster (infrastructure) is ready.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-scvmm
+    cluster.x-k8s.io/v1alpha3: v1alpha3
+    clusterctl.cluster.x-k8s.io: ""
+    clusterctl.cluster.x-k8s.io/lifecycle: shared
+  name: scvmmmachines.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: ScvmmMachine
+    listKind: ScvmmMachineList
+    plural: scvmmmachines
+    singular: scvmmmachine
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Virtual Machine Status
+      jsonPath: .status.vmStatus
+      name: STATUS
+      type: string
+    - description: Virtual Machine BIS GUID
+      jsonPath: .status.biosGuid
+      name: GUID
+      type: string
+    name: v1alpha3
+    schema:
+      openAPIV3Schema:
+        description: ScvmmMachine is the Schema for the scvmmmachines API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScvmmMachineSpec defines the desired state of ScvmmMachine
+            properties:
+              cloud:
+                description: VMM cloud to run VM on
+                type: string
+              cloudInit:
+                description: Cloud-Init data This triggers the controller to create the machine without a (cluster-api) cluster For testing purposes, or just for creating VMs
+                properties:
+                  metaData:
+                    description: Meta-data file contents
+                    type: string
+                  userData:
+                    description: User-data file contents
+                    type: string
+                type: object
+              cpuCount:
+                description: Number of CPU's
+                type: integer
+              diskSize:
+                anyOf:
+                - type: integer
+                - type: string
+                description: Disk size in gigabytes
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
+              memory:
+                anyOf:
+                - type: integer
+                - type: string
+                description: Memory in Megabytes
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
+              networking:
+                description: Network settings
+                properties:
+                  domain:
+                    description: Domain
+                    type: string
+                  gateway:
+                    description: Gateway
+                    type: string
+                  ipAddress:
+                    description: IP Address
+                    type: string
+                  nameservers:
+                    description: Nameservers
+                    items:
+                      type: string
+                    type: array
+                required:
+                - domain
+                - gateway
+                - ipAddress
+                - nameservers
+                type: object
+              providerID:
+                description: ProviderID is scvmm plus bios-guid
+                type: string
+              vhDisk:
+                description: Virtual Harddisk to use
+                type: string
+              vmName:
+                description: Name of the VM
+                type: string
+              vmNetwork:
+                description: Virtual Network identifier
+                type: string
+              vmTemplate:
+                description: VM template to use
+                type: string
+            required:
+            - cloud
+            - cpuCount
+            - diskSize
+            - memory
+            - vmName
+            - vmNetwork
+            type: object
+          status:
+            description: ScvmmMachineStatus defines the observed state of ScvmmMachine
+            properties:
+              addresses:
+                description: Addresses contains the associated addresses for the virtual machine
+                items:
+                  description: MachineAddress contains information for the node's address.
+                  properties:
+                    address:
+                      description: The machine address.
+                      type: string
+                    type:
+                      description: Machine address type, one of Hostname, ExternalIP or InternalIP.
+                      type: string
+                  required:
+                  - address
+                  - type
+                  type: object
+                type: array
+              biosGuid:
+                description: BiosGuid as reported by SVCMM
+                type: string
+              conditions:
+                description: Conditions defines current service state of the ScvmmMachine.
+                items:
+                  description: Condition defines an observation of a Cluster API resource operational state.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status to another. This should be when the underlying condition changed. If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about the transition. This field may be empty.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition in CamelCase. The specific API may choose whether or not this field is considered a guaranteed API. This field may not be empty.
+                      type: string
+                    severity:
+                      description: Severity provides an explicit classification of Reason code, so the users or machines can immediately understand the current situation and act accordingly. The Severity field MUST be set only when Status=False.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of condition in CamelCase or in foo.example.com/CamelCase. Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              creationTime:
+                description: Creation time as given by SCVMM
+                format: date-time
+                type: string
+              modifiedTime:
+                description: Modification time as given by SCVMM
+                format: date-time
+                type: string
+              ready:
+                description: Mandatory field, is machine ready
+                type: boolean
+              vmStatus:
+                description: Status string as given by SCVMM
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-scvmm
+    cluster.x-k8s.io/v1alpha3: v1alpha3
+    clusterctl.cluster.x-k8s.io: ""
+    clusterctl.cluster.x-k8s.io/lifecycle: shared
+  name: scvmmmachinetemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: ScvmmMachineTemplate
+    listKind: ScvmmMachineTemplateList
+    plural: scvmmmachinetemplates
+    singular: scvmmmachinetemplate
+  scope: Namespaced
+  versions:
+  - name: v1alpha3
+    schema:
+      openAPIV3Schema:
+        description: ScvmmMachineTemplate is the Schema for the scvmmmachinetemplates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScvmmMachineTemplateSpec defines the desired state of ScvmmMachineTemplate
+            properties:
+              template:
+                description: ScvmmMachineTemplateResource describes the data needed to create a ScvmmMachine from a template
+                properties:
+                  spec:
+                    description: Spec is the specification of the desired behavior of the machine.
+                    properties:
+                      cloud:
+                        description: VMM cloud to run VM on
+                        type: string
+                      cloudInit:
+                        description: Cloud-Init data This triggers the controller to create the machine without a (cluster-api) cluster For testing purposes, or just for creating VMs
+                        properties:
+                          metaData:
+                            description: Meta-data file contents
+                            type: string
+                          userData:
+                            description: User-data file contents
+                            type: string
+                        type: object
+                      cpuCount:
+                        description: Number of CPU's
+                        type: integer
+                      diskSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Disk size in gigabytes
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      memory:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Memory in Megabytes
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      networking:
+                        description: Network settings
+                        properties:
+                          domain:
+                            description: Domain
+                            type: string
+                          gateway:
+                            description: Gateway
+                            type: string
+                          ipAddress:
+                            description: IP Address
+                            type: string
+                          nameservers:
+                            description: Nameservers
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - domain
+                        - gateway
+                        - ipAddress
+                        - nameservers
+                        type: object
+                      providerID:
+                        description: ProviderID is scvmm plus bios-guid
+                        type: string
+                      vhDisk:
+                        description: Virtual Harddisk to use
+                        type: string
+                      vmName:
+                        description: Name of the VM
+                        type: string
+                      vmNetwork:
+                        description: Virtual Network identifier
+                        type: string
+                      vmTemplate:
+                        description: VM template to use
+                        type: string
+                    required:
+                    - cloud
+                    - cpuCount
+                    - diskSize
+                    - memory
+                    - vmName
+                    - vmNetwork
+                    type: object
+                required:
+                - spec
+                type: object
+            required:
+            - template
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

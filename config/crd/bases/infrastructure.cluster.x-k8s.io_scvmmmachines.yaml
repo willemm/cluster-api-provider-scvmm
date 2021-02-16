@@ -7,11 +7,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: scvmmmachines.infrastructure.cluster.x-k8s.io
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-scvmm
-    cluster.x-k8s.io/v1alpha3: v1alpha3
-    clusterctl.cluster.x-k8s.io: ""
-    clusterctl.cluster.x-k8s.io/lifecycle: shared
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
@@ -55,6 +50,18 @@ spec:
               cloud:
                 description: VMM cloud to run VM on
                 type: string
+              cloudInit:
+                description: Cloud-Init data This triggers the controller to create
+                  the machine without a (cluster-api) cluster For testing purposes,
+                  or just for creating VMs
+                properties:
+                  metaData:
+                    description: Meta-data file contents
+                    type: string
+                  userData:
+                    description: User-data file contents
+                    type: string
+                type: object
               cpuCount:
                 description: Number of CPU's
                 type: integer

@@ -42,6 +42,10 @@ deploy: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+# Generate CRD file (add labels to manifests, etc)
+chart: manifests
+	kustomize build config/crd > chart/crds/scvmm-crds.yaml
+
 # Run go fmt against code
 fmt:
 	go fmt ./...

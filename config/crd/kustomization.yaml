@@ -8,6 +8,9 @@ resources:
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
+- patches/crd_labels_scvmmclusters.yaml
+- patches/crd_labels_scvmmmachines.yaml
+- patches/crd_labels_scvmmmachinetemplates.yaml
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 #- patches/webhook_in_scvmmmachines.yaml
