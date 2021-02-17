@@ -32,7 +32,7 @@ type ScvmmMachineSpec struct {
 	// Host Group to run VM in
 	HostGroup string `json:"hostGroup"`
 	// Name of the VM
-        // +optional
+	// +optional
 	VMName string `json:"vmName,omitempty"`
 	// VM template to use
 	// +optional

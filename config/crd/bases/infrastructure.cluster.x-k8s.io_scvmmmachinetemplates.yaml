@@ -43,9 +43,10 @@ spec:
                 description: ScvmmMachineTemplateResource describes the data needed
                   to create a ScvmmMachine from a template
                 properties:
+                  metadata:
+                    type: object
                   spec:
-                    description: Spec is the specification of the desired behavior
-                      of the machine.
+                    description: ScvmmMachineSpec defines the desired state of ScvmmMachine
                     properties:
                       cloud:
                         description: VMM cloud to run VM on

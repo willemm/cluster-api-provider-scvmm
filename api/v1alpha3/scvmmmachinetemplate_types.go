@@ -52,6 +52,6 @@ func init() {
 
 // ScvmmMachineTemplateResource describes the data needed to create a ScvmmMachine from a template
 type ScvmmMachineTemplateResource struct {
-	// Spec is the specification of the desired behavior of the machine.
-	Spec ScvmmMachineSpec `json:"spec"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              ScvmmMachineSpec `json:"spec"`
 }
