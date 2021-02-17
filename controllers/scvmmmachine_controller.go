@@ -789,7 +789,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return ScvmmHost
 			}
 			return "$" + key
-		})
+		}) + "\r\n"
 	} else {
 		ScvmmExecHost = ScvmmHost
 	}
@@ -797,13 +797,15 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return errors.Wrap(err, "Read functions.ps1")
 	}
-	funcScript = funcScript + string(data)
+	funcScript = funcScript + string(data) + "\r\n"
 	data, err = ioutil.ReadFile(ScriptDir + "/extra.ps1")
 	if err != nil {
 		return errors.Wrap(err, "Read extra.ps1")
 	}
-	funcScript = funcScript + string(data)
+	funcScript = funcScript + string(data) + "\r\n"
 	FunctionScript = []byte(funcScript)
+
+	r.Log.V(1).Info("Function script: %q", "functions", funcScript)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
