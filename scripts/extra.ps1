@@ -1,6 +1,6 @@
 function AddVMSpec($spec, $metadata) {
   try {
-    return '{"spec":'+$spec+'}'
+    return $spec
   } catch {
     ErrorToJson 'Add VM Spec' $_
   }

@@ -159,7 +159,6 @@ spec:
             - hardwareProfile
             - hostGroup
             - memory
-            - vmName
             - vmNetwork
             type: object
           status:

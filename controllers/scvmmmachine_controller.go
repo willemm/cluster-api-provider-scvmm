@@ -116,7 +116,7 @@ type VMResult struct {
 }
 
 type VMSpecResult struct {
-	Spec         *infrav1.ScvmmMachineSpec `json:"spec,omitempty"`
+	infrav1.ScvmmMachineSpec
 	Error        string
 	ScriptErrors string
 	Message      string
@@ -572,14 +572,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
 		}
 		log.V(1).Info("AddVMSpec result", "newspec", newspec, "tospec", &scvmmMachine.Spec)
-		if newspec.Spec == nil {
-			nserr := "unknown error"
-			if newspec.Message != "" {
-				nserr = newspec.Message
-			}
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+nserr)
+		if newspec.Error != "" {
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
 		}
-		newspec.Spec.CopyNonZeroTo(&scvmmMachine.Spec)
+		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
 
 		spec := scvmmMachine.Spec
 		log.V(1).Info("Call CreateVM")
@@ -810,7 +806,17 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return errors.Wrap(err, "Read extra.ps1")
 	}
-	funcScript = funcScript + string(data) + "\r\n"
+	funcScript = funcScript + os.Expand(string(data), func(key string) string {
+		switch key {
+		case "SCVMM_USERNAME":
+			return ScvmmUsername
+		case "SCVMM_PASSWORD":
+			return ScvmmPassword
+		case "SCVMM_HOST":
+			return ScvmmHost
+		}
+		return "$" + key
+	}) + "\r\n"
 	FunctionScript = []byte(funcScript)
 
 	// r.Log.V(1).Info("Function script: %q", "functions", funcScript)
