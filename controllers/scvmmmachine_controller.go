@@ -116,7 +116,7 @@ type VMResult struct {
 }
 
 type VMSpecResult struct {
-	Spec         *infrav1.ScvmmMachineSpec `json:",inline"`
+	Spec         *infrav1.ScvmmMachineSpec `json:"spec,omitempty"`
 	Error        string
 	ScriptErrors string
 	Message      string
@@ -571,6 +571,14 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
 		}
+		log.V(1).Info("AddVMSpec result", "newspec", newspec, "tospec", &scvmmMachine.Spec)
+		if newspec.Spec == nil {
+			nserr := "unknown error"
+			if newspec.Message != "" {
+				nserr = newspec.Message
+			}
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+nserr)
+		}
 		newspec.Spec.CopyNonZeroTo(&scvmmMachine.Spec)
 
 		spec := scvmmMachine.Spec
@@ -805,7 +813,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	funcScript = funcScript + string(data) + "\r\n"
 	FunctionScript = []byte(funcScript)
 
-	r.Log.V(1).Info("Function script: %q", "functions", funcScript)
+	// r.Log.V(1).Info("Function script: %q", "functions", funcScript)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
