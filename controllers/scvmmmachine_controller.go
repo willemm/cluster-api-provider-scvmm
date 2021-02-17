@@ -646,6 +646,16 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
 	}
+	if vm.IPv4Addresses == nil {
+		log.V(1).Info("Call ReadVM")
+		vm, err = sendWinrmCommand(log, cmd, "ReadVM -VMName '%s'", scvmmMachine.Spec.VMName)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Failed to read vm")
+		}
+		log.V(1).Info("ReadVM result", "vm", vm)
+		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
+		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
+	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
 }

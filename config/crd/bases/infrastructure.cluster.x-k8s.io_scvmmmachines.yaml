@@ -32,6 +32,10 @@ spec:
       name: GUID
       priority: 1
       type: string
+    - description: Virtual Machine Creation Timestamp
+      jsonPath: .status.creationTime
+      name: AGE
+      type: date
     name: v1alpha3
     schema:
       openAPIV3Schema:
