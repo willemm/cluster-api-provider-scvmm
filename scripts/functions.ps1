@@ -1,3 +1,4 @@
+$ProgressPreference = 'SilentlyContinue'
 function VMToJson($vm, $message = "") {
   $vmjson = @{}
   if ($vm.Cloud -ne $null) { $vmjson.Cloud = $vm.Cloud.Name }
@@ -15,14 +16,14 @@ function VMToJson($vm, $message = "") {
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
   if ($vm.ModifiedTime -ne $null) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToString('o') }
   if ($message) { $vmjson.Message = $message }
-  $vmjson | convertto-json
+  $vmjson | convertto-json -Depth 2 -Compress
 }
 
 function ErrorToJson($what,$err) {
   @{
     Message = "$($what) Failed: $($err.Exception.Message)"
     Error = "$($err) $($err.ScriptStackTrace)"
-  } | convertto-json
+  } | convertto-json -Depth 2 -Compress
 }
 
 function GetVM($vmname) {

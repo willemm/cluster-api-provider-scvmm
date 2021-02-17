@@ -115,9 +115,16 @@ type VMResult struct {
 	ModifiedTime   metav1.Time
 }
 
+type VMSpecResult struct {
+	Spec         *infrav1.ScvmmMachineSpec `json:",inline"`
+	Error        string
+	ScriptErrors string
+	Message      string
+}
+
 // Create a winrm powershell session and seed with the function script
 func createWinrmCmd() (*winrm.Command, error) {
-	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
+	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 180*time.Second)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
 
@@ -163,10 +170,10 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args 
 	return getWinrmResult(cmd)
 }
 
-func getWinrmSpecResult(cmd *winrm.Command) (infrav1.ScvmmMachineSpec, error) {
+func getWinrmSpecResult(cmd *winrm.Command) (VMSpecResult, error) {
 	decoder := json.NewDecoder(cmd.Stdout)
 
-	var res infrav1.ScvmmMachineSpec
+	var res VMSpecResult
 	err := decoder.Decode(&res)
 	if err != nil {
 		outb := make([]byte, 1024)
@@ -176,21 +183,21 @@ func getWinrmSpecResult(cmd *winrm.Command) (infrav1.ScvmmMachineSpec, error) {
 	return res, nil
 }
 
-func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.Command, command string, scvmmMachine *infrav1.ScvmmMachine) (infrav1.ScvmmMachineSpec, error) {
+func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.Command, command string, scvmmMachine *infrav1.ScvmmMachine) (VMSpecResult, error) {
 	specjson, err := json.Marshal(scvmmMachine.Spec)
 	if err != nil {
-		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "encoding spec")
+		return VMSpecResult{ScriptErrors: "Error encoding spec"}, errors.Wrap(err, "encoding spec")
 	}
 	metajson, err := json.Marshal(scvmmMachine.ObjectMeta)
 	if err != nil {
-		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "encoding metadata")
+		return VMSpecResult{ScriptErrors: "Error encoding metadata"}, errors.Wrap(err, "encoding metadata")
 	}
 	log.V(1).Info("Sending WinRM command", "command", command, "spec", scvmmMachine.Spec,
 		"metadata", scvmmMachine.ObjectMeta,
 		"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson))
 	_, err = fmt.Fprintf(cmd.Stdin, command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson)
 	if err != nil {
-		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "sending command")
+		return VMSpecResult{ScriptErrors: "Error executing command"}, errors.Wrap(err, "sending command")
 	}
 	return getWinrmSpecResult(cmd)
 }
@@ -564,7 +571,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
 		}
-		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
+		newspec.Spec.CopyNonZeroTo(&scvmmMachine.Spec)
 
 		spec := scvmmMachine.Spec
 		log.V(1).Info("Call CreateVM")
