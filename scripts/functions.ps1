@@ -161,36 +161,37 @@ function GenerateVMName($spec, $metadata) {
     $newspec = @{}
     if (-not $specobj.VMName) {
       $namerange = $metadataobj.annotations["scvmmmachine.cluster.x-k8s.io/vmnames"]
-      if (-not $namerange) {
-        throw "no vmnames annotation"
-      }
-      $rstart, $rend = $namerange -split ':'
-      $vmname = $rstart
-      while ($vmname -le $rend) {
-        write-host "Get-SCVirtualMachine -Name '$vmname'"
-        if (-not (Get-SCVirtualMachine -Name $vmname)) { break }
-        $nextname = ""
-        $brk = $false
-        for ($vi = $vmname.length-1; $vi -ge 0; $vi = $vi-1) {
-          $chr = $vmname[$vi]
-          if (-not $brk) {
-            if ($chr -match '[0-8A-Ya-y]') {
-              $chr = [char]([int]$chr+1)
-              $brk = $true
-            } elseif ($chr -eq '9') {
-              $chr = '0'
-            } else {
-              $chr=[char]([int]$chr-25)
+      if ($namerange) {
+        $rstart, $rend = $namerange -split ':'
+        $vmname = $rstart
+        while ($vmname -le $rend) {
+          write-host "Get-SCVirtualMachine -Name '$vmname'"
+          if (-not (Get-SCVirtualMachine -Name $vmname)) { break }
+          $nextname = ""
+          $brk = $false
+          for ($vi = $vmname.length-1; $vi -ge 0; $vi = $vi-1) {
+            $chr = $vmname[$vi]
+            if (-not $brk) {
+              if ($chr -match '[0-8A-Ya-y]') {
+                $chr = [char]([int]$chr+1)
+                $brk = $true
+              } elseif ($chr -eq '9') {
+                $chr = '0'
+              } else {
+                $chr=[char]([int]$chr-25)
+              }
             }
+            $nextname = "$chr$nextname"
           }
-          $nextname = "$chr$nextname"
+          $vmname = $nextname
         }
-        $vmname = $nextname
-      }
-      if ($vmname -le $rend) {
-        $newspec.VMName = $vmname
+        if ($vmname -le $rend) {
+          $newspec.VMName = $vmname
+        } else {
+          throw "no vmname available in range $namerange"
+        }
       } else {
-        throw "no vmname available in range $namerange"
+        $newspec.VMName = $metadataobj.name
       }
     }
     return $newspec | convertto-json -depth 3 -compress
