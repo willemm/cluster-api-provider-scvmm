@@ -35,6 +35,19 @@ function GetVM($vmname) {
   }
 }
 
+function ReadVM($vmname) {
+  try {
+    $vm = Get-SCVirtualMachine -Name $vmname
+    if (-not $vm) {
+      return @{ Message = "VM $($vmname) not found" } | convertto-json
+    }
+    Read-SCVirtualMachine -vm $vm -RunAsynchronously | out-null
+    return VMToJson $vm
+  } catch {
+    ErrorToJson 'Get VM' $_
+  }
+}
+
 function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
   try {
     if (-not $description) { $description = "$hostgroup||capi-scvmm" }

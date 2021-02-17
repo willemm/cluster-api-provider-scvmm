@@ -125,9 +125,14 @@ spec:
       jsonPath: .status.vmStatus
       name: STATUS
       type: string
-    - description: Virtual Machine BIS GUID
+    - description: Virtual Machine IP Address
+      jsonPath: .status.addresses[].address
+      name: IP
+      type: string
+    - description: Virtual Machine BIOS GUID
       jsonPath: .status.biosGuid
       name: GUID
+      priority: 1
       type: string
     name: v1alpha3
     schema:

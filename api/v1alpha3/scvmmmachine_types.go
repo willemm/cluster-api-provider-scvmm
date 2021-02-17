@@ -125,7 +125,8 @@ type ScvmmMachineStatus struct {
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.vmStatus",type="string",name="STATUS",description="Virtual Machine Status"
-// +kubebuilder:printcolumn:JSONPath=".status.biosGuid",type="string",name="GUID",description="Virtual Machine BIS GUID"
+// +kubebuilder:printcolumn:JSONPath=".status.addresses[].address",type="string",name="IP",description="Virtual Machine IP Address"
+// +kubebuilder:printcolumn:JSONPath=".status.biosGuid",type="string",name="GUID",description="Virtual Machine BIOS GUID",priority=1
 
 // ScvmmMachine is the Schema for the scvmmmachines API
 type ScvmmMachine struct {
