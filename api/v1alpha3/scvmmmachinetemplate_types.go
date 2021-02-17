@@ -52,6 +52,23 @@ func init() {
 
 // ScvmmMachineTemplateResource describes the data needed to create a ScvmmMachine from a template
 type ScvmmMachineTemplateResource struct {
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              ScvmmMachineSpec `json:"spec"`
+	ObjectMeta `json:"metadata,omitempty"`
+	Spec       ScvmmMachineSpec `json:"spec"`
+}
+
+// Copy of ObjectMeta, with only labels and annotations for now
+type ObjectMeta struct {
+	// Map of string keys and values that can be used to organize and categorize
+	// (scope and select) objects. May match selectors of replication controllers
+	// and services.
+	// More info: http://kubernetes.io/docs/user-guide/labels
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations is an unstructured key value map stored with a resource that may be
+	// set by external tools to store and retrieve arbitrary metadata. They are not
+	// queryable and should be preserved when modifying objects.
+	// More info: http://kubernetes.io/docs/user-guide/annotations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
