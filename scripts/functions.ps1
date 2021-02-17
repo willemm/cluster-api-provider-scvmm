@@ -7,7 +7,9 @@ function VMToJson($vm, $message = "") {
   if ($vm.CpuCount -ne $null) { $vmjson.CpuCount = $vm.CpuCount }
   if ($vm.VirtualNetworkAdapters -ne $null) {
     $vmjson.VirtualNetwork = $vm.VirtualNetworkAdapters.VMNetwork.Name | select -first 1
-    $vmjson.IPv4Addresses = @($vm.VirtualNetworkAdapters.IPv4Addresses)
+    if ($vm.VirtualNetworkAdapters.IPv4Addresses) {
+      $vmjson.IPv4Addresses = @($vm.VirtualNetworkAdapters.IPv4Addresses)
+    }
   }
   if ($vm.BiosGuid -ne $null) { $vmjson.Guid = $vm.BiosGuid }
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
