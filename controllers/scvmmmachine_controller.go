@@ -148,7 +148,7 @@ func getWinrmResult(cmd *winrm.Command) (VMResult, error) {
 	if err != nil {
 		outb := make([]byte, 1024)
 		n, _ := cmd.Stdout.Read(outb)
-		return VMResult{}, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
+		return res, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
 	}
 	return res, nil
 }
@@ -163,12 +163,44 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args 
 	return getWinrmResult(cmd)
 }
 
+func getWinrmSpecResult(cmd *winrm.Command) (infrav1.ScvmmMachineSpec, error) {
+	decoder := json.NewDecoder(cmd.Stdout)
+
+	var res infrav1.ScvmmMachineSpec
+	err := decoder.Decode(&res)
+	if err != nil {
+		outb := make([]byte, 1024)
+		n, _ := cmd.Stdout.Read(outb)
+		return res, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
+	}
+	return res, nil
+}
+
+func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.Command, command string, scvmmMachine *infrav1.ScvmmMachine) (infrav1.ScvmmMachineSpec, error) {
+	specjson, err := json.Marshal(scvmmMachine.Spec)
+	if err != nil {
+		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "encoding spec")
+	}
+	metajson, err := json.Marshal(scvmmMachine.ObjectMeta)
+	if err != nil {
+		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "encoding metadata")
+	}
+	log.V(1).Info("Sending WinRM command", "command", command, "spec", scvmmMachine.Spec,
+		"metadata", scvmmMachine.ObjectMeta,
+		"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson))
+	_, err = fmt.Fprintf(cmd.Stdin, command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson)
+	if err != nil {
+		return infrav1.ScvmmMachineSpec{}, errors.Wrap(err, "sending command")
+	}
+	return getWinrmSpecResult(cmd)
+}
+
 type CloudInitFile struct {
 	Filename string
 	Contents []byte
 }
 
-func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData, metaData, networkConfig []byte, networking *infrav1.ScvmmMachineNetworking) error {
+func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData, metaData, networkConfig []byte, networking *infrav1.Networking) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
@@ -210,7 +242,8 @@ func writeCloudInit(log logr.Logger, hostname, sharePath string, bootstrapData, 
 	}
 	if metaData == nil {
 		data := "instance-id: scvmm-capi\n" +
-			"hostname: " + hostname + "\n"
+			"hostname: " + hostname + "\n" +
+			"local-hostname: " + hostname + "\n"
 		metaData = []byte(data)
 	}
 	if networkConfig == nil && networking != nil {
@@ -526,8 +559,15 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	log.V(1).Info("GetVM result", "vm", vm)
 	if vm.Name == "" {
-		log.V(1).Info("Call CreateVM")
+		log.V(1).Info("Call AddVMSpec")
+		newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
+		if err != nil {
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
+		}
+		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
+
 		spec := scvmmMachine.Spec
+		log.V(1).Info("Call CreateVM")
 		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
 			spec.Cloud, spec.HostGroup, spec.VMName,
 			spec.VMTemplate, spec.VHDisk,
@@ -749,6 +789,11 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	data, err := ioutil.ReadFile(ScriptDir + "/functions.ps1")
 	if err != nil {
 		return errors.Wrap(err, "Read functions.ps1")
+	}
+	funcScript = funcScript + string(data)
+	data, err = ioutil.ReadFile(ScriptDir + "/extra.ps1")
+	if err != nil {
+		return errors.Wrap(err, "Read extra.ps1")
 	}
 	funcScript = funcScript + string(data)
 	FunctionScript = []byte(funcScript)

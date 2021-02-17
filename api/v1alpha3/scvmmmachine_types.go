@@ -40,11 +40,11 @@ type ScvmmMachineSpec struct {
 	// +optional
 	VHDisk string `json:"vhDisk,omitempty"`
 	// Disk size in gigabytes
-	DiskSize resource.Quantity `json:"diskSize"`
+	DiskSize *resource.Quantity `json:"diskSize"`
 	// Number of CPU's
 	CPUCount int `json:"cpuCount"`
 	// Memory in Megabytes
-	Memory resource.Quantity `json:"memory"`
+	Memory *resource.Quantity `json:"memory"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
 	// Hardware profile
@@ -62,15 +62,15 @@ type ScvmmMachineSpec struct {
 	StopAction string `json:"stopAction,omitempty"`
 	// Network settings
 	// +optional
-	Networking *ScvmmMachineNetworking `json:"networking,omitempty"`
+	Networking *Networking `json:"networking,omitempty"`
 	// Cloud-Init data
 	// This triggers the controller to create the machine without a (cluster-api) cluster
 	// For testing purposes, or just for creating VMs
 	// +optional
-	CloudInit *ScvmmMachineCloudInit `json:"cloudInit,omitempty"`
+	CloudInit *CloudInit `json:"cloudInit,omitempty"`
 }
 
-type ScvmmMachineNetworking struct {
+type Networking struct {
 	// IP Address
 	IPAddress string `json:"ipAddress"`
 	// Gateway
@@ -83,7 +83,7 @@ type ScvmmMachineNetworking struct {
 
 // NoCloud cloud-init data (user-data and meta-data file contents)
 // This triggers the machine to be created without a cluster
-type ScvmmMachineCloudInit struct {
+type CloudInit struct {
 	// Meta-data file contents
 	// +optional
 	MetaData string `json:"metaData,omitempty"`
@@ -157,4 +157,52 @@ type ScvmmMachineList struct {
 
 func init() {
 	SchemeBuilder.Register(&ScvmmMachine{}, &ScvmmMachineList{})
+}
+
+func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) {
+	if in.Cloud != "" {
+		out.Cloud = in.Cloud
+	}
+	if in.HostGroup != "" {
+		out.HostGroup = in.HostGroup
+	}
+	if in.VMName != "" {
+		out.VMName = in.VMName
+	}
+	if in.VMTemplate != "" {
+		out.VMTemplate = in.VMTemplate
+	}
+	if in.VHDisk != "" {
+		out.VHDisk = in.VHDisk
+	}
+	if in.DiskSize != nil {
+		out.DiskSize = in.DiskSize
+	}
+	if in.CPUCount != 0 {
+		out.CPUCount = in.CPUCount
+	}
+	if in.Memory != nil {
+		out.Memory = in.Memory
+	}
+	if in.VMNetwork != "" {
+		out.VMNetwork = in.VMNetwork
+	}
+	if in.HardwareProfile != "" {
+		out.HardwareProfile = in.HardwareProfile
+	}
+	if in.Description != "" {
+		out.Description = in.Description
+	}
+	if in.StartAction != "" {
+		out.StartAction = in.StartAction
+	}
+	if in.StopAction != "" {
+		out.StopAction = in.StopAction
+	}
+	if in.Networking != nil {
+		out.Networking = in.Networking
+	}
+	if in.CloudInit != nil {
+		out.CloudInit = in.CloudInit
+	}
 }
