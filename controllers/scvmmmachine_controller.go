@@ -670,7 +670,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		scvmmMachine.Status.VMStatus = vm.Status
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			return ctrl.Result{}, err
+			return ctrl.Result{}, perr
 		}
 		log.V(1).Info("Requeue in 10 seconds")
 		return ctrl.Result{RequeueAfter: time.Second * 10}, nil
@@ -695,7 +695,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	conditions.MarkTrue(scvmmMachine, VmRunning)
 	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, perr
 	}
 	if vm.IPv4Addresses == nil {
 		log.V(1).Info("Call ReadVM")
@@ -717,6 +717,15 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	log.V(1).Info("Do delete reconciliation")
 	// If there's no finalizer do nothing
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
+		return ctrl.Result{}, nil
+	}
+	if scvmmMachine.Spec.VMName == "" {
+		log.V(1).Info("Machine has no vmname set, remove finalizer")
+		controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
+		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+			return ctrl.Result{}, perr
+		}
 		return ctrl.Result{}, nil
 	}
 	log.V(1).Info("Set created to false, doing deletion")
@@ -746,7 +755,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			return ctrl.Result{}, err
+			return ctrl.Result{}, perr
 		}
 		return ctrl.Result{}, nil
 	} else {
