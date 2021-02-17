@@ -160,7 +160,7 @@ function GenerateVMName($spec, $metadata) {
     $metadataobj = $metadata | convertfrom-json
     $newspec = @{}
     if (-not $specobj.VMName) {
-      $namerange = $metadataobj.annotations["scvmmmachine.cluster.x-k8s.io/vmnames"]
+      $namerange = $metadataobj.annotations.'scvmmmachine.cluster.x-k8s.io/vmnames'
       if ($namerange) {
         $rstart, $rend = $namerange -split ':'
         $vmname = $rstart
