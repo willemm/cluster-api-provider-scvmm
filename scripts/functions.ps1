@@ -168,7 +168,6 @@ function GenerateVMName($spec, $metadata) {
         $rstart, $rend = $namerange -split ':'
         $vmname = $rstart
         while ($vmname -le $rend) {
-          write-host "Get-SCVirtualMachine -Name '$vmname'"
           if (-not (Get-SCVirtualMachine -Name $vmname)) { break }
           $nextname = ""
           $brk = $false

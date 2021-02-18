@@ -560,43 +560,36 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
 	}
 	defer cmd.Close()
-	if scvmmMachine.Spec.VMName == "" {
-		log.V(1).Info("Call GenerateVMName")
-		newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
+	var vm VMResult
+	if scvmmMachine.Spec.VMName != "" {
+		log.V(1).Info("Running GetVM")
+		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", scvmmMachine.Spec.VMName)
 		if err != nil {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
+			return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
 		}
-		log.V(1).Info("GenerateVMName result", "newspec", newspec)
-		if newspec.Error != "" {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-		}
-		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
-		if scvmmMachine.Spec.VMName == "" {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-		}
+		log.V(1).Info("GetVM result", "vm", vm)
 	}
-	log.V(1).Info("Running GetVM")
-	vm, err := sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", scvmmMachine.Spec.VMName)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
-	}
-	log.V(1).Info("GetVM result", "vm", vm)
 	if vm.Name == "" {
-		log.V(1).Info("Call AddVMSpec")
-		newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
-		if err != nil {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
+		vmName := scvmmMachine.Spec.VMName
+		if vmName == "" {
+			log.V(1).Info("Call GenerateVMName")
+			newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
+			if err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
+			}
+			log.V(1).Info("GenerateVMName result", "newspec", newspec)
+			if newspec.Error != "" {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
+			}
+			if newspec.VMName == "" {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
+			}
+			vmName = newspec.VMName
 		}
-		log.V(1).Info("AddVMSpec result", "newspec", newspec)
-		if newspec.Error != "" {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
-		}
-		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
-
 		spec := scvmmMachine.Spec
 		log.V(1).Info("Call CreateVM")
 		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
-			spec.Cloud, spec.HostGroup, spec.VMName,
+			spec.Cloud, spec.HostGroup, vmName,
 			spec.VMTemplate, spec.VHDisk,
 			(spec.Memory.Value() / 1024 / 1024),
 			spec.CPUCount, (spec.DiskSize.Value() / 1024 / 1024),
@@ -630,6 +623,21 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
 	if vm.Status == "PowerOff" {
+		log.V(1).Info("Call AddVMSpec")
+		newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
+		if err != nil {
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
+		}
+		log.V(1).Info("AddVMSpec result", "newspec", newspec)
+		if newspec.Error != "" {
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
+		}
+		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
+		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+			return ctrl.Result{}, err
+		}
+
 		var bootstrapData, metaData, networkConfig []byte
 		if machine != nil {
 			if machine.Spec.Bootstrap.DataSecretName == nil {
