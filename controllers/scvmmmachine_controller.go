@@ -604,6 +604,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 
 		log.V(1).Info("Fill in status")
+		scvmmMachine.Spec.VMName = vmName
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
 		scvmmMachine.Status.Ready = false
 		scvmmMachine.Status.VMStatus = vm.Status
