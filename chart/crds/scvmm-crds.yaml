@@ -125,6 +125,11 @@ spec:
       jsonPath: .status.vmStatus
       name: STATUS
       type: string
+    - description: Virtual Machine Hostname
+      jsonPath: .status.hostname
+      name: HOST
+      priority: 1
+      type: string
     - description: Virtual Machine IP Address
       jsonPath: .status.addresses[].address
       name: IP
@@ -311,6 +316,9 @@ spec:
               creationTime:
                 description: Creation time as given by SCVMM
                 format: date-time
+                type: string
+              hostname:
+                description: Host name of the VM
                 type: string
               modifiedTime:
                 description: Modification time as given by SCVMM

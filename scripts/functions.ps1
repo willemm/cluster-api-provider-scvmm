@@ -11,6 +11,9 @@ function VMToJson($vm, $message = "") {
     if ($vm.VirtualNetworkAdapters.IPv4Addresses) {
       $vmjson.IPv4Addresses = @($vm.VirtualNetworkAdapters.IPv4Addresses)
     }
+    if ($vm.VirtualNetworkAdapters.Name) {
+      $vmjson.Hostname = $vm.VirtualNetworkAdapters.Name | select -first 1
+    }
   }
   if ($vm.BiosGuid -ne $null) { $vmjson.Guid = $vm.BiosGuid }
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }

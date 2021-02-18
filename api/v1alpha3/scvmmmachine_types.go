@@ -113,6 +113,9 @@ type ScvmmMachineStatus struct {
 	// Modification time as given by SCVMM
 	// +optional
 	ModifiedTime metav1.Time `json:"modifiedTime,omitempty"`
+	// Host name of the VM
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
 	// Addresses contains the associated addresses for the virtual machine
 	// +optional
 	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
@@ -126,6 +129,7 @@ type ScvmmMachineStatus struct {
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.vmStatus",type="string",name="STATUS",description="Virtual Machine Status"
+// +kubebuilder:printcolumn:JSONPath=".status.hostname",type="string",name="HOST",description="Virtual Machine Hostname",priority=1
 // +kubebuilder:printcolumn:JSONPath=".status.addresses[].address",type="string",name="IP",description="Virtual Machine IP Address"
 // +kubebuilder:printcolumn:JSONPath=".status.biosGuid",type="string",name="GUID",description="Virtual Machine BIOS GUID",priority=1
 // +kubebuilder:printcolumn:JSONPath=".status.creationTime",type="date",name="AGE",description="Virtual Machine Creation Timestamp"

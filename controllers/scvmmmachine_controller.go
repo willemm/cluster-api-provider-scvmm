@@ -102,6 +102,7 @@ var (
 type VMResult struct {
 	Cloud          string
 	Name           string
+	Hostname       string
 	Status         string
 	Memory         int
 	CpuCount       int
@@ -706,6 +707,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				Address: vm.IPv4Addresses[i],
 			}
 		}
+	}
+	if vm.Hostname != "" {
+		scvmmMachine.Status.Hostname = vm.Hostname
 	}
 	conditions.MarkTrue(scvmmMachine, VmRunning)
 	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
