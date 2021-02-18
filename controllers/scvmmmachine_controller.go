@@ -725,7 +725,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, perr
 	}
-	if vm.IPv4Addresses == nil {
+	if vm.IPv4Addresses == nil || vm.Hostname == "" {
 		log.V(1).Info("Call ReadVM")
 		vm, err = sendWinrmCommand(log, cmd, "ReadVM -VMName '%s'", scvmmMachine.Spec.VMName)
 		if err != nil {
