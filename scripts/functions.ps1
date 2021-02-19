@@ -1,4 +1,9 @@
 $ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+$VerbosePreference = 'SilentlyContinue'
+$InformationPreference = 'SilentlyContinue'
+$DebugPreference = 'SilentlyContinue'
+
 function VMToJson($vm, $message = "") {
   $vmjson = @{}
   if ($vm.Cloud -ne $null) { $vmjson.Cloud = $vm.Cloud.Name }

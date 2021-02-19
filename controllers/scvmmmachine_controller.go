@@ -202,14 +202,10 @@ func createWinrmCmd(log logr.Logger) (*winrm.DirectCommand, error) {
 	return cmd, nil
 }
 
-func getWinrmResult(cmd *winrm.DirectCommand) (VMResult, error) {
+func getWinrmResult(cmd *winrm.DirectCommand, log logr.Logger) (VMResult, error) {
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
 		return VMResult{}, errors.Wrap(err, "Failed to read output")
-	}
-	if !json.Valid(stdout) {
-		return VMResult{}, errors.Wrap(err, "Invalid json result: "+string(stdout)+
-			"  (stderr="+string(stderr)+")")
 	}
 	if ExtraDebug {
 		log.V(1).Info("Got WinRM Result", "stdout", string(stdout), "stderr", string(stderr))
@@ -230,17 +226,13 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.DirectCommand, command string,
 	if err := cmd.SendCommand(command, args...); err != nil {
 		return VMResult{}, err
 	}
-	return getWinrmResult(cmd)
+	return getWinrmResult(cmd, log)
 }
 
-func getWinrmSpecResult(cmd *winrm.DirectCommand) (VMSpecResult, error) {
+func getWinrmSpecResult(cmd *winrm.DirectCommand, log logr.Logger) (VMSpecResult, error) {
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
 		return VMSpecResult{}, errors.Wrap(err, "Failed to read output")
-	}
-	if !json.Valid(stdout) {
-		return VMSpecResult{}, errors.Wrap(err, "Invalid json result: "+string(stdout)+
-			"  (stderr="+string(stderr)+")")
 	}
 	if ExtraDebug {
 		log.V(1).Info("Got WinRMSpec Result", "stdout", string(stdout), "stderr", string(stderr))
@@ -270,7 +262,7 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command str
 	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'", specjson, metajson); err != nil {
 		return VMSpecResult{ScriptErrors: "Error executing command"}, errors.Wrap(err, "sending command")
 	}
-	return getWinrmSpecResult(cmd)
+	return getWinrmSpecResult(cmd, log)
 }
 
 type CloudInitFile struct {
