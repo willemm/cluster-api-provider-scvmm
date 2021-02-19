@@ -693,12 +693,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		log.V(1).Info("AddVMSpec result", "newspec", newspec)
 		if newspec.Error != "" {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
 		}
-		newspec.CopyNonZeroTo(&scvmmMachine.Spec)
-		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			return ctrl.Result{}, err
+		if newspec.CopyNonZeroTo(&scvmmMachine.Spec) {
+			if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+				log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+				return ctrl.Result{}, err
+			}
 		}
 
 		var bootstrapData, metaData, networkConfig []byte
@@ -728,7 +729,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				networkConfig = []byte(scvmmMachine.Spec.CloudInit.NetworkConfig)
 			}
 		}
-		if metaData != nil || bootstrapData != nil {
+		if metaData != nil || bootstrapData != nil || networkConfig != nil {
 			log.V(1).Info("Create cloudinit")
 			isoPath := ScvmmLibraryShare + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 			if err := writeCloudInit(log, scvmmMachine.Spec.VMName, isoPath, bootstrapData, metaData, networkConfig, scvmmMachine.Spec.Networking); err != nil {

@@ -164,50 +164,88 @@ func init() {
 	SchemeBuilder.Register(&ScvmmMachine{}, &ScvmmMachineList{})
 }
 
-func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) {
-	if in.Cloud != "" {
+func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
+	changed := false
+	if in.Cloud != "" && in.Cloud != out.Cloud {
+		changed = true
 		out.Cloud = in.Cloud
 	}
-	if in.HostGroup != "" {
+	if in.HostGroup != "" && in.HostGroup != out.HostGroup {
+		changed = true
 		out.HostGroup = in.HostGroup
 	}
-	if in.VMName != "" {
+	if in.VMName != "" && in.VMName != out.VMName {
+		changed = true
 		out.VMName = in.VMName
 	}
-	if in.VMTemplate != "" {
+	if in.VMTemplate != "" && in.VMTemplate != out.VMTemplate {
+		changed = true
 		out.VMTemplate = in.VMTemplate
 	}
-	if in.VHDisk != "" {
+	if in.VHDisk != "" && in.VHDisk != out.VHDisk {
+		changed = true
 		out.VHDisk = in.VHDisk
 	}
-	if in.DiskSize != nil {
+	if in.DiskSize != nil && in.DiskSize != out.DiskSize {
+		changed = true
 		out.DiskSize = in.DiskSize
 	}
-	if in.CPUCount != 0 {
+	if in.CPUCount != 0 && in.CPUCount != out.CPUCount {
+		changed = true
 		out.CPUCount = in.CPUCount
 	}
-	if in.Memory != nil {
+	if in.Memory != nil && in.Memory != out.Memory {
+		changed = true
 		out.Memory = in.Memory
 	}
-	if in.VMNetwork != "" {
+	if in.VMNetwork != "" && in.VMNetwork != out.VMNetwork {
+		changed = true
 		out.VMNetwork = in.VMNetwork
 	}
-	if in.HardwareProfile != "" {
+	if in.HardwareProfile != "" && in.HardwareProfile != out.HardwareProfile {
+		changed = true
 		out.HardwareProfile = in.HardwareProfile
 	}
-	if in.Description != "" {
+	if in.Description != "" && in.Description != out.Description {
+		changed = true
 		out.Description = in.Description
 	}
-	if in.StartAction != "" {
+	if in.StartAction != "" && in.StartAction != out.StartAction {
+		changed = true
 		out.StartAction = in.StartAction
 	}
-	if in.StopAction != "" {
+	if in.StopAction != "" && in.StopAction != out.StopAction {
+		changed = true
 		out.StopAction = in.StopAction
 	}
-	if in.Networking != nil {
+	if in.Networking != nil && !in.Networking.Equals(out.Networking) {
+		changed = true
 		out.Networking = in.Networking
 	}
-	if in.CloudInit != nil {
+	if in.CloudInit != nil && !in.CloudInit.Equals(out.CloudInit) {
+		changed = true
 		out.CloudInit = in.CloudInit
 	}
+	return changed
+}
+
+func (left *Networking) Equals(right *Networking) bool {
+	if left.IPAddress != right.IPAddress ||
+		left.Gateway != right.Gateway ||
+		left.Domain != right.Domain ||
+		len(left.Nameservers) != len(right.Nameservers) {
+		return false
+	}
+	for i, v := range left.Nameservers {
+		if v != right.Nameservers[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (left *CloudInit) Equals(right *CloudInit) bool {
+	return left.MetaData == right.MetaData &&
+		left.UserData == right.UserData &&
+		left.NetworkConfig == right.NetworkConfig
 }
