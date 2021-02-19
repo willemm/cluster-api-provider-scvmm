@@ -96,6 +96,8 @@ var (
 	ScriptDir string
 	// Holds the powershell script-functions (will be executed at the start of each remote shell)
 	FunctionScript []byte
+	// SHow extra debugging info
+	ExtraDebug bool = false
 )
 
 // The result (passed as json) of a call to Scvmm scripts
@@ -124,67 +126,134 @@ type VMSpecResult struct {
 }
 
 // Create a winrm powershell session and seed with the function script
-func createWinrmCmd() (*winrm.Command, error) {
-	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 180*time.Second)
+func createWinrmCmd(log logr.Logger) (*winrm.DirectCommand, error) {
+	endpoint := winrm.NewEndpoint(ScvmmExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
 
+	if ExtraDebug {
+		log.V(1).Info("Creating WinRM connection", ScvmmExecHost, 5985)
+	}
 	client, err := winrm.NewClientWithParameters(endpoint, ScvmmUsername, ScvmmPassword, params)
 	if err != nil {
-		return &winrm.Command{}, errors.Wrap(err, "Creating winrm client")
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm client")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Creating WinRM shell")
 	}
 	shell, err := client.CreateShell()
 	if err != nil {
-		return &winrm.Command{}, errors.Wrap(err, "Creating winrm shell")
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm shell")
 	}
-	cmd, err := shell.Execute("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
-	if err != nil {
-		return &winrm.Command{}, errors.Wrap(err, "Creating winrm powershell")
+	if ExtraDebug {
+		log.V(1).Info("Starting WinRM powershell.exe")
 	}
-	_, err = cmd.Stdin.Write(FunctionScript)
+	cmd, err := shell.ExecuteDirect("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
 	if err != nil {
-		return &winrm.Command{}, errors.Wrap(err, "Sending powershell functions")
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm powershell")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM ping")
+		if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
+			cmd.Close()
+			return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
+		}
+		log.V(1).Info("Getting WinRM ping")
+		stdout, stderr, _, _, err := cmd.ReadOutput()
+		if err != nil {
+			cmd.Close()
+			return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
+		}
+		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
+		if strings.TrimSpace(string(stdout)) != "OK" {
+			cmd.Close()
+			return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
+		}
+	}
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM function script")
+	}
+	if err := cmd.SendInput(FunctionScript, false); err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM ping")
+	}
+	if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Getting WinRM ping")
+	}
+	stdout, stderr, _, _, err := cmd.ReadOutput()
+	if err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
+	}
+	if strings.TrimSpace(string(stdout)) != "OK" {
+		cmd.Close()
+		return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
 	}
 	return cmd, nil
 }
 
-func getWinrmResult(cmd *winrm.Command) (VMResult, error) {
-	decoder := json.NewDecoder(cmd.Stdout)
-
-	var res VMResult
-	err := decoder.Decode(&res)
+func getWinrmResult(cmd *winrm.DirectCommand) (VMResult, error) {
+	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
-		outb := make([]byte, 1024)
-		n, _ := cmd.Stdout.Read(outb)
-		return res, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
+		return VMResult{}, errors.Wrap(err, "Failed to read output")
+	}
+	if !json.Valid(stdout) {
+		return VMResult{}, errors.Wrap(err, "Invalid json result: "+string(stdout)+
+			"  (stderr="+string(stderr)+")")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Got WinRM Result", "stdout", string(stdout), "stderr", string(stderr))
+	}
+	var res VMResult
+	if err := json.Unmarshal(stdout, &res); err != nil {
+		return VMResult{}, errors.Wrap(err, "Decode result error: "+string(stdout)+
+			"  (stderr="+string(stderr)+")")
 	}
 	return res, nil
 }
 
-func sendWinrmCommand(log logr.Logger, cmd *winrm.Command, command string, args ...interface{}) (VMResult, error) {
-	log.V(1).Info("Sending WinRM command", "command", command, "args", args,
-		"cmdline", fmt.Sprintf(command+"\r\n", args...))
-	_, err := fmt.Fprintf(cmd.Stdin, command+"\r\n", args...)
-	if err != nil {
+func sendWinrmCommand(log logr.Logger, cmd *winrm.DirectCommand, command string, args ...interface{}) (VMResult, error) {
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM command", "command", command, "args", args,
+			"cmdline", fmt.Sprintf(command+"\n", args...))
+	}
+	if err := cmd.SendCommand(command, args...); err != nil {
 		return VMResult{}, err
 	}
 	return getWinrmResult(cmd)
 }
 
-func getWinrmSpecResult(cmd *winrm.Command) (VMSpecResult, error) {
-	decoder := json.NewDecoder(cmd.Stdout)
-
-	var res VMSpecResult
-	err := decoder.Decode(&res)
+func getWinrmSpecResult(cmd *winrm.DirectCommand) (VMSpecResult, error) {
+	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
-		outb := make([]byte, 1024)
-		n, _ := cmd.Stdout.Read(outb)
-		return res, errors.Wrapf(err, "Decoding script result %q", string(outb[:n]))
+		return VMSpecResult{}, errors.Wrap(err, "Failed to read output")
+	}
+	if !json.Valid(stdout) {
+		return VMSpecResult{}, errors.Wrap(err, "Invalid json result: "+string(stdout)+
+			"  (stderr="+string(stderr)+")")
+	}
+	if ExtraDebug {
+		log.V(1).Info("Got WinRMSpec Result", "stdout", string(stdout), "stderr", string(stderr))
+	}
+	var res VMSpecResult
+	if err := json.Unmarshal(stdout, &res); err != nil {
+		return VMSpecResult{}, errors.Wrap(err, "Decode result error: "+string(stdout)+
+			"  (stderr="+string(stderr)+")")
 	}
 	return res, nil
 }
 
-func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.Command, command string, scvmmMachine *infrav1.ScvmmMachine) (VMSpecResult, error) {
+func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command string, scvmmMachine *infrav1.ScvmmMachine) (VMSpecResult, error) {
 	specjson, err := json.Marshal(scvmmMachine.Spec)
 	if err != nil {
 		return VMSpecResult{ScriptErrors: "Error encoding spec"}, errors.Wrap(err, "encoding spec")
@@ -193,11 +262,12 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.Command, command string, s
 	if err != nil {
 		return VMSpecResult{ScriptErrors: "Error encoding metadata"}, errors.Wrap(err, "encoding metadata")
 	}
-	log.V(1).Info("Sending WinRM command", "command", command, "spec", scvmmMachine.Spec,
-		"metadata", scvmmMachine.ObjectMeta,
-		"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson))
-	_, err = fmt.Fprintf(cmd.Stdin, command+" -spec '%s' -metadata '%s'\r\n", specjson, metajson)
-	if err != nil {
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM command", "command", command, "spec", scvmmMachine.Spec,
+			"metadata", scvmmMachine.ObjectMeta,
+			"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\n", specjson, metajson))
+	}
+	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'", specjson, metajson); err != nil {
 		return VMSpecResult{ScriptErrors: "Error executing command"}, errors.Wrap(err, "sending command")
 	}
 	return getWinrmSpecResult(cmd)
@@ -555,7 +625,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
-	cmd, err := createWinrmCmd()
+	cmd, err := createWinrmCmd(log)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
 	}
@@ -763,7 +833,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	}
 
 	log.Info("Doing removal of ScvmmMachine")
-	cmd, err := createWinrmCmd()
+	cmd, err := createWinrmCmd(log)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
 	}
@@ -797,6 +867,10 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 }
 
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	extraDebug := os.Getenv("EXTRA_DEBUG")
+	if extraDebug != "" {
+		ExtraDebug = true
+	}
 	ScvmmHost = os.Getenv("SCVMM_HOST")
 	if ScvmmHost == "" {
 		return fmt.Errorf("missing required env SCVMM_HOST")
@@ -830,7 +904,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return ScvmmHost
 			}
 			return "$" + key
-		}) + "\r\n"
+		}) + "\n\n"
 	} else {
 		ScvmmExecHost = ScvmmHost
 	}
@@ -838,7 +912,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return errors.Wrap(err, "Read functions.ps1")
 	}
-	funcScript = funcScript + string(data) + "\r\n"
+	funcScript = funcScript + string(data) + "\n\n"
 	data, err = ioutil.ReadFile(ScriptDir + "/extra.ps1")
 	if err != nil {
 		return errors.Wrap(err, "Read extra.ps1")
@@ -853,10 +927,12 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return ScvmmHost
 		}
 		return "$" + key
-	}) + "\r\n"
+	}) + "\n\n"
 	FunctionScript = []byte(funcScript)
 
-	// r.Log.V(1).Info("Function script: %q", "functions", funcScript)
+	if ExtraDebug {
+		r.Log.V(1).Info("Function script", "functions", funcScript)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
