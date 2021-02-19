@@ -1,4 +1,4 @@
-BBugs:
+Bugs:
 v Fails when reconciling delete: It doesn't work when the cluster is not there etc etc
 v Errors out when trying to get bootstrapdata if it's not there
 v Doesn't seem to update the status when erroring out (!!)
@@ -6,12 +6,6 @@ v CreateVM takes too long and hits a winrm timeout
     (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
 
 Todo:
-v Actually send the bootstrap data (mount as iso image)  <- This is the big one
-v Set a template (needs a field in the spec)
-- What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
-- Some kind of domain join action?
-- Pluggable script to determine IP addresses
-
 - Add to api/Spec: 
   v Hardware Profile
   v Host Group
@@ -19,12 +13,40 @@ v Set a template (needs a field in the spec)
   v StartAction, StopAction
 
 - Add to Status:
-  - IP address(es)
+  v IP address(es)
+  v Hostname from Linux-OS
 
-Uploading an ISO:
-- Create iso (using go library and then compres and send as base64, or using the powershell script?)
-- Get-SCLibrarySHare -Name <???> (probably env var to determine which?)
-- Upload iso to library share (libraryshare.Path \ISOs) (also env var?)
-- Read-SCLibraryShare -LibraryShare <libraryshare> -Path <...\ISOs> (Re-scans the library)
-- Get-SCISO -Name <uploaded file>
-- New-SCVirtualDVDDrive with iso
+v Actually send the bootstrap data (mount as iso image)  <- This is the big one
+v Set a template (needs a field in the spec)
+v Pluggable script to determine IP addresses
+
+- What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
+  . Which responsibilities is the cluster controller supposed to have?
+
+- The (reference) docker infra-provider also seems to have a watch on other resources to
+  trigger reconciliation.  Look into that and do that also
+
+- Some kind of domain join action?  Or should that be done with user-supplied user-data?
+
+- Make GenerateVMName atomic (probably works OK now because the controller is single threaded)
+  . Needs some way to set and get values from the VMMServer somewhere
+  . Alternatively, handle name clashes (currently it would create two VMs with the same name)
+  . Do we need to store the unique ID of the VM in the spec?  There's the ProviderID, maybe
+    use that to query the VM status instead of the name.  But that's currently BiosGUID, should
+    that be the VM unique ID ?
+
+- Regularly check the status of the VMs
+  . What to do when somebody turns off the VM externally?
+    Currently it will probably recreate the cloud-init and then boot it up again,
+    that would surprise some sysadmins
+  . Think about error scenarios
+
+- Keep the WinRM powershell running (stop it after a number of seconds of inactivity)
+   (Powershell startup and module loading takes a few seconds each time)
+   . Probably use a channel to send the commands and get back the results?
+   . Needs decent error handling for reconnection and stuff
+
+- Better handling of external errors
+
+- Maybe look into setting networking via hyper-v integration instead of cloud-init networkconfig ??
+
