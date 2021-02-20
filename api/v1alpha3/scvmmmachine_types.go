@@ -230,6 +230,9 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 }
 
 func (left *Networking) Equals(right *Networking) bool {
+	if right == nil {
+		return false
+	}
 	if left.IPAddress != right.IPAddress ||
 		left.Gateway != right.Gateway ||
 		left.Domain != right.Domain ||
@@ -245,6 +248,9 @@ func (left *Networking) Equals(right *Networking) bool {
 }
 
 func (left *CloudInit) Equals(right *CloudInit) bool {
+	if right == nil {
+		return false
+	}
 	return left.MetaData == right.MetaData &&
 		left.UserData == right.UserData &&
 		left.NetworkConfig == right.NetworkConfig
