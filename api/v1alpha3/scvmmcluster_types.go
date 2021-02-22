@@ -25,7 +25,7 @@ import (
 type ScvmmClusterSpec struct {
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint *APIEndpoint `json:"controlPlaneEndpoint,omitEmpty"`
 }
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster

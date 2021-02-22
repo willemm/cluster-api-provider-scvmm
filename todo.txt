@@ -4,6 +4,7 @@ v Errors out when trying to get bootstrapdata if it's not there
 v Doesn't seem to update the status when erroring out (!!)
 v CreateVM takes too long and hits a winrm timeout
     (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
+- Somehow the kubeadm provider needs to set the ProviderID on the nodes, which is not happening
 
 Todo:
 - Add to api/Spec: 
@@ -22,6 +23,18 @@ v Pluggable script to determine IP addresses
 
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
   . Which responsibilities is the cluster controller supposed to have?
+  . Looks like at least setting the ControlPlaneEndpoint correctly
+  . Isn't there a chicken-egg issue where the endpoint needs to be known before the first
+    control plane has been initialized?
+  . Easiest is probably defining it in the spec, and then using that to setup the LB
+    But does the kubeadm init need the endpoint?  The kubeadm join certainly does.
+- Does the cluster reconciler also have to apply a CNI networker?
+
+- Doing kubernetes-api loadbalancing
+  . MetalLB?
+  . Keepalived?
+  . Choice?
+
 
 - The (reference) docker infra-provider also seems to have a watch on other resources to
   trigger reconciliation.  Look into that and do that also

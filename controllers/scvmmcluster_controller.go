@@ -125,10 +125,12 @@ func patchScvmmCluster(ctx context.Context, patchHelper *patch.Helper, scvmmClus
 
 func (r *ScvmmClusterReconciler) reconcileNormal(ctx context.Context, scvmmCluster *infrav1.ScvmmCluster) (ctrl.Result, error) {
 	// We have to get some kind of endpoint IP thing going
-	scvmmCluster.Spec.ControlPlaneEndpoint = infrav1.APIEndpoint{
-		Host: "todo",
-		Port: 6443,
-	}
+	/*
+		scvmmCluster.Spec.ControlPlaneEndpoint = &infrav1.APIEndpoint{
+			Host: "localhost",
+			Port: 6443,
+		}
+	*/
 
 	// Mark the scvmmCluster ready
 	scvmmCluster.Status.Ready = true
