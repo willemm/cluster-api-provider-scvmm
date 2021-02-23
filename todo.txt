@@ -9,6 +9,7 @@ v Apparently, the scvmmmachine controller needs to set the ProviderID on the nod
   . Add a runcmd at the end?  Not sure that works with all images (especially Talos)
   . Just stick it in the kubeadm templates somehow?  (Doesn't work well with other providers)
   v Run it remotely via the ControlPlaneEndpoint, assuming the nodename will be the hostname?
+- The machinecontroller needs to watch something else for changes (machine, cluster or scvmmcluster)
 
 Todo:
 - Add to api/Spec: 

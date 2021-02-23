@@ -831,8 +831,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.V(1).Info("Setting providerid on remote node", "node", remoteNode)
 		remoteNode.Spec.ProviderID = scvmmMachine.Spec.ProviderID
 		if err := remoteClient.Update(ctx, remoteNode); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "Failed to update remote node")
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmJoined, WaitingForNodeJoinReason, "Failed to set providerID on remote node")
 		}
+	}
+	conditions.MarkTrue(scvmmMachine, VmJoined)
+	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+		return ctrl.Result{}, perr
 	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
