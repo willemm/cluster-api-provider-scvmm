@@ -1,31 +1,14 @@
 Bugs:
-v Fails when reconciling delete: It doesn't work when the cluster is not there etc etc
-v Errors out when trying to get bootstrapdata if it's not there
-v Doesn't seem to update the status when erroring out (!!)
-v CreateVM takes too long and hits a winrm timeout
-    (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
 v Apparently, the scvmmmachine controller needs to set the ProviderID on the node
   (The kubeadm provider doesn't seem to be doing that)
   . Add a runcmd at the end?  Not sure that works with all images (especially Talos)
   . Just stick it in the kubeadm templates somehow?  (Doesn't work well with other providers)
   v Run it remotely via the ControlPlaneEndpoint, assuming the nodename will be the hostname?
+  * It might be that this just caused one of the controlplanes to half-degrade to a workernode
 - The machinecontroller needs to watch something else for changes (machine, cluster or scvmmcluster)
+  Because now, it sometimes doesn't go on reconciling when the owner data is ready
 
 Todo:
-- Add to api/Spec: 
-  v Hardware Profile
-  v Host Group
-  v Description
-  v StartAction, StopAction
-
-- Add to Status:
-  v IP address(es)
-  v Hostname from Linux-OS
-
-v Actually send the bootstrap data (mount as iso image)  <- This is the big one
-v Set a template (needs a field in the spec)
-v Pluggable script to determine IP addresses
-
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
   . Which responsibilities is the cluster controller supposed to have?
   . Looks like at least setting the ControlPlaneEndpoint correctly
@@ -41,6 +24,7 @@ v Pluggable script to determine IP addresses
   . Keepalived?
   . Choice?
 
+v Add the possibility for adding more than one disk to the VM
 
 - The (reference) docker infra-provider also seems to have a watch on other resources to
   trigger reconciliation.  Look into that and do that also

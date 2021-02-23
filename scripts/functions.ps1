@@ -59,21 +59,32 @@ function ReadVM($vmname) {
   }
 }
 
-function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, [int]$disksize, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
+function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
   try {
+    $diskarr = @()
+    if ($disks) { $diskarr = $disks | convertfrom-json }
     if (-not $description) { $description = "$hostgroup||capi-scvmm" }
     if (-not $startaction) { $startaction = 'NeverAutoTurnOnVM' }
     if (-not $stopaction) { $stopaction = 'ShutdownGuestOS' }
     $JobGroupID = [GUID]::NewGuid().ToString()
+    $disknum = 0
+    $voltype = 'BootAndSystem'
     if ($vhdisk) {
       $VirtualHardDisk = Get-SCVirtualHardDisk -name $vhdisk
       if (-not $VirtualHardDisk) {
         throw "VHD $($vhdisk) not found"
       }
       New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem -VirtualHardDisk $VirtualHardDisk
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 1 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_2" -VolumeType System
-    } else {
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disksize) -CreateDiffDisk $false -Dynamic -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem
+      $disknum = 1
+      $voltype = 'System'
+    }
+    foreach ($disk in $disks) {
+      if ($disknum -gt 16) {
+        throw "Too many virtual disks"
+      }
+      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType System
+      $disknum = $disknum + 1
+      $voltype = 'System'
     }
 
     if ($vmtemplate) {

@@ -40,11 +40,12 @@ type ScvmmMachineSpec struct {
 	// Virtual Harddisk to use
 	// +optional
 	VHDisk string `json:"vhDisk,omitempty"`
-	// Disk size in gigabytes
-	DiskSize *resource.Quantity `json:"diskSize"`
+	// Extra disks (after the VHDisk) to connect to the VM
+	// +optional
+	Disks []VmDisk `json:"disks,omitEmpty"`
 	// Number of CPU's
 	CPUCount int `json:"cpuCount"`
-	// Memory in Megabytes
+	// Allocated memory
 	Memory *resource.Quantity `json:"memory"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
@@ -69,6 +70,14 @@ type ScvmmMachineSpec struct {
 	// For testing purposes, or just for creating VMs
 	// +optional
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
+}
+
+type VmDisk struct {
+	// Size of the virtual disk
+	Size *resource.Quantity `json:"size,omitEmpty"`
+	// Specify that the virtual disk can expand dynamically (default: true)
+	// +optional
+	Dynamic bool `json:"dynamic,omitEmpty"`
 }
 
 type Networking struct {
@@ -186,9 +195,9 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.VHDisk = in.VHDisk
 	}
-	if in.DiskSize != nil && in.DiskSize != out.DiskSize {
+	if in.Disks != nil && VmDiskEquals(in.Disks, out.Disks) {
 		changed = true
-		out.DiskSize = in.DiskSize
+		out.Disks = in.Disks
 	}
 	if in.CPUCount != 0 && in.CPUCount != out.CPUCount {
 		changed = true
@@ -227,6 +236,21 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		out.CloudInit = in.CloudInit
 	}
 	return changed
+}
+
+func VmDiskEquals(left []VmDisk, right []VmDisk) bool {
+	if left == nil {
+		return right == nil
+	}
+	if len(left) != len(right) {
+		return false
+	}
+	for i, v := range left {
+		if v != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (left *Networking) Equals(right *Networking) bool {

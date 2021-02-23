@@ -92,13 +92,26 @@ spec:
                       description:
                         description: Description
                         type: string
-                      diskSize:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: Disk size in gigabytes
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
+                      disks:
+                        description: Extra disks (after the VHDisk) to connect to
+                          the VM
+                        items:
+                          properties:
+                            dynamic:
+                              description: 'Specify that the virtual disk can expand
+                                dynamically (default: true)'
+                              type: boolean
+                            size:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Size of the virtual disk
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                          required:
+                          - size
+                          type: object
+                        type: array
                       hardwareProfile:
                         description: Hardware profile
                         type: string
@@ -109,7 +122,7 @@ spec:
                         anyOf:
                         - type: integer
                         - type: string
-                        description: Memory in Megabytes
+                        description: Allocated memory
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       networking:
@@ -167,7 +180,6 @@ spec:
                     required:
                     - cloud
                     - cpuCount
-                    - diskSize
                     - hardwareProfile
                     - hostGroup
                     - memory

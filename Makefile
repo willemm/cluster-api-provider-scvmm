@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= willemmon/cluster-api-provider-scvmm:v0.1.0
+IMG ?= willemmon/cluster-api-provider-scvmm:v0.1.1
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 

@@ -662,11 +662,15 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		spec := scvmmMachine.Spec
 		log.V(1).Info("Call CreateVM")
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -DiskSize %d -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
+		diskjson, err := makeDisksJSON(spec.Disks)
+		if err != nil {
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
+		}
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
 			spec.Cloud, spec.HostGroup, vmName,
 			spec.VMTemplate, spec.VHDisk,
 			(spec.Memory.Value() / 1024 / 1024),
-			spec.CPUCount, (spec.DiskSize.Value() / 1024 / 1024),
+			spec.CPUCount, diskjson,
 			spec.VMNetwork, spec.HardwareProfile, spec.Description,
 			spec.StartAction, spec.StopAction)
 		if err != nil {
@@ -841,6 +845,20 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
+}
+
+type VmDiskElem struct {
+	SizeMB  int64
+	Dynamic bool
+}
+
+func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
+	diskarr := make([]VmDiskElem, len(disks))
+	for i, d := range disks {
+		diskarr[i].SizeMB = d.Size.Value() / 1024 / 1024
+		diskarr[i].Dynamic = d.Dynamic
+	}
+	return json.Marshal(diskarr)
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
