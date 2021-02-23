@@ -21,7 +21,11 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -55,6 +59,8 @@ const (
 	VmCreated clusterv1.ConditionType = "VmCreated"
 	// VM running
 	VmRunning clusterv1.ConditionType = "VmRunning"
+	// VM node joined cluster
+	VmJoined clusterv1.ConditionType = "VmJoined"
 
 	// Cluster-Api related statuses
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
@@ -63,6 +69,7 @@ const (
 	WaitingForOwnerReason                 = "WaitingForOwner"
 	ClusterNotAvailableReason             = "ClusterNotAvailable"
 	MissingClusterReason                  = "MissingCluster"
+	WaitingForNodeJoinReason              = "WaitingForNodeJoin"
 
 	VmCreatingReason = "VmCreating"
 	VmStartingReason = "VmStarting"
@@ -75,8 +82,9 @@ const (
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
 type ScvmmMachineReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log     logr.Logger
+	Tracker *remote.ClusterCacheTracker
+	Scheme  *runtime.Scheme
 }
 
 // Are global variables bad? Dunno.  These hold data for the lifetime of the controller.
@@ -96,7 +104,7 @@ var (
 	ScriptDir string
 	// Holds the powershell script-functions (will be executed at the start of each remote shell)
 	FunctionScript []byte
-	// SHow extra debugging info
+	// Show extra debugging info
 	ExtraDebug bool = false
 )
 
@@ -802,6 +810,30 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
+	log.V(1).Info("Check ProviderID on node")
+	// Check ProviderID on remote node
+	remoteClient, err := r.Tracker.GetClient(ctx, util.ObjectKey(cluster))
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	remoteNodeName := types.NamespacedName{Name: scvmmMachine.Spec.VMName}
+	remoteNode := &corev1.Node{}
+	if err := remoteClient.Get(ctx, remoteNodeName, remoteNode); err != nil {
+		// May not exist yet, don't complain too hard
+		log.V(1).Info("Remote node not found", "nodename", remoteNodeName, "error", err)
+		message := "Can't connect to remote cluster"
+		if k8serrors.IsNotFound(err) {
+			message = "Node not found"
+		}
+		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmJoined, WaitingForNodeJoinReason, message)
+	}
+	if remoteNode.Spec.ProviderID == "" {
+		log.V(1).Info("Setting providerid on remote node", "node", remoteNode)
+		remoteNode.Spec.ProviderID = scvmmMachine.Spec.ProviderID
+		if err := remoteClient.Update(ctx, remoteNode); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Failed to update remote node")
+		}
+	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
 }
@@ -968,6 +1000,7 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 		conditions.WithConditions(
 			VmCreated,
 			VmRunning,
+			VmJoined,
 		),
 		conditions.WithStepCounterIf(scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()),
 	)
@@ -980,6 +1013,7 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 			clusterv1.ReadyCondition,
 			VmCreated,
 			VmRunning,
+			VmJoined,
 		}},
 	)
 }

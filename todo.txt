@@ -4,7 +4,11 @@ v Errors out when trying to get bootstrapdata if it's not there
 v Doesn't seem to update the status when erroring out (!!)
 v CreateVM takes too long and hits a winrm timeout
     (could return a lot sooner, then we don't get the VM info, but that should come next reconcile)
-- Somehow the kubeadm provider needs to set the ProviderID on the nodes, which is not happening
+v Apparently, the scvmmmachine controller needs to set the ProviderID on the node
+  (The kubeadm provider doesn't seem to be doing that)
+  . Add a runcmd at the end?  Not sure that works with all images (especially Talos)
+  . Just stick it in the kubeadm templates somehow?  (Doesn't work well with other providers)
+  v Run it remotely via the ControlPlaneEndpoint, assuming the nodename will be the hostname?
 
 Todo:
 - Add to api/Spec: 
@@ -29,6 +33,7 @@ v Pluggable script to determine IP addresses
   . Easiest is probably defining it in the spec, and then using that to setup the LB
     But does the kubeadm init need the endpoint?  The kubeadm join certainly does.
 - Does the cluster reconciler also have to apply a CNI networker?
+  (Maybe.  There seems to be a 'cni' label on the cluster)
 
 - Doing kubernetes-api loadbalancing
   . MetalLB?
