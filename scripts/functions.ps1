@@ -61,8 +61,6 @@ function ReadVM($vmname) {
 
 function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
   try {
-    $diskarr = @()
-    if ($disks) { $diskarr = $disks | convertfrom-json }
     if (-not $description) { $description = "$hostgroup||capi-scvmm" }
     if (-not $startaction) { $startaction = 'NeverAutoTurnOnVM' }
     if (-not $stopaction) { $stopaction = 'ShutdownGuestOS' }
@@ -78,11 +76,11 @@ function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memor
       $disknum = 1
       $voltype = 'System'
     }
-    foreach ($disk in $disks) {
+    foreach ($disk in ($disks | convertfrom-json)) {
       if ($disknum -gt 16) {
         throw "Too many virtual disks"
       }
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType System
+      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType $voltype
       $disknum = $disknum + 1
       $voltype = 'System'
     }

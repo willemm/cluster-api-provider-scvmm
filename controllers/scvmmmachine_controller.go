@@ -22,17 +22,20 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/predicates"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 	// "k8s.io/apimachinery/pkg/api/resource"
@@ -44,7 +47,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/masterzen/winrm"
+	"github.com/willemm/winrm"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -826,7 +829,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		// May not exist yet, don't complain too hard
 		log.V(1).Info("Remote node not found", "nodename", remoteNodeName, "error", err)
 		message := "Can't connect to remote cluster"
-		if k8serrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			message = "Node not found"
 		}
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmJoined, WaitingForNodeJoinReason, message)
@@ -918,6 +921,112 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	}
 }
 
+func patchReasonCondition(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine, requeue int, err error, condition clusterv1.ConditionType, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
+	scvmmMachine.Status.Ready = false
+	if err != nil {
+		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityError, message, messageargs...)
+	} else {
+		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityInfo, message, messageargs...)
+	}
+	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+	}
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, reason)
+	}
+	if requeue != 0 {
+		// This is absolutely horridly stupid.  You can't multiply a Duration with an integer,
+		// so you have to cast it to a "duration" which is not actually a duration as such
+		// but just a scalar masquerading as a Duration to make it work.
+		//
+		// (If it had been done properly, you should not have been able to multiply Duration*Duration,
+		//  but only Duration*int or v.v., but I guess that's too difficult gor the go devs...)
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(requeue)}, nil
+	}
+	return ctrl.Result{}, nil
+}
+
+func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
+	// Always update the readyCondition by summarizing the state of other conditions.
+	// A step counter is added to represent progress during the provisioning process (instead we are hiding the step counter during the deletion process).
+	conditions.SetSummary(scvmmMachine,
+		conditions.WithConditions(
+			VmCreated,
+			VmRunning,
+			VmJoined,
+		),
+		conditions.WithStepCounterIf(scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+	)
+
+	// Patch the object, ignoring conflicts on the conditions owned by this controller.
+	return patchHelper.Patch(
+		ctx,
+		scvmmMachine,
+		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+			clusterv1.ReadyCondition,
+			VmCreated,
+			VmRunning,
+			VmJoined,
+		}},
+	)
+}
+
+func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) ([]byte, error) {
+	if machine.Spec.Bootstrap.DataSecretName == nil {
+		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
+
+	s := &corev1.Secret{}
+	key := client.ObjectKey{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
+	if err := r.Client.Get(ctx, key, s); err != nil {
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
+	}
+
+	value, ok := s.Data["value"]
+	if !ok {
+		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return value, nil
+}
+
+// ScvmmClusterToScvmmMachines is a handler.ToRequestsFunc to be used to enqeue
+// requests for reconciliation of ScvmmMachines.
+func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(o handler.MapObject) []ctrl.Request {
+	result := []ctrl.Request{}
+	c, ok := o.Object.(*infrav1.ScvmmCluster)
+	if !ok {
+		r.Log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o.Object), "failed to get ScvmmMachine for ScvmmCluster")
+		return nil
+	}
+	log := r.Log.WithValues("ScvmmCluster", c.Name, "Namespace", c.Namespace)
+
+	cluster, err := util.GetOwnerCluster(context.TODO(), r.Client, c.ObjectMeta)
+	switch {
+	case apierrors.IsNotFound(errors.Cause(err)) || cluster == nil:
+		return result
+	case err != nil:
+		log.Error(err, "failed to get owning cluster")
+		return result
+	}
+
+	labels := map[string]string{clusterv1.ClusterLabelName: cluster.Name}
+	machineList := &clusterv1.MachineList{}
+	if err := r.Client.List(context.TODO(), machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
+		log.Error(err, "failed to list ScvmmMachines")
+		return nil
+	}
+	for _, m := range machineList.Items {
+		if m.Spec.InfrastructureRef.Name == "" {
+			continue
+		}
+		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Name}
+		result = append(result, ctrl.Request{NamespacedName: name})
+	}
+
+	return result
+}
+
 func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	extraDebug := os.Getenv("EXTRA_DEBUG")
 	if extraDebug != "" {
@@ -986,76 +1095,34 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Log.V(1).Info("Function script", "functions", funcScript)
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	clusterToScvmmMachines, err := util.ClusterToObjectsMapper(mgr.GetClient(), &infrav1.ScvmmMachineList{}, mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
-		Complete(r)
-}
-
-func patchReasonCondition(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine, requeue int, err error, condition clusterv1.ConditionType, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
-	scvmmMachine.Status.Ready = false
+		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		Watches(
+			&source.Kind{Type: &clusterv1.Machine{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmMachine")),
+			},
+		).
+		Watches(
+			&source.Kind{Type: &infrav1.ScvmmCluster{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: handler.ToRequestsFunc(r.ScvmmClusterToScvmmMachines),
+			},
+		).
+		Build(r)
 	if err != nil {
-		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityError, message, messageargs...)
-	} else {
-		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityInfo, message, messageargs...)
+		return err
 	}
-	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-	}
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, reason)
-	}
-	if requeue != 0 {
-		// This is absolutely horridly stupid.  You can't multiply a Duration with an integer,
-		// so you have to cast it to a "duration" which is not actually a duration as such
-		// but just a scalar masquerading as a Duration to make it work.
-		//
-		// (If it had been done properly, you should not have been able to multiply Duration*Duration,
-		//  but only Duration*int or v.v., but I guess that's too difficult gor the go devs...)
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(requeue)}, nil
-	}
-	return ctrl.Result{}, nil
-}
-
-func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
-	// Always update the readyCondition by summarizing the state of other conditions.
-	// A step counter is added to represent progress during the provisioning process (instead we are hiding the step counter during the deletion process).
-	conditions.SetSummary(scvmmMachine,
-		conditions.WithConditions(
-			VmCreated,
-			VmRunning,
-			VmJoined,
-		),
-		conditions.WithStepCounterIf(scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+	return c.Watch(
+		&source.Kind{Type: &clusterv1.Cluster{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: clusterToScvmmMachines,
+		},
+		predicates.ClusterUnpausedAndInfrastructureReady(r.Log),
 	)
-
-	// Patch the object, ignoring conflicts on the conditions owned by this controller.
-	return patchHelper.Patch(
-		ctx,
-		scvmmMachine,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			clusterv1.ReadyCondition,
-			VmCreated,
-			VmRunning,
-			VmJoined,
-		}},
-	)
-}
-
-func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) ([]byte, error) {
-	if machine.Spec.Bootstrap.DataSecretName == nil {
-		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
-	}
-
-	s := &corev1.Secret{}
-	key := client.ObjectKey{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
-	if err := r.Client.Get(ctx, key, s); err != nil {
-		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
-	}
-
-	value, ok := s.Data["value"]
-	if !ok {
-		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
-	}
-
-	return value, nil
 }

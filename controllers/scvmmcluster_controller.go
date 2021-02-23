@@ -25,10 +25,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/predicates"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
 
@@ -158,7 +161,18 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 }
 
 func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmCluster{}).
-		Complete(r)
+		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		Build(r)
+	if err != nil {
+		return err
+	}
+	return c.Watch(
+		&source.Kind{Type: &clusterv1.Cluster{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmCluster")),
+		},
+		predicates.ClusterUnpaused(r.Log),
+	)
 }
