@@ -817,28 +817,30 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
-	log.V(1).Info("Check ProviderID on node")
-	// Check ProviderID on remote node
-	remoteClient, err := r.Tracker.GetClient(ctx, util.ObjectKey(cluster))
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	remoteNodeName := types.NamespacedName{Name: scvmmMachine.Spec.VMName}
-	remoteNode := &corev1.Node{}
-	if err := remoteClient.Get(ctx, remoteNodeName, remoteNode); err != nil {
-		// May not exist yet, don't complain too hard
-		log.V(1).Info("Remote node not found", "nodename", remoteNodeName, "error", err)
-		message := "Can't connect to remote cluster"
-		if apierrors.IsNotFound(err) {
-			message = "Node not found"
+	if cluster != nil {
+		log.V(1).Info("Check ProviderID on node")
+		// Check ProviderID on remote node
+		remoteClient, err := r.Tracker.GetClient(ctx, util.ObjectKey(cluster))
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmJoined, WaitingForNodeJoinReason, message)
-	}
-	if remoteNode.Spec.ProviderID == "" {
-		log.V(1).Info("Setting providerid on remote node", "node", remoteNode)
-		remoteNode.Spec.ProviderID = scvmmMachine.Spec.ProviderID
-		if err := remoteClient.Update(ctx, remoteNode); err != nil {
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmJoined, WaitingForNodeJoinReason, "Failed to set providerID on remote node")
+		remoteNodeName := types.NamespacedName{Name: scvmmMachine.Spec.VMName}
+		remoteNode := &corev1.Node{}
+		if err := remoteClient.Get(ctx, remoteNodeName, remoteNode); err != nil {
+			// May not exist yet, don't complain too hard
+			log.V(1).Info("Remote node not found", "nodename", remoteNodeName, "error", err)
+			message := "Can't connect to remote cluster"
+			if apierrors.IsNotFound(err) {
+				message = "Node not found"
+			}
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmJoined, WaitingForNodeJoinReason, message)
+		}
+		if remoteNode.Spec.ProviderID == "" {
+			log.V(1).Info("Setting providerid on remote node", "node", remoteNode)
+			remoteNode.Spec.ProviderID = scvmmMachine.Spec.ProviderID
+			if err := remoteClient.Update(ctx, remoteNode); err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmJoined, WaitingForNodeJoinReason, "Failed to set providerID on remote node")
+			}
 		}
 	}
 	conditions.MarkTrue(scvmmMachine, VmJoined)
