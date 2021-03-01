@@ -24,7 +24,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,8 +61,6 @@ const (
 	VmCreated clusterv1.ConditionType = "VmCreated"
 	// VM running
 	VmRunning clusterv1.ConditionType = "VmRunning"
-	// VM node joined cluster
-	VmJoined clusterv1.ConditionType = "VmJoined"
 
 	// Cluster-Api related statuses
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
@@ -72,7 +69,6 @@ const (
 	WaitingForOwnerReason                 = "WaitingForOwner"
 	ClusterNotAvailableReason             = "ClusterNotAvailable"
 	MissingClusterReason                  = "MissingCluster"
-	WaitingForNodeJoinReason              = "WaitingForNodeJoin"
 
 	VmCreatingReason = "VmCreating"
 	VmStartingReason = "VmStarting"
@@ -121,7 +117,8 @@ type VMResult struct {
 	CpuCount       int
 	VirtualNetwork string
 	IPv4Addresses  []string
-	Guid           string
+	BiosGuid       string
+	Id             string
 	Error          string
 	ScriptErrors   string
 	Message        string
@@ -281,7 +278,7 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
-func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
+func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
@@ -323,7 +320,7 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, sharePa
 	}
 	if metaData == nil {
 		hostname := scvmmMachine.Spec.VMName
-		data := "instance-id: scvmm-capi-" + scvmmMachine.ObjectMeta.Name + "\n" +
+		data := "instance-id: " + machineid + "\n" +
 			"hostname: " + hostname + "\n" +
 			"local-hostname: " + hostname + "\n"
 		metaData = []byte(data)
@@ -686,10 +683,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 
 		log.V(1).Info("Fill in status")
 		scvmmMachine.Spec.VMName = vmName
-		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
+		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Id
 		scvmmMachine.Status.Ready = false
 		scvmmMachine.Status.VMStatus = vm.Status
-		scvmmMachine.Status.BiosGuid = vm.Guid
+		scvmmMachine.Status.BiosGuid = vm.BiosGuid
 		scvmmMachine.Status.CreationTime = vm.CreationTime
 		scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "")
@@ -697,10 +694,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
 	log.V(1).Info("Machine is there, fill in status")
-	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Guid
+	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Id
 	scvmmMachine.Status.Ready = (vm.Status == "Running")
 	scvmmMachine.Status.VMStatus = vm.Status
-	scvmmMachine.Status.BiosGuid = vm.Guid
+	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
@@ -751,7 +748,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if metaData != nil || bootstrapData != nil || networkConfig != nil {
 			log.V(1).Info("Create cloudinit")
 			isoPath := ScvmmLibraryShare + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
-			if err := writeCloudInit(log, scvmmMachine, isoPath, bootstrapData, metaData, networkConfig); err != nil {
+			if err := writeCloudInit(log, scvmmMachine, vm.Id, isoPath, bootstrapData, metaData, networkConfig); err != nil {
 				r.Log.Error(err, "failed to create cloud init")
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 			}
@@ -816,37 +813,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.V(1).Info("ReadVM result", "vm", vm)
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
-	}
-	if cluster != nil {
-		log.V(1).Info("Check ProviderID on node")
-		// Check ProviderID on remote node
-		remoteClient, err := r.Tracker.GetClient(ctx, util.ObjectKey(cluster))
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		remoteNodeName := types.NamespacedName{Name: scvmmMachine.Spec.VMName}
-		remoteNode := &corev1.Node{}
-		if err := remoteClient.Get(ctx, remoteNodeName, remoteNode); err != nil {
-			// May not exist yet, don't complain too hard
-			log.V(1).Info("Remote node not found", "nodename", remoteNodeName, "error", err)
-			message := "Can't connect to remote cluster"
-			if apierrors.IsNotFound(err) {
-				message = "Node not found"
-			}
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmJoined, WaitingForNodeJoinReason, message)
-		}
-		if remoteNode.Spec.ProviderID == "" {
-			log.V(1).Info("Setting providerid on remote node", "node", remoteNode)
-			remoteNode.Spec.ProviderID = scvmmMachine.Spec.ProviderID
-			if err := remoteClient.Update(ctx, remoteNode); err != nil {
-				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmJoined, WaitingForNodeJoinReason, "Failed to set providerID on remote node")
-			}
-		}
-	}
-	conditions.MarkTrue(scvmmMachine, VmJoined)
-	if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-		return ctrl.Result{}, perr
 	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
@@ -955,7 +921,6 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 		conditions.WithConditions(
 			VmCreated,
 			VmRunning,
-			VmJoined,
 		),
 		conditions.WithStepCounterIf(scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()),
 	)
@@ -968,7 +933,6 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 			clusterv1.ReadyCondition,
 			VmCreated,
 			VmRunning,
-			VmJoined,
 		}},
 	)
 }

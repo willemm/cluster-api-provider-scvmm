@@ -20,7 +20,8 @@ function VMToJson($vm, $message = "") {
       $vmjson.Hostname = $vm.VirtualNetworkAdapters.Name | select -first 1
     }
   }
-  if ($vm.BiosGuid -ne $null) { $vmjson.Guid = $vm.BiosGuid }
+  if ($vm.BiosGuid -ne $null) { $vmjson.BiosGuid = "$($vm.BiosGuid)" }
+  if ($vm.Id -ne $null) { $vmjson.Id = "$($vm.Id)" }
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
   if ($vm.ModifiedTime -ne $null) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToString('o') }
   if ($message) { $vmjson.Message = $message }

@@ -135,8 +135,8 @@ spec:
       name: IP
       type: string
     - description: Virtual Machine BIOS GUID
-      jsonPath: .status.biosGuid
-      name: GUID
+      jsonPath: .spec.providerID
+      name: ID
       priority: 1
       type: string
     - description: Virtual Machine Creation Timestamp
