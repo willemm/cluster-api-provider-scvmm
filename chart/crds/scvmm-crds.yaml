@@ -134,7 +134,7 @@ spec:
       jsonPath: .status.addresses[].address
       name: IP
       type: string
-    - description: Virtual Machine BIOS GUID
+    - description: Virtual Machine ProviderID
       jsonPath: .spec.providerID
       name: ID
       priority: 1
