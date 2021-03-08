@@ -253,6 +253,10 @@ func getWinrmSpecResult(cmd *winrm.DirectCommand, log logr.Logger) (VMSpecResult
 	return res, nil
 }
 
+func escapeSingleQuotes(str string) string {
+	return strings.Replace(str, `'`, `''`, -1)
+}
+
 func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command string, scvmmMachine *infrav1.ScvmmMachine) (VMSpecResult, error) {
 	specjson, err := json.Marshal(scvmmMachine.Spec)
 	if err != nil {
@@ -265,9 +269,13 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command str
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM command", "command", command, "spec", scvmmMachine.Spec,
 			"metadata", scvmmMachine.ObjectMeta,
-			"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\n", specjson, metajson))
+			"cmdline", fmt.Sprintf(command+" -spec '%s' -metadata '%s'\n",
+				escapeSingleQuotes(string(specjson)),
+				escapeSingleQuotes(string(metajson))))
 	}
-	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'", specjson, metajson); err != nil {
+	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'",
+		escapeSingleQuotes(string(specjson)),
+		escapeSingleQuotes(string(metajson))); err != nil {
 		return VMSpecResult{ScriptErrors: "Error executing command"}, errors.Wrap(err, "sending command")
 	}
 	return getWinrmSpecResult(cmd, log)
@@ -637,7 +645,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	var vm VMResult
 	if scvmmMachine.Spec.VMName != "" {
 		log.V(1).Info("Running GetVM")
-		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", scvmmMachine.Spec.VMName)
+		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", escapeSingleQuotes(scvmmMachine.Spec.VMName))
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
 		}
@@ -667,12 +675,19 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
 		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
-			spec.Cloud, spec.HostGroup, vmName,
-			spec.VMTemplate, spec.VHDisk,
+			escapeSingleQuotes(spec.Cloud),
+			escapeSingleQuotes(spec.HostGroup),
+			escapeSingleQuotes(vmName),
+			escapeSingleQuotes(spec.VMTemplate),
+			escapeSingleQuotes(spec.VHDisk),
 			(spec.Memory.Value() / 1024 / 1024),
-			spec.CPUCount, diskjson,
-			spec.VMNetwork, spec.HardwareProfile, spec.Description,
-			spec.StartAction, spec.StopAction)
+			spec.CPUCount,
+			escapeSingleQuotes(string(diskjson)),
+			escapeSingleQuotes(spec.VMNetwork),
+			escapeSingleQuotes(spec.HardwareProfile),
+			escapeSingleQuotes(spec.Description),
+			escapeSingleQuotes(spec.StartAction),
+			escapeSingleQuotes(spec.StopAction))
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
@@ -758,14 +773,17 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				return ctrl.Result{}, err
 			}
 			log.V(1).Info("Call AddIsoToVM")
-			vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'", scvmmMachine.Spec.VMName, isoPath)
+			vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				escapeSingleQuotes(isoPath))
 			if err != nil {
 				return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
 			}
 			log.V(1).Info("AddIsoToVM result", "vm", vm)
 		} else {
 			log.V(1).Info("Call StartVM")
-			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'", scvmmMachine.Spec.VMName)
+			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName))
 			if err != nil {
 				return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 			}
@@ -806,7 +824,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	if vm.IPv4Addresses == nil || vm.Hostname == "" {
 		log.V(1).Info("Call ReadVM")
-		vm, err = sendWinrmCommand(log, cmd, "ReadVM -VMName '%s'", scvmmMachine.Spec.VMName)
+		vm, err = sendWinrmCommand(log, cmd, "ReadVM -VMName '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.VMName))
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to read vm")
 		}
@@ -863,7 +882,8 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	defer cmd.Close()
 
 	log.V(1).Info("Call RemoveVM")
-	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName '%s'", scvmmMachine.Spec.VMName)
+	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName '%s'",
+		escapeSingleQuotes(scvmmMachine.Spec.VMName))
 	if err != nil {
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to delete VM")
 	}
