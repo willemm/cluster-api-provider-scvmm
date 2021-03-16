@@ -219,20 +219,23 @@ function GenerateVMName($spec, $metadata) {
 
 function CreateADComputer($name, $oupath, $domaincontroller, $description, $memberof) {
   try {
-    $comp = Get-ADComputer -Identity $name
-    if ($comp) {
-      return @{ Message = "ADComputer $($name) already exists" } | convertto-json
-    }
     $dcparam = @{}
     if ($domaincontroller) {
       $dcparam.Server = $domaincontroller
     }
-    $sam = "$($name)`$"
-    New-ADComputer @credparam @dcparam -Name $name -Path $oupath -AccountPassword $null -samaccountname $sam -enabled $true -Description $description
-    foreach ($grp in $memberof) {
-      Add-ADCroupMember -Identity $grp -Member $sam
+    $ident = "CN=$($name),$($oupath)"
+    try {
+      $comp = Get-ADComputer @credparam @dcparam -Identity $ident
+      if (-not $comp) {
+        throw "ADComputer $ident not found"
+      }
+    } catch {
+      New-ADComputer @credparam @dcparam -Name $name -Path $oupath -AccountPassword $null -samaccountname "$($name)`$" -enabled $true -Description $description
     }
-    return @{ Message = "ADComputer $($name) created" } | convertto-json
+    foreach ($grp in $memberof) {
+      Add-ADGroupMember @credparam @dcparam -Identity $grp -Members $ident
+    }
+    return @{ Message = "ADComputer $($ident) created" } | convertto-json
   } catch {
     ErrorToJson 'Create AD Computer' $_
   }
@@ -244,7 +247,14 @@ function RemoveADComputer($name, $oupath, $domaincontroller) {
     if ($domaincontroller) {
       $dcparam.Server = $domaincontroller
     }
-    Remove-ADComputer @credparam @dcparam -Identity "CN=$($name),$($oupath)"
+    $ident = "CN=$($name),$($oupath)"
+    try {
+      $comp = Get-ADComputer @credparam @dcparam -Identity $ident
+    } catch {
+      return @{ Message = "ADComputer $($ident) not found" } | convertto-json
+    }
+    Remove-ADComputer @credparam @dcparam -Confirm:$false -Identity $ident
+    return @{ Message = "ADComputer $($ident) removed" } | convertto-json
   } catch {
     ErrorToJson 'Remove AD Computer' $_
   }
