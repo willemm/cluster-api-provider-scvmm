@@ -65,6 +65,9 @@ type ScvmmMachineSpec struct {
 	// Network settings
 	// +optional
 	Networking *Networking `json:"networking,omitempty"`
+	// Active Directory entry
+	// +optional
+	ActiveDirectory *ActiveDirectory `json:"activeDirectory,omitempty"`
 	// Cloud-Init data
 	// This triggers the controller to create the machine without a (cluster-api) cluster
 	// For testing purposes, or just for creating VMs
@@ -89,6 +92,20 @@ type Networking struct {
 	Nameservers []string `json:"nameservers"`
 	// Domain
 	Domain string `json:"domain"`
+}
+
+type ActiveDirectory struct {
+	// Domain Controller
+	// +optional
+	DomainController string `json:"domainController,omitempty"`
+	// OU Path
+	OUPath string `json:"ouPath"`
+	// Description
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Group memberships
+	// +option
+	MemberOf []string `json:"memberOf,omitempty"`
 }
 
 // NoCloud cloud-init data (user-data and meta-data file contents)

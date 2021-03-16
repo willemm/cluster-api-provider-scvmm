@@ -216,3 +216,36 @@ function GenerateVMName($spec, $metadata) {
     ErrorToJson 'Generate VM Name' $_
   }
 }
+
+function CreateADComputer($name, $oupath, $domaincontroller, $description, $memberof) {
+  try {
+    $comp = Get-ADComputer -Identity $name
+    if ($comp) {
+      return @{ Message = "ADComputer $($name) already exists" } | convertto-json
+    }
+    $dcparam = @{}
+    if ($domaincontroller) {
+      $dcparam.Server = $domaincontroller
+    }
+    $sam = "$($name)`$"
+    New-ADComputer @credparam @dcparam -Name $name -Path $oupath -AccountPassword $null -samaccountname $sam -enabled $true -Description $description
+    foreach ($grp in $memberof) {
+      Add-ADCroupMember -Identity $grp -Member $sam
+    }
+    return @{ Message = "ADComputer $($name) created" } | convertto-json
+  } catch {
+    ErrorToJson 'Create AD Computer' $_
+  }
+}
+
+function RemoveADComputer($name, $oupath, $domaincontroller) {
+  try {
+    $dcparam = @{}
+    if ($domaincontroller) {
+      $dcparam.Server = $domaincontroller
+    }
+    Remove-ADComputer @credparam @dcparam -Identity "CN=$($name),$($oupath)"
+  } catch {
+    ErrorToJson 'Remove AD Computer' $_
+  }
+}

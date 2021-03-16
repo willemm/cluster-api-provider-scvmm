@@ -61,6 +61,26 @@ spec:
           spec:
             description: ScvmmMachineSpec defines the desired state of ScvmmMachine
             properties:
+              activeDirectory:
+                description: Active Directory entry
+                properties:
+                  description:
+                    description: Description
+                    type: string
+                  domainController:
+                    description: Domain Controller
+                    type: string
+                  memberOf:
+                    description: Group memberships
+                    items:
+                      type: string
+                    type: array
+                  ouPath:
+                    description: OU Path
+                    type: string
+                required:
+                - ouPath
+                type: object
               cloud:
                 description: VMM cloud to run VM on
                 type: string

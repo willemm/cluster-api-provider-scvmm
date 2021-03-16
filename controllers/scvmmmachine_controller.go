@@ -101,6 +101,8 @@ var (
 	ScvmmLibraryShare string
 	// Location of the powershell script files
 	ScriptDir string
+	// Active Directory server (optional)
+	ADServer string
 	// Holds the powershell script-functions (will be executed at the start of each remote shell)
 	FunctionScript []byte
 	// Show extra debugging info
@@ -255,6 +257,21 @@ func getWinrmSpecResult(cmd *winrm.DirectCommand, log logr.Logger) (VMSpecResult
 
 func escapeSingleQuotes(str string) string {
 	return strings.Replace(str, `'`, `''`, -1)
+}
+
+func escapeSingleQuotesArray(str []string) string {
+	var res strings.Builder
+	if len(str) == 0 {
+		return ""
+	}
+	res.WriteString("'")
+	res.WriteString(strings.Replace(str[0], `'`, `''`, -1))
+	for s := range str[1:] {
+		res.WriteString("','")
+		res.WriteString(strings.Replace(str[s], `'`, `''`, -1))
+	}
+	res.WriteString("'")
+	return res.String()
 }
 
 func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command string, scvmmMachine *infrav1.ScvmmMachine) (VMSpecResult, error) {
@@ -669,6 +686,23 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			vmName = newspec.VMName
 		}
 		spec := scvmmMachine.Spec
+		adspec := spec.ActiveDirectory
+		if adspec != nil {
+			log.V(1).Info("Call CreateADComputer")
+			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
+				escapeSingleQuotes(spec.VMName),
+				escapeSingleQuotes(adspec.OUPath),
+				escapeSingleQuotes(adspec.DomainController),
+				escapeSingleQuotes(adspec.Description),
+				escapeSingleQuotesArray(adspec.MemberOf))
+			if err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
+			}
+			log.V(1).Info("CreateADComputer Result", "vm", vm)
+			if vm.Error != "" {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to create AD entry: %s", vm.Error)
+			}
+		}
 		log.V(1).Info("Call CreateVM")
 		diskjson, err := makeDisksJSON(spec.Disks)
 		if err != nil {
@@ -892,6 +926,21 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to delete VM: %s", vm.Error)
 	}
 	if vm.Message == "Removed" {
+		adspec := scvmmMachine.Spec.ActiveDirectory
+		if adspec != nil {
+			log.V(1).Info("Call RemoveADComputer")
+			vm, err = sendWinrmCommand(log, cmd, "RemoveADComputer -Name '%s' -OUPath '%s' -DomainController '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				escapeSingleQuotes(adspec.OUPath),
+				escapeSingleQuotes(adspec.DomainController))
+			if err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to remove AD entry")
+			}
+			log.V(1).Info("RemoveADComputer Result", "vm", vm)
+			if vm.Error != "" {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to remove AD entry: %s", vm.Error)
+			}
+		}
 		log.V(1).Info("Machine is removed, remove finalizer")
 		controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
@@ -1034,6 +1083,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if ScvmmPassword == "" {
 		return fmt.Errorf("missing required env SCVMM_PASSWORD")
 	}
+	ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
 
 	funcScript := ""
 	if ScvmmExecHost != "" {
