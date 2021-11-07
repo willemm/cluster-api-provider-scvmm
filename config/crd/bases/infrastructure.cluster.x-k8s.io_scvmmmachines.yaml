@@ -41,7 +41,7 @@ spec:
       jsonPath: .status.creationTime
       name: AGE
       type: date
-    name: v1alpha3
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: ScvmmMachine is the Schema for the scvmmmachines API

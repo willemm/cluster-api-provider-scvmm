@@ -5,7 +5,7 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.1
   labels:
     cluster.x-k8s.io/provider: infrastructure-scvmm
-    cluster.x-k8s.io/v1alpha3: v1alpha3
+    cluster.x-k8s.io/v1beta1: v1beta1
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/lifecycle: shared
   name: scvmmclusters.infrastructure.cluster.x-k8s.io
@@ -20,7 +20,7 @@ spec:
     singular: scvmmcluster
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: ScvmmCluster is the Schema for the scvmmclusters API
@@ -105,7 +105,7 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.1
   labels:
     cluster.x-k8s.io/provider: infrastructure-scvmm
-    cluster.x-k8s.io/v1alpha3: v1alpha3
+    cluster.x-k8s.io/v1beta1: v1beta1
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/lifecycle: shared
   name: scvmmmachines.infrastructure.cluster.x-k8s.io
@@ -143,7 +143,7 @@ spec:
       jsonPath: .status.creationTime
       name: AGE
       type: date
-    name: v1alpha3
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: ScvmmMachine is the Schema for the scvmmmachines API
@@ -380,7 +380,7 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.1
   labels:
     cluster.x-k8s.io/provider: infrastructure-scvmm
-    cluster.x-k8s.io/v1alpha3: v1alpha3
+    cluster.x-k8s.io/v1beta1: v1beta1
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/lifecycle: shared
   name: scvmmmachinetemplates.infrastructure.cluster.x-k8s.io
@@ -395,7 +395,7 @@ spec:
     singular: scvmmmachinetemplate
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: ScvmmMachineTemplate is the Schema for the scvmmmachinetemplates API

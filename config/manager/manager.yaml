@@ -3,13 +3,13 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: system
+  name: caps-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: caps-system
   labels:
     control-plane: controller-manager
 spec:
@@ -25,9 +25,24 @@ spec:
       containers:
       - command:
         - /manager
-        args:
-        - --enable-leader-election
-        image: controller:latest
+        #args:
+        #- --enable-leader-election
+        env:
+          - name: SCVMM_EXECHOST
+            value: stxlr01.europe.stater.corp
+          - name: SCVMM_HOST
+            value: stvmm.europe.stater.corp
+          - name: SCVMM_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: scvmm-credentials
+                key: username
+          - name: SCVMM_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: scvmm-credentials
+                key: password
+        image: willemmon/cluster-api-provider-scvmm:WIP-7
         name: manager
         resources:
           limits:

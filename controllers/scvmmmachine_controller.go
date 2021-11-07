@@ -36,11 +36,11 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
 	// "k8s.io/apimachinery/pkg/api/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	// "encoding/base64"
 	"encoding/binary"

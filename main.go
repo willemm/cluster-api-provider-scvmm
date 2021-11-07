@@ -26,9 +26,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha3"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
 	"github.com/willemm/cluster-api-provider-scvmm/controllers"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
