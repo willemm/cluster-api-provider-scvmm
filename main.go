@@ -33,6 +33,7 @@ import (
 
 	infrastructurev1beta1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
 	"github.com/willemm/cluster-api-provider-scvmm/controllers"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -45,6 +46,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(infrastructurev1beta1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -80,6 +82,7 @@ func main() {
 
 	if err = (&controllers.ScvmmClusterReconciler{
 		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmCluster"),
 		// Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmCluster")
@@ -87,6 +90,7 @@ func main() {
 	}
 	if err = (&controllers.ScvmmMachineReconciler{
 		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmCluster"),
 		// Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmMachine")

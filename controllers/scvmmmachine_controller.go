@@ -24,7 +24,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	// "k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api/controllers/remote"
+	// "sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -82,7 +82,7 @@ const (
 type ScvmmMachineReconciler struct {
 	client.Client
 	Log     logr.Logger
-	Tracker *remote.ClusterCacheTracker
+	// Tracker *remote.ClusterCacheTracker
 	// Scheme  *runtime.Scheme
 }
 

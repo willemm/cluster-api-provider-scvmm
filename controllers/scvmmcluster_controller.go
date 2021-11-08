@@ -170,6 +170,6 @@ func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return c.Watch(
 		&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmCluster"))),
-		predicates.ClusterUnpaused(r.Log),
+		predicates.ClusterUnpausedAndInfrastructureReady(r.Log),
 	)
 }
