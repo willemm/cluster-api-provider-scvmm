@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
+	// "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -83,7 +83,7 @@ type ScvmmMachineReconciler struct {
 	client.Client
 	Log     logr.Logger
 	Tracker *remote.ClusterCacheTracker
-	Scheme  *runtime.Scheme
+	// Scheme  *runtime.Scheme
 }
 
 // Are global variables bad? Dunno.  These hold data for the lifetime of the controller.
@@ -554,11 +554,11 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
-func (r *ScvmmMachineReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("scvmmmachine", req.NamespacedName)
 
 	log.V(1).Info("Fetching scvmmmachine")
@@ -770,7 +770,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		var bootstrapData, metaData, networkConfig []byte
 		if machine != nil {
 			if machine.Spec.Bootstrap.DataSecretName == nil {
-				if !util.IsControlPlaneMachine(machine) && !cluster.Status.ControlPlaneInitialized {
+				if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
 					log.Info("Waiting for the control plane to be initialized")
 					return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
 				}
@@ -1027,11 +1027,11 @@ func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *
 
 // ScvmmClusterToScvmmMachines is a handler.ToRequestsFunc to be used to enqeue
 // requests for reconciliation of ScvmmMachines.
-func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(o handler.MapObject) []ctrl.Request {
+func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(o client.Object) []ctrl.Request {
 	result := []ctrl.Request{}
-	c, ok := o.Object.(*infrav1.ScvmmCluster)
+	c, ok := o.(*infrav1.ScvmmCluster)
 	if !ok {
-		r.Log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o.Object), "failed to get ScvmmMachine for ScvmmCluster")
+		r.Log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o), "failed to get ScvmmMachine for ScvmmCluster")
 		return nil
 	}
 	log := r.Log.WithValues("ScvmmCluster", c.Name, "Namespace", c.Namespace)
@@ -1140,15 +1140,11 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmMachine")),
-			},
+			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmMachine"))),
 		).
 		Watches(
 			&source.Kind{Type: &infrav1.ScvmmCluster{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: handler.ToRequestsFunc(r.ScvmmClusterToScvmmMachines),
-			},
+			handler.EnqueueRequestsFromMapFunc(r.ScvmmClusterToScvmmMachines),
 		).
 		Build(r)
 	if err != nil {
@@ -1156,9 +1152,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return c.Watch(
 		&source.Kind{Type: &clusterv1.Cluster{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: clusterToScvmmMachines,
-		},
+		handler.EnqueueRequestsFromMapFunc(clusterToScvmmMachines),
 		predicates.ClusterUnpausedAndInfrastructureReady(r.Log),
 	)
 }
