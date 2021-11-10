@@ -120,6 +120,9 @@ spec:
                       description: Size of the virtual disk
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
+                    vhDisk:
+                      description: Virtual Harddisk to couple
+                      type: string
                   required:
                   - size
                   type: object
@@ -176,9 +179,6 @@ spec:
                 - ShutdownGuestOS
                 - TurnOffVM
                 - SaveVM
-                type: string
-              vhDisk:
-                description: Virtual Harddisk to use
                 type: string
               vmName:
                 description: Name of the VM

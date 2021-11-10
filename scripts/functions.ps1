@@ -20,6 +20,9 @@ function VMToJson($vm, $message = "") {
       $vmjson.Hostname = $vm.VirtualNetworkAdapters.Name | select -first 1
     }
   }
+  if ($vm.VirtualHardDisks -ne $null) {
+    $vmjson.VirtualDisks = @($vm.VirtualHardDisks | select Size, MaximumSize)
+  }
   if ($vm.BiosGuid -ne $null) { $vmjson.BiosGuid = "$($vm.BiosGuid)" }
   if ($vm.Id -ne $null) { $vmjson.Id = "$($vm.Id)" }
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
@@ -60,7 +63,7 @@ function ReadVM($vmname) {
   }
 }
 
-function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memory, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
+function CreateVM($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction) {
   try {
     if (-not $description) { $description = "$hostgroup||capi-scvmm" }
     if (-not $startaction) { $startaction = 'NeverAutoTurnOnVM' }
@@ -68,20 +71,19 @@ function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memor
     $JobGroupID = [GUID]::NewGuid().ToString()
     $disknum = 0
     $voltype = 'BootAndSystem'
-    if ($vhdisk) {
-      $VirtualHardDisk = Get-SCVirtualHardDisk -name $vhdisk
-      if (-not $VirtualHardDisk) {
-        throw "VHD $($vhdisk) not found"
-      }
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType BootAndSystem -VirtualHardDisk $VirtualHardDisk
-      $disknum = 1
-      $voltype = 'System'
-    }
     foreach ($disk in ($disks | convertfrom-json)) {
       if ($disknum -gt 16) {
         throw "Too many virtual disks"
       }
-      New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType $voltype
+      if ($disk.vhDisk) {
+        $VirtualHardDisk = Get-SCVirtualHardDisk -name $disk.vhDisk
+        if (-not $VirtualHardDisk) {
+          throw "VHD $($disk.vhDisk) not found"
+        }
+        New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType $voltype -VirtualHardDisk $VirtualHardDisk
+      } else {
+        New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType $voltype
+      }
       $disknum = $disknum + 1
       $voltype = 'System'
     }
@@ -107,6 +109,24 @@ function CreateVM($cloud, $hostgroup, $vmname, $vhdisk, $vmtemplate, [int]$memor
     return VMToJson $vm "Creating"
   } catch {
     ErrorToJson 'Create VM' $_
+  }
+}
+
+function ExpandVMDisks($vmname, $disks) {
+  try {
+    $vm = Get-SCVirtualMachine -Name $vmname
+    if (-not $vm) {
+      throw "Virtual Machine $vmname not found"
+    }
+    foreach ($vhdisk in Get-SCVirtualDiskDrive -vm $vm) {
+      $lun = $vhdisk.LUN
+      if ($disks[$lun].sizeMB) {
+        Expand-SCVirtualDiskDrive -VirtualDiskDrive $vhdisk -VirtualHardDiskSizeGB ($disks[$lun].sizeMB / 1024) -JobGroup $JobGroupID -RunAsynchronously
+      }
+    }
+    return VMToJson $vm "Resizing"
+  } catch {
+    ErrorToJson 'Expand VM Disks' $_
   }
 }
 

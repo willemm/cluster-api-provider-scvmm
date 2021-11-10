@@ -71,6 +71,7 @@ const (
 	MissingClusterReason                  = "MissingCluster"
 
 	VmCreatingReason = "VmCreating"
+	VmUpdatingReason = "VmUpdating"
 	VmStartingReason = "VmStarting"
 	VmDeletingReason = "VmDeleting"
 	VmFailedReason   = "VmFailed"
@@ -81,7 +82,7 @@ const (
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
 type ScvmmMachineReconciler struct {
 	client.Client
-	Log     logr.Logger
+	Log logr.Logger
 	// Tracker *remote.ClusterCacheTracker
 	// Scheme  *runtime.Scheme
 }
@@ -119,13 +120,17 @@ type VMResult struct {
 	CpuCount       int
 	VirtualNetwork string
 	IPv4Addresses  []string
-	BiosGuid       string
-	Id             string
-	Error          string
-	ScriptErrors   string
-	Message        string
-	CreationTime   metav1.Time
-	ModifiedTime   metav1.Time
+	VirtualDisks   []struct {
+		Size        int64
+		MaximumSize int64
+	}
+	BiosGuid     string
+	Id           string
+	Error        string
+	ScriptErrors string
+	Message      string
+	CreationTime metav1.Time
+	ModifiedTime metav1.Time
 }
 
 type VMSpecResult struct {
@@ -690,7 +695,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if adspec != nil {
 			log.V(1).Info("Call CreateADComputer")
 			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
-				escapeSingleQuotes(spec.VMName),
+				escapeSingleQuotes(vmName),
 				escapeSingleQuotes(adspec.OUPath),
 				escapeSingleQuotes(adspec.DomainController),
 				escapeSingleQuotes(adspec.Description),
@@ -708,12 +713,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if err != nil {
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -VHDisk '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
 			escapeSingleQuotes(spec.VMTemplate),
-			escapeSingleQuotes(spec.VHDisk),
 			(spec.Memory.Value() / 1024 / 1024),
 			spec.CPUCount,
 			escapeSingleQuotes(string(diskjson)),
@@ -765,6 +769,36 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 				return ctrl.Result{}, err
 			}
+		}
+		spec := scvmmMachine.Spec
+		doexpand := false
+		for i, d := range spec.Disks {
+			if vm.VirtualDisks[i].MaximumSize < (d.Size.Value() + 1024*1024) { // For rounding errors
+				doexpand = true
+			}
+		}
+		if doexpand {
+			log.V(1).Info("Call ResizeVMDisks")
+			diskjson, err := makeDisksJSON(spec.Disks)
+			if err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
+			}
+			vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -VMName '%s' -Disks '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				escapeSingleQuotes(string(diskjson)))
+			if err != nil {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
+			}
+			log.V(1).Info("ExpandVMDisks Result", "vm", vm)
+			if vm.Error != "" {
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "Failed to create vm: %s", vm.Error)
+			}
+			scvmmMachine.Status.Ready = false
+			scvmmMachine.Status.VMStatus = vm.Status
+			scvmmMachine.Status.BiosGuid = vm.BiosGuid
+			scvmmMachine.Status.CreationTime = vm.CreationTime
+			scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "")
 		}
 
 		var bootstrapData, metaData, networkConfig []byte
@@ -872,14 +906,16 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 }
 
 type VmDiskElem struct {
-	SizeMB  int64
-	Dynamic bool
+	SizeMB  int64  `json:"sizeMB"`
+	VHDisk  string `json:"vhDisk,omitempty"`
+	Dynamic bool   `json:"dynamic"`
 }
 
 func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 	diskarr := make([]VmDiskElem, len(disks))
 	for i, d := range disks {
 		diskarr[i].SizeMB = d.Size.Value() / 1024 / 1024
+		diskarr[i].VHDisk = d.VHDisk
 		diskarr[i].Dynamic = d.Dynamic
 	}
 	return json.Marshal(diskarr)

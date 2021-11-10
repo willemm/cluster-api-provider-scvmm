@@ -37,9 +37,6 @@ type ScvmmMachineSpec struct {
 	// VM template to use
 	// +optional
 	VMTemplate string `json:"vmTemplate,omitempty"`
-	// Virtual Harddisk to use
-	// +optional
-	VHDisk string `json:"vhDisk,omitempty"`
 	// Extra disks (after the VHDisk) to connect to the VM
 	// +optional
 	Disks []VmDisk `json:"disks,omitEmpty"`
@@ -81,6 +78,9 @@ type VmDisk struct {
 	// Specify that the virtual disk can expand dynamically (default: true)
 	// +optional
 	Dynamic bool `json:"dynamic,omitEmpty"`
+	// Virtual Harddisk to couple
+	// +optional
+	VHDisk string `json:"vhDisk,omitempty"`
 }
 
 type Networking struct {
@@ -207,10 +207,6 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	if in.VMTemplate != "" && in.VMTemplate != out.VMTemplate {
 		changed = true
 		out.VMTemplate = in.VMTemplate
-	}
-	if in.VHDisk != "" && in.VHDisk != out.VHDisk {
-		changed = true
-		out.VHDisk = in.VHDisk
 	}
 	if in.Disks != nil && VmDiskEquals(in.Disks, out.Disks) {
 		changed = true
