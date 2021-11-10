@@ -773,7 +773,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		spec := scvmmMachine.Spec
 		doexpand := false
 		for i, d := range spec.Disks {
-			if vm.VirtualDisks[i].MaximumSize < (d.Size.Value() + 1024*1024) { // For rounding errors
+			if vm.VirtualDisks[i].MaximumSize < (d.Size.Value() - 1024*1024) { // For rounding errors
 				doexpand = true
 			}
 		}
