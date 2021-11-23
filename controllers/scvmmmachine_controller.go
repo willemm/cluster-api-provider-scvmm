@@ -126,6 +126,7 @@ type VMResult struct {
 	}
 	BiosGuid     string
 	Id           string
+	VMId         string
 	Error        string
 	ScriptErrors string
 	Message      string
@@ -736,7 +737,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 
 		log.V(1).Info("Fill in status")
 		scvmmMachine.Spec.VMName = vmName
-		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Id
+		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 		scvmmMachine.Status.Ready = false
 		scvmmMachine.Status.VMStatus = vm.Status
 		scvmmMachine.Status.BiosGuid = vm.BiosGuid
@@ -747,7 +748,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
 	log.V(1).Info("Machine is there, fill in status")
-	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.Id
+	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	scvmmMachine.Status.Ready = (vm.Status == "Running")
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
@@ -831,7 +832,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if metaData != nil || bootstrapData != nil || networkConfig != nil {
 			log.V(1).Info("Create cloudinit")
 			isoPath := ScvmmLibraryShare + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
-			if err := writeCloudInit(log, scvmmMachine, vm.Id, isoPath, bootstrapData, metaData, networkConfig); err != nil {
+			if err := writeCloudInit(log, scvmmMachine, vm.VMId, isoPath, bootstrapData, metaData, networkConfig); err != nil {
 				r.Log.Error(err, "failed to create cloud init")
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 			}

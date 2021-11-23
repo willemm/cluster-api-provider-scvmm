@@ -25,6 +25,7 @@ function VMToJson($vm, $message = "") {
   }
   if ($vm.BiosGuid -ne $null) { $vmjson.BiosGuid = "$($vm.BiosGuid)" }
   if ($vm.Id -ne $null) { $vmjson.Id = "$($vm.Id)" }
+  if ($vm.VMId -ne $null) { $vmjson.VMId = "$($vm.VMId)" }
   if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
   if ($vm.ModifiedTime -ne $null) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToString('o') }
   if ($message) { $vmjson.Message = $message }
