@@ -737,7 +737,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 
 		log.V(1).Info("Fill in status")
 		scvmmMachine.Spec.VMName = vmName
-		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
+		if vm.VMId != "" {
+			scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
+		}
 		scvmmMachine.Status.Ready = false
 		scvmmMachine.Status.VMStatus = vm.Status
 		scvmmMachine.Status.BiosGuid = vm.BiosGuid
@@ -748,7 +750,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
 	log.V(1).Info("Machine is there, fill in status")
-	scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
+	if vm.VMId != "" {
+		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
+	}
 	scvmmMachine.Status.Ready = (vm.Status == "Running")
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
