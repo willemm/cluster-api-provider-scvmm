@@ -778,7 +778,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		spec := scvmmMachine.Spec
 		doexpand := false
 		for i, d := range spec.Disks {
-			if vm.VirtualDisks[i].MaximumSize < (d.Size.Value() - 1024*1024) { // For rounding errors
+			if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) { // For rounding errors
 				doexpand = true
 			}
 		}
@@ -919,7 +919,11 @@ type VmDiskElem struct {
 func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 	diskarr := make([]VmDiskElem, len(disks))
 	for i, d := range disks {
-		diskarr[i].SizeMB = d.Size.Value() / 1024 / 1024
+		if d.Size == nil {
+			diskarr[i].SizeMB = 0
+		} else {
+			diskarr[i].SizeMB = d.Size.Value() / 1024 / 1024
+		}
 		diskarr[i].VHDisk = d.VHDisk
 		diskarr[i].Dynamic = d.Dynamic
 	}
