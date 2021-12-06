@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/predicates"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
-	// "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -572,6 +572,15 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	scvmmMachine := &infrav1.ScvmmMachine{}
 	if err := r.Get(ctx, req.NamespacedName, scvmmMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Workaround bug in patchhelper
+	if scvmmMachine.Spec.Disks != nil {
+		for i,d := range scvmmMachine.Spec.Disks {
+			if d.Size == nil {
+				scvmmMachine.Spec.Disks[i].Size = resource.NewQuantity(0, resource.BinarySI)
+			}
+		}
 	}
 
 	patchHelper, err := patch.NewHelper(scvmmMachine, r)
