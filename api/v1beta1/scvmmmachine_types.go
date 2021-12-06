@@ -74,6 +74,7 @@ type ScvmmMachineSpec struct {
 
 type VmDisk struct {
 	// Size of the virtual disk
+	// +optional
 	Size *resource.Quantity `json:"size,omitEmpty"`
 	// Specify that the virtual disk can expand dynamically (default: true)
 	// +optional

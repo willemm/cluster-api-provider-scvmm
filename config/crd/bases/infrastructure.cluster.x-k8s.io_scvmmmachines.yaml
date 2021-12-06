@@ -123,8 +123,6 @@ spec:
                     vhDisk:
                       description: Virtual Harddisk to couple
                       type: string
-                  required:
-                  - size
                   type: object
                 type: array
               hardwareProfile:
