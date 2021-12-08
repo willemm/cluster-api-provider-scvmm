@@ -349,15 +349,22 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, machine
 	if err != nil {
 		return err
 	}
+	networking := scvmmMachine.Spec.Networking
 	if metaData == nil {
 		hostname := scvmmMachine.Spec.VMName
+		domainname := ""
+		if networking != nil {
+			domainname = "." + networking.Domain
+		}
+		// hostnameParts := strings.Split(hostname, ".")
+		// localhostname := hostnameParts[0]
 		data := "instance-id: " + machineid + "\n" +
-			"hostname: " + hostname + "\n" +
-			"local-hostname: " + hostname + "\n"
+			"hostname: " + hostname + domainname + "\n" +
+			"fqdn: " + hostname + domainname + "\n" +
+			"local-hostname: " + hostname + domainname + "\n"
 		metaData = []byte(data)
 	}
 	if networkConfig == nil {
-		networking := scvmmMachine.Spec.Networking
 		if networking != nil {
 			data := "version: 2\n" +
 				"ethernets:\n" +
