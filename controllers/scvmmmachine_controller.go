@@ -356,11 +356,8 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, machine
 		if networking != nil {
 			domainname = "." + networking.Domain
 		}
-		// hostnameParts := strings.Split(hostname, ".")
-		// localhostname := hostnameParts[0]
 		data := "instance-id: " + machineid + "\n" +
 			"hostname: " + hostname + domainname + "\n" +
-			"fqdn: " + hostname + domainname + "\n" +
 			"local-hostname: " + hostname + domainname + "\n"
 		metaData = []byte(data)
 	}
