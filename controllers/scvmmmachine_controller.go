@@ -323,13 +323,17 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, machine
 		return err
 	}
 	defer conn.Close()
+	userParts := strings.Split(ScvmmUsername, "\\")
 
-	d := &smb2.Dialer{
-		Initiator: &smb2.NTLMInitiator{
-			User:     ScvmmUsername,
-			Password: ScvmmPassword,
-		},
+	smbCreds := &smb2.NTLMInitiator{
+		User: userParts[0],
+		Password: ScvmmPassword,
 	}
+	if len(userParts) > 1 {
+		smbCreds.Domain = userParts[0]
+		smbCreds.User = userParts[1]
+	}
+	d := &smb2.Dialer{ Initiator: smbCreds }
 
 	log.V(1).Info("smb2 Dialing", "user", ScvmmUsername)
 	s, err := d.Dial(conn)
