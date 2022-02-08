@@ -10,9 +10,9 @@ require (
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
 	github.com/willemm/winrm v0.0.0-20210223164918-ea3696aa9375
-	k8s.io/api v0.23.3
-	k8s.io/apimachinery v0.22.2
-	k8s.io/client-go v0.22.2
+	k8s.io/api v0.23.0
+	k8s.io/apimachinery v0.23.0
+	k8s.io/client-go v0.23.0
 	sigs.k8s.io/cluster-api v1.1.0
 	sigs.k8s.io/controller-runtime v0.11.0
 )

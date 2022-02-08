@@ -37,8 +37,8 @@ import (
 	"sigs.k8s.io/cluster-api/util/predicates"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -326,14 +326,14 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, machine
 	userParts := strings.Split(ScvmmUsername, "\\")
 
 	smbCreds := &smb2.NTLMInitiator{
-		User: userParts[0],
+		User:     userParts[0],
 		Password: ScvmmPassword,
 	}
 	if len(userParts) > 1 {
 		smbCreds.Domain = userParts[0]
 		smbCreds.User = userParts[1]
 	}
-	d := &smb2.Dialer{ Initiator: smbCreds }
+	d := &smb2.Dialer{Initiator: smbCreds}
 
 	log.V(1).Info("smb2 Dialing", "user", ScvmmUsername)
 	s, err := d.Dial(conn)
@@ -584,7 +584,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Workaround bug in patchhelper
 	if scvmmMachine.Spec.Disks != nil {
-		for i,d := range scvmmMachine.Spec.Disks {
+		for i, d := range scvmmMachine.Spec.Disks {
 			if d.Size == nil {
 				scvmmMachine.Spec.Disks[i].Size = resource.NewQuantity(0, resource.BinarySI)
 			}
