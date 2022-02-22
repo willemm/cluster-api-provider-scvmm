@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -25,7 +26,10 @@ import (
 type ScvmmClusterSpec struct {
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint *APIEndpoint `json:"controlPlaneEndpoint,omitEmpty"`
+	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint,omitEmpty"`
+        // ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
+        // +optional
+        ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
 }
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster
@@ -39,6 +43,7 @@ type ScvmmClusterStatus struct {
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
+/*
 // APIEndpoint represents a reachable Kubernetes API endpoint.
 type APIEndpoint struct {
 	// Host is the hostname on which the API server is serving.
@@ -47,6 +52,7 @@ type APIEndpoint struct {
 	// Port is the port on which the API server is serving.
 	Port int `json:"port"`
 }
+*/
 
 // +kubebuilder:resource:path=scvmmclusters,scope=Namespaced,categories=cluster-api
 // +kubebuilder:subresource:status
