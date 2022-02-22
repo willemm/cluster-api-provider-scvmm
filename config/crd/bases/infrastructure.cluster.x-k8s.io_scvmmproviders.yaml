@@ -1,0 +1,75 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.7.0
+  creationTimestamp: null
+  name: scvmmproviders.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    kind: ScvmmProvider
+    listKind: ScvmmProviderList
+    plural: scvmmproviders
+    singular: scvmmprovider
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ScvmmProvider is the Schema for the scvmmproviders API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScvmmProviderSpec defines the desired state of ScvmmProvider
+            properties:
+              execHost:
+                description: Jumphost to run scvmm scripts on, instead of directly
+                  on the scvmm server
+                type: string
+              extraFunctions:
+                additionalProperties:
+                  type: string
+                description: Extra functions to run when provisioning machines
+                type: object
+              secretRef:
+                description: Reference to secret containing user and password for
+                  scvmm
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
+            type: object
+          status:
+            description: ScvmmProviderStatus defines the observed state of ScvmmProvider
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

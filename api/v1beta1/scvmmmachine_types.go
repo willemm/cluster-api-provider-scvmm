@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -121,6 +122,9 @@ type CloudInit struct {
 	// Network-config file contents
 	// +optional
 	NetworkConfig string `json:"networkConfig,omitempty"`
+	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this machine.
+	// +optional
+	ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
