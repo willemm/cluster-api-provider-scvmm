@@ -469,7 +469,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		log.V(1).Info("Fetching scvmmcluster", "scvmmClusterName", scvmmClusterName)
 		if err := r.Client.Get(ctx, scvmmClusterName, scvmmCluster); err != nil {
-			log.Info("ScvmmCluster is not available yet")
+			log.Info("ScvmmCluster is not available yet", "error", err)
 			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
 		}
 
