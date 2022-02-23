@@ -278,7 +278,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if ExtraDebug {
 		log.V(1).Info("Calling WinRM function ConnectSCVMM")
 	}
-	if err := cmd.SendCommand("ConnectSCVMM -Host '%s' -Username '%s' -Password '%s'", provider.ScvmmHost, provider.ScvmmUsername, provider.ScvmmPassword); err != nil {
+	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s' -Username '%s' -Password '%s'", provider.ScvmmHost, provider.ScvmmUsername, provider.ScvmmPassword); err != nil {
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
 	}
