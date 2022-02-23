@@ -154,11 +154,9 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *infrav1.ScvmmCluster, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 	var providerRef *corev1.ObjectReference
-	if scvmmCluster == nil {
+	if scvmmMachine.Spec.CloudInit != nil {
 		log.V(1).Info("Fetching provider ref from machine", "scvmmMachine", scvmmMachine.Spec)
-		if scvmmMachine.Spec.CloudInit != nil {
-			providerRef = scvmmMachine.Spec.CloudInit.ProviderRef
-		}
+		providerRef = scvmmMachine.Spec.CloudInit.ProviderRef
 	} else {
 		log.V(1).Info("Fetching provider ref from cluster", "scvmmCluster", scvmmCluster.Spec)
 		providerRef = scvmmCluster.Spec.ProviderRef
