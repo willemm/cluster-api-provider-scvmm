@@ -66,6 +66,7 @@ const (
 	WaitingForBootstrapDataReason         = "WaitingForBootstrapData"
 	WaitingForOwnerReason                 = "WaitingForOwner"
 	ClusterNotAvailableReason             = "ClusterNotAvailable"
+	ProviderNotAvailableReason            = "ProviderNotAvailable"
 	MissingClusterReason                  = "MissingCluster"
 
 	VmCreatingReason = "VmCreating"
@@ -421,13 +422,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
 	}
 
-	// Handle deleted machines
-	// NB: The reference implementation handles deletion at the end of this function, but that seems wrogn
-	//     because it could be that the machine, cluster, etc is gone and also it tries to add finalizers
-	deleting := false
-	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		deleting = true
-	}
+	deleting := !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()
 
 	var cluster *clusterv1.Cluster
 	var machine *clusterv1.Machine
@@ -495,12 +490,15 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
+	log.V(1).Info("Get provider")
 	provider, err := r.getProvider(ctx, scvmmCluster, scvmmMachine)
 	if err != nil {
-		return ctrl.Result{}, nil
+		log.Error(err, "Failed to get provider")
+		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
 	}
 
 	if deleting {
+		// Handle deleted machines
 		return r.reconcileDelete(ctx, patchHelper, provider, scvmmMachine)
 	} else {
 		// Handle non-deleted machines
