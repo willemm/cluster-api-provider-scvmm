@@ -155,7 +155,7 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 	var providerRef *corev1.ObjectReference
 	if scvmmCluster == nil {
-		log.V(1).Info("Fetching provider ref from machine", "scvmmMachine", scvmmMacine.Spec)
+		log.V(1).Info("Fetching provider ref from machine", "scvmmMachine", scvmmMachine.Spec)
 		if scvmmMachine.Spec.CloudInit != nil {
 			providerRef = scvmmMachine.Spec.CloudInit.ProviderRef
 		}
