@@ -49,6 +49,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 .PHONY: chart
 chart: manifests
 	kustomize build config/crd > chart/crds/scvmm-crds.yaml
+	kustomize build config/default > chart/templates/scvmm-install.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
