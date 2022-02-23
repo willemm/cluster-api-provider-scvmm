@@ -431,7 +431,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	var cluster *clusterv1.Cluster
 	var machine *clusterv1.Machine
-	var scvmmCluster *infrav1.ScvmmCluster
+	scvmmCluster := &infrav1.ScvmmCluster{}
 	// If the user provides a cloudInit section in the machine, assume it's a standalone machine
 	// Otherwise get the owning machine, cluster, etc.
 	if scvmmMachine.Spec.CloudInit == nil {
