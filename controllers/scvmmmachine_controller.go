@@ -152,6 +152,7 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 }
 
 func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *infrav1.ScvmmCluster, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
+	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 	var providerRef *corev1.ObjectReference
 	if scvmmCluster == nil {
 		if scvmmMachine.Spec.CloudInit != nil {
@@ -161,6 +162,7 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 		providerRef = scvmmCluster.Spec.ProviderRef
 	}
 	provider := &infrav1.ScvmmProvider{}
+	log.V(1).Info("Fetching provider ref", "ref", providerRef)
 	if providerRef != nil {
 		key := client.ObjectKey{Namespace: providerRef.Namespace, Name: providerRef.Name}
 		if key.Namespace == "" {
@@ -195,6 +197,7 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
 	}
 	if p.SecretRef != nil {
+		log.V(1).Info("Fetching secret ref", "secret", p.SecretRef)
 		creds := &corev1.Secret{}
 		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.SecretRef.Name}
 		if err := r.Client.Get(ctx, key, creds); err != nil {
@@ -227,7 +230,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
 
 	if ExtraDebug {
-		log.V(1).Info("Creating WinRM connection", provider.ExecHost, 5985)
+		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)
 	}
 	client, err := winrm.NewClientWithParameters(endpoint, provider.ScvmmUsername, provider.ScvmmPassword, params)
 	if err != nil {
