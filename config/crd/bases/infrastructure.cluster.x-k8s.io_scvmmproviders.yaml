@@ -36,9 +36,28 @@ spec:
           spec:
             description: ScvmmProviderSpec defines the desired state of ScvmmProvider
             properties:
+              adSecret:
+                description: Reference to secret containing user and password for
+                  activediractory
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
               adServer:
                 description: Active Directory server
                 type: string
+              env:
+                additionalProperties:
+                  type: string
+                description: Environment variables to set for scripts Will be supplemented
+                  with scvmm and ad credentials
+                type: object
               execHost:
                 description: Jumphost to run scvmm scripts on, instead of directly
                   on the scvmm server
@@ -55,7 +74,7 @@ spec:
                 description: Library share where ISOs can be placed for cloud-init
                   Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
                 type: string
-              secretRef:
+              scvmmSecret:
                 description: Reference to secret containing user and password for
                   scvmm
                 properties:
