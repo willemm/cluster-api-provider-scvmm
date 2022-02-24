@@ -580,14 +580,12 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		if adspec != nil {
 			log.V(1).Info("Call CreateADComputer")
-			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s) -Username '%s', -Password '%s'",
+			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
 				escapeSingleQuotes(vmName),
 				escapeSingleQuotes(adspec.OUPath),
 				escapeSingleQuotes(domaincontroller),
 				escapeSingleQuotes(adspec.Description),
-				escapeSingleQuotesArray(adspec.MemberOf),
-				escapeSingleQuotes(provider.ADUsername),
-				escapeSingleQuotes(provider.ADPassword))
+				escapeSingleQuotesArray(adspec.MemberOf))
 			if err != nil {
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
 			}

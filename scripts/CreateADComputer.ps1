@@ -1,11 +1,11 @@
-param($name, $oupath, $domaincontroller, $description, $memberof, $username, $password)
+param($name, $oupath, $domaincontroller, $description, $memberof)
 try {
   $dcparam = @{}
   if ($domaincontroller) {
     $dcparam.Server = $domaincontroller
   }
-  if ($username -and $password) {
-    $dcparam['Credential'] = new-object PSCredential($username, (ConvertTo-Securestring -force -AsPlainText -String $password))
+  if (${env:ACTIVEDIRECTORY_USERNAME} -and ${env:ACTIVEDIRECTORY_PASSWORD}) {
+    $dcparam.Credential = new-object PSCredential(${env:ACTIVEDIRECTORY_USERNAME}, (ConvertTo-Securestring -force -AsPlainText -String ${env:ACTIVEDIRECTORY_PASSWORD}))
   }
   $ident = "CN=$($name),$($oupath)"
   try {
