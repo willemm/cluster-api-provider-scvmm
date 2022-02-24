@@ -26,7 +26,7 @@ type ScvmmProviderSpec struct {
 	// Hostname of scvmm server
 	ScvmmHost string `json:"scvmmHost"`
 	// Reference to secret containing user and password for scvmm
-	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+	ScvmmSecret *corev1.SecretReference `json:"scvmmSecret,omitempty"`
 	// Jumphost to run scvmm scripts on, instead of directly on the scvmm server
 	// +optional
 	ExecHost string `json:"execHost,omitempty"`
@@ -37,13 +37,23 @@ type ScvmmProviderSpec struct {
 	// Active Directory server
 	// +optional
 	ADServer string `json:"adServer,omitempty"`
+	// Reference to secret containing user and password for activediractory
+	// +optional
+	ADSecret *corev1.SecretReference `json:"adSecret,omitempty"`
 	// Extra functions to run when provisioning machines
 	// +optional
 	ExtraFunctions map[string]string `json:"extraFunctions,omitempty"`
 
-	// Scvmm username and Password (not serialized)
+	// Scvmm/AD username and Password (not serialized)
 	ScvmmUsername string `json:"-"`
 	ScvmmPassword string `json:"-"`
+	ADUsername    string `json:"-"`
+	ADPassword    string `json:"-"`
+
+	// Environment variables to set for scripts
+	// Will be supplemented with scvmm and ad credentials
+	// +optional
+	Env map[string]string `json:"env,omitempty"`
 }
 
 // ScvmmProviderStatus defines the observed state of ScvmmProvider

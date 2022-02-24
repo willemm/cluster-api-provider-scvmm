@@ -143,8 +143,11 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 		"$VerbosePreference = 'SilentlyContinue'\n" +
 		"$InformationPreference = 'SilentlyContinue'\n" +
 		"$DebugPreference = 'SilentlyContinue'\n\n")
+	for name, value := range provider.Env {
+		functionScripts.WriteString("${env:" + name + "} = '" + escapeSingleQuotes(value) + "'\n")
+	}
 	for name, content := range funcScripts {
-		functionScripts.WriteString("function " + name + " {\n")
+		functionScripts.WriteString("\nfunction " + name + " {\n")
 		functionScripts.Write(content)
 		functionScripts.WriteString("}\n\n")
 	}
@@ -181,9 +184,9 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 	}
 	if p.ExecHost == "" {
 		p.ExecHost = os.Getenv("SCVMM_EXECHOST")
-		// Disable scvmm connect script ??? (untested)
-		p.ExtraFunctions["ConnectSCVMM"] = ""
-		p.ExecHost = p.ScvmmHost
+		if p.ExecHost == "" {
+			p.ExecHost = p.ScvmmHost
+		}
 	}
 	if p.ScvmmLibraryISOs == "" {
 		p.ScvmmLibraryISOs = os.Getenv("SCVMM_LIBRARY")
@@ -194,12 +197,12 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 	if p.ADServer == "" {
 		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
 	}
-	if p.SecretRef != nil {
-		log.V(1).Info("Fetching secret ref", "secret", p.SecretRef)
+	if p.ScvmmSecret != nil {
+		log.V(1).Info("Fetching scvmm secret ref", "secret", p.ScvmmSecret)
 		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.SecretRef.Name}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ScvmmSecret.Name}
 		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get credential secretref: %v", err)
+			return nil, fmt.Errorf("Failed to get scvmm credential secretref: %v", err)
 		}
 		if value, ok := creds.Data["username"]; ok {
 			p.ScvmmUsername = string(value)
@@ -208,12 +211,39 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 			p.ScvmmPassword = string(value)
 		}
 	}
+	if p.ADSecret != nil {
+		log.V(1).Info("Fetching AD secret ref", "secret", p.ADSecret)
+		creds := &corev1.Secret{}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ADSecret.Name}
+		if err := r.Client.Get(ctx, key, creds); err != nil {
+			return nil, fmt.Errorf("Failed to get AD credential secretref: %v", err)
+		}
+		if value, ok := creds.Data["username"]; ok {
+			p.ADUsername = string(value)
+		}
+		if value, ok := creds.Data["password"]; ok {
+			p.ADPassword = string(value)
+		}
+	}
 	if p.ScvmmUsername == "" {
 		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	}
 	if p.ScvmmPassword == "" {
 		p.ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
 	}
+	if p.ADUsername == "" {
+		p.ADUsername = os.Getenv("ACTIVEDIRECTOYR_USERNAME")
+	}
+	if p.ADPassword == "" {
+		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
+	}
+	if p.Env == nil {
+		p.Env = make(map[string]string)
+	}
+	p.Env["SCVMM_USERNAME"] = p.ScvmmUsername
+	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
+	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
+	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
 	return p, nil
 }
 
@@ -276,7 +306,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if ExtraDebug {
 		log.V(1).Info("Calling WinRM function ConnectSCVMM")
 	}
-	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s' -Username '%s' -Password '%s'", provider.ScvmmHost, provider.ScvmmUsername, provider.ScvmmPassword); err != nil {
+	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s'", provider.ScvmmHost); err != nil {
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
 	}
@@ -550,12 +580,14 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		if adspec != nil {
 			log.V(1).Info("Call CreateADComputer")
-			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
+			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s) -Username '%s', -Password '%s'",
 				escapeSingleQuotes(vmName),
 				escapeSingleQuotes(adspec.OUPath),
-				escapeSingleQuotes(adspec.DomainController),
+				escapeSingleQuotes(domaincontroller),
 				escapeSingleQuotes(adspec.Description),
-				escapeSingleQuotesArray(adspec.MemberOf))
+				escapeSingleQuotesArray(adspec.MemberOf),
+				escapeSingleQuotes(provider.ADUsername),
+				escapeSingleQuotes(provider.ADPassword))
 			if err != nil {
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
 			}
