@@ -191,7 +191,7 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *
 	if p.ScvmmLibraryISOs == "" {
 		p.ScvmmLibraryISOs = os.Getenv("SCVMM_LIBRARY")
 		if p.ScvmmLibraryISOs == "" {
-			p.ScvmmLibraryISOs = `\\` + p.ScvmmHost + `\MSSCVMMLibrary\ISOs\clond-init`
+			p.ScvmmLibraryISOs = `\\` + p.ScvmmHost + `\MSSCVMMLibrary\ISOs\cloud-init`
 		}
 	}
 	if p.ADServer == "" {
