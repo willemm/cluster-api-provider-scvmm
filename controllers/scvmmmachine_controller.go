@@ -154,20 +154,15 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 	return functionScripts.Bytes(), nil
 }
 
-func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmCluster *infrav1.ScvmmCluster, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
+func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
-	var providerRef *corev1.ObjectReference
-	if scvmmMachine.Spec.CloudInit != nil {
-		providerRef = scvmmMachine.Spec.CloudInit.ProviderRef
-	} else {
-		providerRef = scvmmCluster.Spec.ProviderRef
-	}
+	providerRef := scvmmMachine.Spec.ProviderRef
 	provider := &infrav1.ScvmmProvider{}
 	if providerRef != nil {
 		log.V(1).Info("Fetching provider ref", "ref", providerRef)
 		key := client.ObjectKey{Namespace: providerRef.Namespace, Name: providerRef.Name}
 		if key.Namespace == "" {
-			key.Namespace = scvmmCluster.Namespace
+			key.Namespace = scvmmMachine.Namespace
 		}
 		if err := r.Client.Get(ctx, key, provider); err != nil {
 			return nil, fmt.Errorf("Failed to get ScvmmProvider: %v", err)
@@ -457,7 +452,6 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	var cluster *clusterv1.Cluster
 	var machine *clusterv1.Machine
-	scvmmCluster := &infrav1.ScvmmCluster{}
 	// If the user provides a cloudInit section in the machine, assume it's a standalone machine
 	// Otherwise get the owning machine, cluster, etc.
 	if scvmmMachine.Spec.CloudInit == nil {
@@ -488,18 +482,20 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		log = log.WithValues("cluster", cluster.Name)
 
-		// Fetch the Scvmm Cluster.
-		scvmmClusterName := client.ObjectKey{
-			Namespace: cluster.Spec.InfrastructureRef.Namespace,
-			Name:      cluster.Spec.InfrastructureRef.Name,
+		if scvmmMachine.Spec.ProviderRef == nil {
+			// Fetch the Scvmm Cluster to get the providerRef.
+			scvmmClusterName := client.ObjectKey{
+				Namespace: cluster.Spec.InfrastructureRef.Namespace,
+				Name:      cluster.Spec.InfrastructureRef.Name,
+			}
+			log.V(1).Info("Fetching scvmmcluster", "scvmmClusterName", scvmmClusterName)
+			scvmmCluster := &infrav1.ScvmmCluster{}
+			if err := r.Client.Get(ctx, scvmmClusterName, scvmmCluster); err != nil {
+				log.Info("ScvmmCluster is not available yet", "error", err)
+				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
+			}
+			scvmmMachine.Spec.ProviderRef = scvmmCluster.Spec.ProviderRef
 		}
-		log.V(1).Info("Fetching scvmmcluster", "scvmmClusterName", scvmmClusterName)
-		if err := r.Client.Get(ctx, scvmmClusterName, scvmmCluster); err != nil {
-			log.Info("ScvmmCluster is not available yet", "error", err)
-			return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
-		}
-
-		log = log.WithValues("scvmm-cluster", scvmmCluster.Name)
 
 		// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
 		if !cluster.Status.InfrastructureReady {
@@ -522,7 +518,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	log.V(1).Info("Get provider")
-	provider, err := r.getProvider(ctx, scvmmCluster, scvmmMachine)
+	provider, err := r.getProvider(ctx, scvmmMachine)
 	if err != nil {
 		log.Error(err, "Failed to get provider")
 		return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")

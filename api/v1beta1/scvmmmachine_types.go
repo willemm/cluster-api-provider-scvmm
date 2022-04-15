@@ -71,6 +71,10 @@ type ScvmmMachineSpec struct {
 	// For testing purposes, or just for creating VMs
 	// +optional
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
+	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
+	// Will be copied from scvmmcluster if not using cloudinit
+	// +optional
+	ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
 }
 
 type VmDisk struct {
@@ -122,9 +126,6 @@ type CloudInit struct {
 	// Network-config file contents
 	// +optional
 	NetworkConfig string `json:"networkConfig,omitempty"`
-	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this machine.
-	// +optional
-	ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
