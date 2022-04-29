@@ -103,6 +103,10 @@ type VMResult struct {
 		Size        int64
 		MaximumSize int64
 	}
+	ISOs []struct {
+		Size      int64
+		SharePath string
+	}
 	BiosGuid     string
 	Id           string
 	VMId         string
@@ -640,6 +644,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
+	isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 	if vm.Status == "PowerOff" {
 		log.V(1).Info("Call AddVMSpec")
 		newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
@@ -716,7 +721,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		if metaData != nil || bootstrapData != nil || networkConfig != nil {
 			log.V(1).Info("Create cloudinit")
-			isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 			if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, isoPath, bootstrapData, metaData, networkConfig); err != nil {
 				r.Log.Error(err, "failed to create cloud init")
 				return patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
@@ -786,6 +790,21 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.V(1).Info("ReadVM result", "vm", vm)
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
+	}
+	// If it reported an IP address, assume it's ready and cloudinit is no longer needed
+	for _, iso := range vm.ISOs {
+		if iso.SharePath == isoPath {
+			log.V(1).Info("Call RemoveIsoFromVM")
+			vm, err = sendWinrmCommand(log, cmd, "RemoveIsoFromVM -VMName '%s' -ISOPath '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				escapeSingleQuotes(isoPath))
+			if err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "Failed to remove iso from vm")
+			}
+			log.V(1).Info("RemoveIsoFromVM result", "vm", vm)
+			log.Info("Removing cloud-init, reschedule after 10 seconds")
+			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+		}
 	}
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil

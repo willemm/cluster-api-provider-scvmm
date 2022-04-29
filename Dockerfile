@@ -2,9 +2,6 @@
 FROM golang:1.17 as builder
 ARG GOPROXY=https://proxy.golang.org
 
-RUN curl http://pr-art.europe.stater.corp/artifactory/auto-local/certs/pr-root.cer | sed -e "s/\r//g" > /usr/local/share/ca-certificates/pr-root.crt \
- && update-ca-certificates
-
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod

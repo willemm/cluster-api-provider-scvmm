@@ -18,6 +18,9 @@ if ($vm.VirtualNetworkAdapters -ne $null) {
 if ($vm.VirtualHardDisks -ne $null) {
   $vmjson.VirtualDisks = @($vm.VirtualHardDisks | select Size, MaximumSize)
 }
+if ($vm.VirtualDVDDrives -ne $null) {
+  $vmjson.ISOs = @($vm.VirtualDVDDrives.ISO | select Size, SharePath)
+}
 if ($vm.BiosGuid -ne $null) { $vmjson.BiosGuid = "$($vm.BiosGuid)" }
 if ($vm.Id -ne $null) { $vmjson.Id = "$($vm.Id)" }
 if ($vm.VMId -ne $null) { $vmjson.VMId = "$($vm.VMId)" }
