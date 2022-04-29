@@ -899,7 +899,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, perr
 		}
-		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmDeletingReason, "Removed vm %s", vm.Name)
+		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmDeletingReason, "Removed vm %s", scvmmMachine.Spec.VMName)
 		return ctrl.Result{}, nil
 	} else {
 		log.V(1).Info("Set status")
