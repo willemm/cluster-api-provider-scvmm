@@ -5,12 +5,14 @@ try {
     return (@{ Message = "Removed" } | convertto-json)
   }
   if ($vm.Status -eq 'PowerOff') {
-    $JobGroupID = [GUID]::NewGuid().ToString()
-    $ISOs = $vm.VirtualDVDDrives.ISO | ?{ $_.SharePath -match '-cloud-init\.iso$' }
-    $vm = Remove-SCVirtualMachine $vm -RunAsynchronously -JobGroup $JobGroupID
-    foreach ($iso in $ISOs) {
-      Remove-SCISO -ISO $iso -RunAsynchronously -JobGroup $JobGroupID
+    foreach ($vdd in $vm.VirtualDVDDrives) {
+      if ($vdd.ISO -and $vdd.ISO.SharePath -match "\\$($vm.Name)-cloud-init\.iso`$") {
+        $ISO = $vdd.ISO
+        Set-SCVirtualDVDDrive -VirtualDVDDrive $vdd -NoMedia | out-null
+        Remove-SCISO -ISO $ISO | out-null
+      }
     }
+    $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
     VMToJson $vm "Removing"
   } else {
     $vm = Stop-SCVirtualmachine $vm -RunAsynchronously
