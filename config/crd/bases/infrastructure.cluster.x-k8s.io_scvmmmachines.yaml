@@ -102,6 +102,12 @@ spec:
               cpuCount:
                 description: Number of CPU's
                 type: integer
+              cpuLimitForMigration:
+                description: CPULimitForMigration
+                type: boolean
+              cpuLimitFunctionality:
+                description: CPULimitFunctionality
+                type: boolean
               description:
                 description: Description
                 type: string
@@ -125,6 +131,30 @@ spec:
                       type: string
                   type: object
                 type: array
+              dynamicmemory:
+                description: Dynamic Memory
+                properties:
+                  bufferPercentage:
+                    description: BufferPercentage
+                    type: integer
+                  maximum:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Maximum
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  minimum:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Minimum
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                required:
+                - maximum
+                - minimum
+                type: object
               hardwareProfile:
                 description: Hardware profile
                 type: string
@@ -161,6 +191,9 @@ spec:
                 - ipAddress
                 - nameservers
                 type: object
+              operatingSystem:
+                description: OperatingSystem
+                type: string
               providerID:
                 description: ProviderID is scvmm plus bios-guid
                 type: string
@@ -202,6 +235,9 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+              replicationGroup:
+                description: ReplicationGroup
+                type: string
               startAction:
                 description: Start Action
                 enum:
@@ -230,7 +266,6 @@ spec:
             - cpuCount
             - hardwareProfile
             - hostGroup
-            - memory
             - vmNetwork
             type: object
           status:

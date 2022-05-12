@@ -9,7 +9,6 @@ try {
     throw "Isofile $isopath not connected to $vmname"
   }
   $ISO = $DVDDrive.ISO
-  Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -NoMedia | out-null
   Remove-SCISO -ISO $ISO | out-null
 
   return VMToJson $vm "Removing ISO"

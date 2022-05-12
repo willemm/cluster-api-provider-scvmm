@@ -40,15 +40,20 @@ type ScvmmProviderSpec struct {
 	// Reference to secret containing user and password for activediractory
 	// +optional
 	ADSecret *corev1.SecretReference `json:"adSecret,omitempty"`
+	// Reference to secret containing user and password for domain join
+	// +optional
+	DomainSecret *corev1.SecretReference `json:"domainSecret,omitempty"`
 	// Extra functions to run when provisioning machines
 	// +optional
 	ExtraFunctions map[string]string `json:"extraFunctions,omitempty"`
 
 	// Scvmm/AD username and Password (not serialized)
-	ScvmmUsername string `json:"-"`
-	ScvmmPassword string `json:"-"`
-	ADUsername    string `json:"-"`
-	ADPassword    string `json:"-"`
+	ScvmmUsername  string `json:"-"`
+	ScvmmPassword  string `json:"-"`
+	ADUsername     string `json:"-"`
+	ADPassword     string `json:"-"`
+	DomainUsername string `json:"-"`
+	DomainPassword string `json:"-"`
 
 	// Environment variables to set for scripts
 	// Will be supplemented with scvmm and ad credentials

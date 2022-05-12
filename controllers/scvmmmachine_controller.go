@@ -75,6 +75,7 @@ const (
 	VmUpdatingReason = "VmUpdating"
 	VmStartingReason = "VmStarting"
 	VmDeletingReason = "VmDeleting"
+	VmRunningReason  = "VmRunning"
 	VmFailedReason   = "VmFailed"
 
 	MachineFinalizer = "scvmmmachine.finalizers.cluster.x-k8s.io"
@@ -227,6 +228,20 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *
 			p.ADPassword = string(value)
 		}
 	}
+	if p.DomainSecret != nil {
+		log.V(1).Info("Fetching Domain secret ref", "secret", p.DomainSecret)
+		creds := &corev1.Secret{}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.DomainSecret.Name}
+		if err := r.Client.Get(ctx, key, creds); err != nil {
+			return nil, fmt.Errorf("Failed to get Domain credential secretref: %v", err)
+		}
+		if value, ok := creds.Data["username"]; ok {
+			p.DomainUsername = string(value)
+		}
+		if value, ok := creds.Data["password"]; ok {
+			p.DomainPassword = string(value)
+		}
+	}
 	if p.ScvmmUsername == "" {
 		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	}
@@ -239,6 +254,12 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *
 	if p.ADPassword == "" {
 		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
 	}
+	if p.DomainUsername == "" {
+		p.DomainUsername = os.Getenv("DOMAIN_USERNAME")
+	}
+	if p.DomainPassword == "" {
+		p.DomainPassword = os.Getenv("DOMAIN_PASSWORD")
+	}
 	if p.Env == nil {
 		p.Env = make(map[string]string)
 	}
@@ -246,6 +267,8 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *
 	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
 	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
 	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
+	p.Env["DOMAIN_USERNAME"] = p.ADUsername
+	p.Env["DOMAIN_PASSWORD"] = p.ADPassword
 	return p, nil
 }
 
@@ -384,6 +407,16 @@ func escapeSingleQuotes(str string) string {
 	return strings.Replace(str, `'`, `''`, -1)
 }
 
+func boolPtrStr(b *bool) string {
+	if b == nil {
+		return ""
+	}
+	if *b {
+		return "true"
+	}
+	return "false"
+}
+
 func escapeSingleQuotesArray(str []string) string {
 	var res strings.Builder
 	if len(str) == 0 {
@@ -456,7 +489,9 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
 	}
 
-	deleting := !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()
+	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, patchHelper, scvmmMachine)
+	}
 
 	var cluster *clusterv1.Cluster
 	var machine *clusterv1.Machine
@@ -515,7 +550,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	log.V(1).Info("Check finalizer")
 	// Add finalizer.  Apparently we should return here to avoid a race condition
 	// (Presumably the change/patch will trigger another reconciliation so it continues)
-	if !deleting && !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
+	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
 		log.V(1).Info("Add finalizer")
 		controllerutil.AddFinalizer(scvmmMachine, MachineFinalizer)
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
@@ -532,13 +567,8 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
 	}
 
-	if deleting {
-		// Handle deleted machines
-		return r.reconcileDelete(ctx, patchHelper, provider, scvmmMachine)
-	} else {
-		// Handle non-deleted machines
-		return r.reconcileNormal(ctx, patchHelper, cluster, provider, machine, scvmmMachine)
-	}
+	// Handle non-deleted machines
+	return r.reconcileNormal(ctx, patchHelper, cluster, provider, machine, scvmmMachine)
 }
 
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, provider *infrav1.ScvmmProviderSpec, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (res ctrl.Result, retErr error) {
@@ -604,7 +634,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s'",
+		domain := ""
+		if spec.Networking != nil {
+			domain = spec.Networking.Domain
+		}
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -ReplicationGroup '%s' -Domain '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
@@ -616,7 +650,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			escapeSingleQuotes(spec.HardwareProfile),
 			escapeSingleQuotes(spec.Description),
 			escapeSingleQuotes(spec.StartAction),
-			escapeSingleQuotes(spec.StopAction))
+			escapeSingleQuotes(spec.StopAction),
+			boolPtrStr(spec.CPULimitForMigration),
+			boolPtrStr(spec.CPULimitFunctionality),
+			escapeSingleQuotes(spec.OperatingSystem),
+			escapeSingleQuotes(spec.ReplicationGroup),
+			escapeSingleQuotes(domain),
+		)
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
 		}
@@ -795,6 +835,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		log.V(1).Info("ReadVM result", "vm", vm)
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
+		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
 	// If it reported an IP address, assume it's ready and cloudinit is no longer needed
@@ -813,6 +854,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
 		}
 	}
+	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
 }
@@ -837,7 +879,7 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 	return json.Marshal(diskarr)
 }
 
-func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.V(1).Info("Do delete reconciliation")
@@ -858,6 +900,13 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	conditions.MarkFalse(scvmmMachine, VmCreated, VmDeletingReason, clusterv1.ConditionSeverityInfo, "")
 	if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmMachine")
+	}
+
+	log.V(1).Info("Get provider")
+	provider, err := r.getProvider(ctx, scvmmMachine)
+	if err != nil {
+		log.Error(err, "Failed to get provider during deletion, this is probably fatal")
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmDeletingReason, ProviderNotAvailableReason, "Fatal error, manual action required")
 	}
 
 	log.Info("Doing removal of ScvmmMachine")

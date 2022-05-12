@@ -44,7 +44,11 @@ type ScvmmMachineSpec struct {
 	// Number of CPU's
 	CPUCount int `json:"cpuCount"`
 	// Allocated memory
-	Memory *resource.Quantity `json:"memory"`
+	// +optional
+	Memory *resource.Quantity `json:"memory,omitempty"`
+	// Dynamic Memory
+	// +optional
+	DynamicMemory *DynamicMemory `json:"dynamicmemory,omitempty"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
 	// Hardware profile
@@ -60,6 +64,18 @@ type ScvmmMachineSpec struct {
 	// +optional
 	// +kubebuilder:validation:Enum=ShutdownGuestOS;TurnOffVM;SaveVM
 	StopAction string `json:"stopAction,omitempty"`
+	// CPULimitForMigration
+	// +optional
+	CPULimitForMigration *bool `json:"cpuLimitForMigration,omitempty"`
+	// CPULimitFunctionality
+	// +optional
+	CPULimitFunctionality *bool `json:"cpuLimitFunctionality,omitempty"`
+	// OperatingSystem
+	// +optional
+	OperatingSystem string `json:"operatingSystem,omitempty"`
+	// ReplicationGroup
+	// +optional
+	ReplicationGroup string `json:"replicationGroup,omitempty"`
 	// Network settings
 	// +optional
 	Networking *Networking `json:"networking,omitempty"`
@@ -110,8 +126,18 @@ type ActiveDirectory struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 	// Group memberships
-	// +option
+	// +optional
 	MemberOf []string `json:"memberOf,omitempty"`
+}
+
+type DynamicMemory struct {
+	// Minimum
+	Minimum *resource.Quantity `json:"minimum"`
+	// Maximum
+	Maximum *resource.Quantity `json:"maximum"`
+	// BufferPercentage
+	// +optional
+	BufferPercentage int `json:"bufferPercentage,omitempty"`
 }
 
 // NoCloud cloud-init data (user-data and meta-data file contents)

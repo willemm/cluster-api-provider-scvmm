@@ -52,6 +52,19 @@ spec:
               adServer:
                 description: Active Directory server
                 type: string
+              domainSecret:
+                description: Reference to secret containing user and password for
+                  domain join
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
               env:
                 additionalProperties:
                   type: string

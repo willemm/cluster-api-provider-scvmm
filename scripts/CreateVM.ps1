@@ -1,9 +1,5 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $replicationgroup, $domain)
 try {
-  if (-not $description) { $description = "$hostgroup||capi-scvmm" }
-  if (-not $startaction) { $startaction = 'NeverAutoTurnOnVM' }
-  if (-not $stopaction) { $stopaction = 'ShutdownGuestOS' }
-
   $generation = 1
   if ($vmtemplate) {
     $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
@@ -51,7 +47,8 @@ try {
     $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
   } else {
     $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq $hardwareprofile }
-    $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq 'Other Linux (64 bit)'}
+    if (-not $operatingsystem) { $operatingsystem = 'Other Linux (64 bit)' }
+    $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq $operatingsystem }
     $generation = $HardwareProfile.generation
 
     $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
@@ -61,9 +58,39 @@ try {
   $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
   Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
-  $virtualMachineConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup
-  $SCCloud = Get-SCCloud -Name $cloud
-  $vm = New-SCVirtualMachine -Name $vmname -VMConfiguration $virtualMachineConfiguration -Cloud $SCCloud -Description $description -JobGroup $JobGroupID -StartAction $startaction -StopAction $stopaction -DynamicMemoryEnabled $false -MemoryMB $memory -CPUCount $cpucount -RunAsynchronously -ErrorAction Stop
+
+  $vmargs = @{
+    Name = "$vmname"
+    CPUCount = $cpucount
+    DynamicMemoryEnabled = $false
+  }
+  $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup
+  $vmargs.Cloud = Get-SCCloud -Name $cloud
+
+  if ($description) { $vmargs.Description = "$description" }
+  if ($startaction) { $vmargs.StartAction = "$startaction"
+  if ($stopaction) { $vmargs.StopAction = "$stopaction" }
+  if ($replicationgroup) { $vmargs.ReplicationGroup = "$replicationgroup" }
+  $bl = $false
+  if ([bool]::TryParse($cpulimitformigration, [ref]$bl)) { $vmargs.CPULimitForMigration = $bl }
+  if ([bool]::TryParse($cpulimitfunctionality, [ref]$bl)) { $vmargs.CPULimitFunctionality = $bl }
+  if ($domain) {
+    if (${env:DOMAIN_USERNAME} -and ${env:DOMAIN_PASSWORD}) {
+      $vmargs.Domain = $domain
+      $vmargs.DomainJoinCredential = new-object PSCredential(${env:DOMAIN_USERNAME}, (ConvertTo-Securestring -force -AsPlainText -String ${env:DOMAIN_PASSWORD}))
+    }
+  }
+
+  if ($memory -gt 0) { $vmargs.MemoryMB = $memory }
+  if ($memorymin -gt 0) {
+    $vmargs.DynamicMemoryMin = $memorymin
+    $vmargs.DynamicMemoryEnabled = $true
+  }
+  if ($memorymin -gt 0) {
+    $vmargs.DynamicMemoryMax = $memorymax
+    $vmargs.DynamicMemoryEnabled = $true
+  }
+  $vm = New-SCVirtualMachine @vmargs -JobGroup $JobGroupID -RunAsynchronously -ErrorAction Stop
 
   return VMToJson $vm "Creating"
 } catch {
