@@ -48,7 +48,7 @@ type ScvmmMachineSpec struct {
 	Memory *resource.Quantity `json:"memory,omitempty"`
 	// Dynamic Memory
 	// +optional
-	DynamicMemory *DynamicMemory `json:"dynamicmemory,omitempty"`
+	DynamicMemory *DynamicMemory `json:"dynamicMemory,omitempty"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
 	// Hardware profile

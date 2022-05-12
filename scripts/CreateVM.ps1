@@ -68,7 +68,7 @@ try {
   $vmargs.Cloud = Get-SCCloud -Name $cloud
 
   if ($description) { $vmargs.Description = "$description" }
-  if ($startaction) { $vmargs.StartAction = "$startaction"
+  if ($startaction) { $vmargs.StartAction = "$startaction" }
   if ($stopaction) { $vmargs.StopAction = "$stopaction" }
   if ($replicationgroup) { $vmargs.ReplicationGroup = "$replicationgroup" }
   $bl = $false

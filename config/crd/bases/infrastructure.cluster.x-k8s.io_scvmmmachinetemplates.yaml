@@ -139,7 +139,7 @@ spec:
                               type: string
                           type: object
                         type: array
-                      dynamicmemory:
+                      dynamicMemory:
                         description: Dynamic Memory
                         properties:
                           bufferPercentage:
