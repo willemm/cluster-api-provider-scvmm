@@ -137,7 +137,7 @@ type DynamicMemory struct {
 	Maximum *resource.Quantity `json:"maximum"`
 	// BufferPercentage
 	// +optional
-	BufferPercentage int `json:"bufferPercentage,omitempty"`
+	BufferPercentage *int `json:"bufferPercentage,omitempty"`
 }
 
 // NoCloud cloud-init data (user-data and meta-data file contents)

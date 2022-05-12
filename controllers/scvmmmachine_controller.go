@@ -638,12 +638,33 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if spec.Networking != nil {
 			domain = spec.Networking.Domain
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -ReplicationGroup '%s' -Domain '%s'",
+		memoryFixed := int64(-1)
+		memoryMin := int64(-1)
+		memoryMax := int64(-1)
+		memoryBuffer := -1
+		if spec.Memory != nil {
+			memoryFixed = spec.Memory.Value() / 1024 / 1024
+		}
+		if spec.DynamicMemory != nil {
+			if spec.DynamicMemory.Minimum != nil {
+				memoryMin = spec.DynamicMemory.Minimum.Value() / 1024 / 1024
+			}
+			if spec.DynamicMemory.Maximum != nil {
+				memoryMax = spec.DynamicMemory.Maximum.Value() / 1024 / 1024
+			}
+			if spec.DynamicMemory.BufferPercentage != nil {
+				memoryBuffer = *spec.DynamicMemory.BufferPercentage
+			}
+		}
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -ReplicationGroup '%s' -Domain '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
 			escapeSingleQuotes(spec.VMTemplate),
-			(spec.Memory.Value() / 1024 / 1024),
+			memoryFixed,
+			memoryMin,
+			memoryMax,
+			memoryBuffer,
 			spec.CPUCount,
 			escapeSingleQuotes(string(diskjson)),
 			escapeSingleQuotes(spec.VMNetwork),

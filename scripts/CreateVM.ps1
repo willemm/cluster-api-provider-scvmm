@@ -82,13 +82,16 @@ try {
   }
 
   if ($memory -gt 0) { $vmargs.MemoryMB = $memory }
-  if ($memorymin -gt 0) {
+  if ($memorymin -ge 0) {
     $vmargs.DynamicMemoryMin = $memorymin
     $vmargs.DynamicMemoryEnabled = $true
   }
-  if ($memorymin -gt 0) {
+  if ($memorymin -ge 0) {
     $vmargs.DynamicMemoryMax = $memorymax
     $vmargs.DynamicMemoryEnabled = $true
+  }
+  if ($memorybuffer -ge 0) {
+    $vmargs.DynamicMemoryBuffer = $memorybuffer
   }
   $vm = New-SCVirtualMachine @vmargs -JobGroup $JobGroupID -RunAsynchronously -ErrorAction Stop
 
