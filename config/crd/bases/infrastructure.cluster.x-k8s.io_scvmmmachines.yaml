@@ -81,6 +81,9 @@ spec:
                 required:
                 - ouPath
                 type: object
+              availabilitySet:
+                description: AvailabilitySet
+                type: string
               cloud:
                 description: VMM cloud to run VM on
                 type: string
@@ -235,9 +238,6 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
-              replicationGroup:
-                description: ReplicationGroup
-                type: string
               startAction:
                 description: Start Action
                 enum:

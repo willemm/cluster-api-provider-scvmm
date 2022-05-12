@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $replicationgroup, $domain)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain)
 try {
   $generation = 1
   if ($vmtemplate) {

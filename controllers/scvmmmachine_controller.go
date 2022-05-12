@@ -656,7 +656,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				memoryBuffer = *spec.DynamicMemory.BufferPercentage
 			}
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -ReplicationGroup '%s' -Domain '%s'",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
@@ -675,7 +675,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			boolPtrStr(spec.CPULimitForMigration),
 			boolPtrStr(spec.CPULimitFunctionality),
 			escapeSingleQuotes(spec.OperatingSystem),
-			escapeSingleQuotes(spec.ReplicationGroup),
 			escapeSingleQuotes(domain),
 		)
 		if err != nil {
@@ -806,8 +805,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			log.V(1).Info("AddIsoToVM result", "vm", vm)
 		} else {
 			log.V(1).Info("Call StartVM")
-			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'",
-				escapeSingleQuotes(scvmmMachine.Spec.VMName))
+			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s' -AvailabilitySet '%s'",
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				escapeSingleQuotes(scvmmMachine.Spec.AvailabilitySet),
+			)
 			if err != nil {
 				return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 			}

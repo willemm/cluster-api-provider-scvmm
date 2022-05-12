@@ -73,9 +73,9 @@ type ScvmmMachineSpec struct {
 	// OperatingSystem
 	// +optional
 	OperatingSystem string `json:"operatingSystem,omitempty"`
-	// ReplicationGroup
+	// AvailabilitySet
 	// +optional
-	ReplicationGroup string `json:"replicationGroup,omitempty"`
+	AvailabilitySet string `json:"availabilitySet,omitempty"`
 	// Network settings
 	// +optional
 	Networking *Networking `json:"networking,omitempty"`
