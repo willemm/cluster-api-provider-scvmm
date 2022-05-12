@@ -81,10 +81,10 @@ try {
     }
   }
 
-  if ($memory -gt 0) { $vmargs.MemoryMB = $memory }
   if ($memorymin -ge 0) {
     $vmargs.DynamicMemoryMin = $memorymin
     $vmargs.DynamicMemoryEnabled = $true
+    $vmargs.MemoryMB = $memorymin
   }
   if ($memorymin -ge 0) {
     $vmargs.DynamicMemoryMax = $memorymax
@@ -93,7 +93,15 @@ try {
   if ($memorybuffer -ge 0) {
     $vmargs.DynamicMemoryBuffer = $memorybuffer
   }
+  if ($memory -gt 0) { $vmargs.MemoryMB = $memory }
   $vm = New-SCVirtualMachine @vmargs -JobGroup $JobGroupID -RunAsynchronously -ErrorAction Stop
+  if ($vm.Status -eq 'CreationFailed') {
+    $msg = "Unknown error"
+    if ($vm.MostRecentTaskIfLocal.ErrorInfo) {
+      $msg = $vm.MostRecentTaskIfLocal.ErrorInfo
+    }
+    throw "Creation Failed: $msg"
+  }
 
   return VMToJson $vm "Creating"
 } catch {
