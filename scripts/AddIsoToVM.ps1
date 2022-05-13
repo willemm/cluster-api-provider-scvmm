@@ -18,6 +18,7 @@ try {
   Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO | out-null
 
   $vm = Start-SCVirtualMachine -VM $vm -RunAsynchronously
+  Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | Remove-SCISO -RunAsynchronously | out-null
   return VMToJson $vm "Starting"
 } catch {
   ErrorToJson 'Add ISO to VM' $_
