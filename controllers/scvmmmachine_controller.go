@@ -951,7 +951,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	if vm.Message == "Removed" {
 		adspec := scvmmMachine.Spec.ActiveDirectory
 		if adspec != nil {
-                        r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmDeletingReason, "Removing AD entry %s", scvmmMachine.Spec.VMName)
+			r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmDeletingReason, "Removing AD entry %s", scvmmMachine.Spec.VMName)
 			log.V(1).Info("Call RemoveADComputer")
 			vm, err = sendWinrmCommand(log, cmd, "RemoveADComputer -Name '%s' -OUPath '%s' -DomainController '%s'",
 				escapeSingleQuotes(scvmmMachine.Spec.VMName),
