@@ -1,10 +1,14 @@
 
-# Image URL to use all building/pushing image targets
-IMG ?= ghcr.io/willemm/cluster-api-provider-scvmm:v0.1.3-rc6
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.22
 
 GOPROXY=https://proxy.golang.org
+
+RELEASE_TAG ?= $(shell git describe --abbrev=0 2>/dev/null)
+RELEASE_DIR ?= out
+
+# Image URL to use all building/pushing image targets
+IMG ?= ghcr.io/willemm/cluster-api-provider-scvmm:${RELEASE_TAG}
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -85,11 +89,30 @@ docker-build: test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: set-manifest-tag
+set-manifest-tag: manifests
+	$(info Updating kustomize image tag)
+	sed -i'' -e 's@image: .*@image: '"$(IMG)"'@' ./config/default/manager_image_patch.yaml
+
 ##@ Deployment
 
 ifndef ignore-not-found
   ignore-not-found = false
 endif
+
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)/
+
+.PHONY: release-manifests
+release-manifests: manifests set-manifest-tag kustomize $(RELEASE_DIR)
+	$(KUSTOMIZE) build config/default > $(RELEASE_DIR)/infrastructure-components.yaml
+
+.PHONY: release-metadata
+release-metadata: $(RELEASE_DIR)
+	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
+
+.PHONY: release
+release: release-manifests release-metadata
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.

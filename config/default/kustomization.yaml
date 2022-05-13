@@ -9,8 +9,8 @@ namespace: cluster-api-provider-scvmm-system
 namePrefix: cluster-api-provider-scvmm-
 
 # Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
+commonLabels:
+  cluster.x-k8s.io/provider: "infrastructure-scvmm"
 
 bases:
 - ../crd
