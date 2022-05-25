@@ -51,9 +51,10 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 # Generate CRD file (add labels to manifests, etc)
 .PHONY: chart
-chart: manifests
-	kustomize build config/crd > chart/crds/scvmm-crds.yaml
-	kustomize build config/default > chart/templates/scvmm-install.yaml
+chart: manifests $(KUSTOMIZE)
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/crd > chart/crds/scvmm-crds.yaml
+	$(KUSTOMIZE) build config/default > chart/templates/scvmm-install.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -104,7 +105,8 @@ $(RELEASE_DIR):
 	mkdir -p $(RELEASE_DIR)/
 
 .PHONY: release-manifests
-release-manifests: manifests set-manifest-tag kustomize $(RELEASE_DIR)
+release-manifests: manifests kustomize $(RELEASE_DIR)
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > $(RELEASE_DIR)/infrastructure-components.yaml
 
 .PHONY: release-metadata
