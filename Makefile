@@ -4,7 +4,11 @@ ENVTEST_K8S_VERSION = 1.22
 
 GOPROXY=https://proxy.golang.org
 
+ifeq (,${GITHUB_REF_NAME})
 RELEASE_TAG ?= $(shell git describe --abbrev=0 2>/dev/null)
+else
+RELEASE_TAG ?= ${GITHUB_REF_NAME}
+endif
 RELEASE_DIR ?= out
 
 # Image URL to use all building/pushing image targets
