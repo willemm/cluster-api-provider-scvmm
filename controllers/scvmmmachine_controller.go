@@ -48,7 +48,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/willemm/winrm"
+	"github.com/masterzen/winrm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
