@@ -2,7 +2,7 @@ module github.com/willemm/cluster-api-provider-scvmm
 
 go 1.16
 
-replace github.com/masterzen/winrm v0.0.0-20211231115050-232efb40349e => github.com/willemm/winrm v0.0.0-20220606164341-4d91010d9d78
+replace github.com/masterzen/winrm v0.0.0-20211231115050-232efb40349e => github.com/willemm/winrm v0.0.0-20220611191938-0dae34e13f02
 
 require (
 	github.com/go-logr/logr v1.2.2

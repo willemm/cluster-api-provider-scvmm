@@ -281,6 +281,9 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
+        params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
+        params.RequestOptions["WINRS_CONSOLEMODE_STDIN"] = "FALSE"
+        params.RequestOptions["WINRS_SKIP_CMD_SHELL"] = "TRUE"
 
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)

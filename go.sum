@@ -622,6 +622,8 @@ github.com/vmware/vmw-guestinfo v0.0.0-20170707015358-25eff159a728/go.mod h1:x9o
 github.com/vmware/vmw-ovflib v0.0.0-20170608004843-1f217b9dc714/go.mod h1:jiPk45kn7klhByRvUq5i2vo1RtHKBHj+iWGFpxbXuuI=
 github.com/willemm/winrm v0.0.0-20220606164341-4d91010d9d78 h1:Ap4qE/QB8p8SxlWs7QfoTq0pK/robwXE7nK8gyG4GxY=
 github.com/willemm/winrm v0.0.0-20220606164341-4d91010d9d78/go.mod h1:Iju3u6NzoTAvjuhsGCZc+7fReNnr/Bd6DsWj3WTokIU=
+github.com/willemm/winrm v0.0.0-20220611191938-0dae34e13f02 h1:vz9ziXit/sM0e3VEjkzC4l4ezH4MUCM0quabc3F1f3k=
+github.com/willemm/winrm v0.0.0-20220611191938-0dae34e13f02/go.mod h1:Iju3u6NzoTAvjuhsGCZc+7fReNnr/Bd6DsWj3WTokIU=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca/go.mod h1:ce1O1j6UtZfjr22oyGxGLbauSBp2YVXpARAosm7dHBg=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
