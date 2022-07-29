@@ -111,14 +111,15 @@ type VMResult struct {
 		Size      int64
 		SharePath string
 	}
-	BiosGuid     string
-	Id           string
-	VMId         string
-	Error        string
-	ScriptErrors string
-	Message      string
-	CreationTime metav1.Time
-	ModifiedTime metav1.Time
+	BiosGuid             string
+	Id                   string
+	VMId                 string
+	AvailabilitySetNames []string
+	Error                string
+	ScriptErrors         string
+	Message              string
+	CreationTime         metav1.Time
+	ModifiedTime         metav1.Time
 }
 
 type VMSpecResult struct {
@@ -281,9 +282,9 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
 	params := winrm.DefaultParameters
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-        params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
-        params.RequestOptions["WINRS_CONSOLEMODE_STDIN"] = "FALSE"
-        params.RequestOptions["WINRS_SKIP_CMD_SHELL"] = "TRUE"
+	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
+	params.RequestOptions["WINRS_CONSOLEMODE_STDIN"] = "FALSE"
+	params.RequestOptions["WINRS_SKIP_CMD_SHELL"] = "TRUE"
 
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)
@@ -712,111 +713,134 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
+	doasn := scvmmMachine.Spec.AvailabilitySet != ""
+	if doasn {
+		for _, asn := range vm.AvailabilitySetNames {
+			if asn == scvmmMachine.Spec.AvailabilitySet {
+				doasn = false
+			}
+		}
+	}
+	if doasn {
+		vm, err = sendWinrmCommand(log, cmd, "AddAvailabilitySet -VMName '%s' -AvailabilitySet '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.VMName),
+			escapeSingleQuotes(scvmmMachine.Spec.AvailabilitySet))
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Failed to add availabilityset")
+		}
+	}
+
 	isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 	if vm.Status == "PowerOff" {
-		log.V(1).Info("Call AddVMSpec")
-		newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
-		if err != nil {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
-		}
-		log.V(1).Info("AddVMSpec result", "newspec", newspec)
-		if newspec.Error != "" {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
-		}
-		if newspec.CopyNonZeroTo(&scvmmMachine.Spec) {
-			if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-				log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-				return ctrl.Result{}, err
+		addiso := true
+		for _, iso := range vm.ISOs {
+			if filepath.Base(iso.SharePath) == filepath.Base(isoPath) {
+				addiso = false
 			}
-		}
-		spec := scvmmMachine.Spec
-		doexpand := false
-		for i, d := range spec.Disks {
-			if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) { // For rounding errors
-				doexpand = true
-			}
-		}
-		if doexpand {
-			log.V(1).Info("Call ResizeVMDisks")
-			diskjson, err := makeDisksJSON(spec.Disks)
-			if err != nil {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
-			}
-			vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -VMName '%s' -Disks '%s'",
-				escapeSingleQuotes(scvmmMachine.Spec.VMName),
-				escapeSingleQuotes(string(diskjson)))
-			if err != nil {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
-			}
-			log.V(1).Info("ExpandVMDisks Result", "vm", vm)
-			if vm.Error != "" {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "Failed to create vm: %s", vm.Error)
-			}
-			scvmmMachine.Status.Ready = false
-			scvmmMachine.Status.VMStatus = vm.Status
-			scvmmMachine.Status.BiosGuid = vm.BiosGuid
-			scvmmMachine.Status.CreationTime = vm.CreationTime
-			scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Updating Disks")
 		}
 
-		var bootstrapData, metaData, networkConfig []byte
-		if machine != nil {
-			if machine.Spec.Bootstrap.DataSecretName == nil {
-				if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
-					log.Info("Waiting for the control plane to be initialized")
-					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
+		if addiso {
+			log.V(1).Info("Call AddVMSpec")
+			newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
+			if err != nil {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
+			}
+			log.V(1).Info("AddVMSpec result", "newspec", newspec)
+			if newspec.Error != "" {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed calling add spec function: "+newspec.Message)
+			}
+			if newspec.CopyNonZeroTo(&scvmmMachine.Spec) {
+				if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+					log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+					return ctrl.Result{}, err
 				}
-				log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
 			}
-			log.V(1).Info("Get bootstrap data")
-			bootstrapData, err = r.getBootstrapData(ctx, machine)
-			if err != nil {
-				r.Log.Error(err, "failed to get bootstrap data")
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
+			spec := scvmmMachine.Spec
+			doexpand := false
+			for i, d := range spec.Disks {
+				if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) { // For rounding errors
+					doexpand = true
+				}
 			}
-		} else if scvmmMachine.Spec.CloudInit != nil {
-			if scvmmMachine.Spec.CloudInit.UserData != "" {
-				bootstrapData = []byte(scvmmMachine.Spec.CloudInit.UserData)
+			if doexpand {
+				log.V(1).Info("Call ResizeVMDisks")
+				diskjson, err := makeDisksJSON(spec.Disks)
+				if err != nil {
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
+				}
+				vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -VMName '%s' -Disks '%s'",
+					escapeSingleQuotes(scvmmMachine.Spec.VMName),
+					escapeSingleQuotes(string(diskjson)))
+				if err != nil {
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
+				}
+				log.V(1).Info("ExpandVMDisks Result", "vm", vm)
+				if vm.Error != "" {
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "Failed to create vm: %s", vm.Error)
+				}
+				scvmmMachine.Status.Ready = false
+				scvmmMachine.Status.VMStatus = vm.Status
+				scvmmMachine.Status.BiosGuid = vm.BiosGuid
+				scvmmMachine.Status.CreationTime = vm.CreationTime
+				scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Updating Disks")
 			}
-			if scvmmMachine.Spec.CloudInit.MetaData != "" {
-				metaData = []byte(scvmmMachine.Spec.CloudInit.MetaData)
+
+			var bootstrapData, metaData, networkConfig []byte
+			if machine != nil {
+				if machine.Spec.Bootstrap.DataSecretName == nil {
+					if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
+						log.Info("Waiting for the control plane to be initialized")
+						return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
+					}
+					log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
+				}
+				log.V(1).Info("Get bootstrap data")
+				bootstrapData, err = r.getBootstrapData(ctx, machine)
+				if err != nil {
+					r.Log.Error(err, "failed to get bootstrap data")
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
+				}
+			} else if scvmmMachine.Spec.CloudInit != nil {
+				if scvmmMachine.Spec.CloudInit.UserData != "" {
+					bootstrapData = []byte(scvmmMachine.Spec.CloudInit.UserData)
+				}
+				if scvmmMachine.Spec.CloudInit.MetaData != "" {
+					metaData = []byte(scvmmMachine.Spec.CloudInit.MetaData)
+				}
+				if scvmmMachine.Spec.CloudInit.NetworkConfig != "" {
+					networkConfig = []byte(scvmmMachine.Spec.CloudInit.NetworkConfig)
+				}
 			}
-			if scvmmMachine.Spec.CloudInit.NetworkConfig != "" {
-				networkConfig = []byte(scvmmMachine.Spec.CloudInit.NetworkConfig)
+			if metaData != nil || bootstrapData != nil || networkConfig != nil {
+				log.V(1).Info("Create cloudinit")
+				if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, isoPath, bootstrapData, metaData, networkConfig); err != nil {
+					r.Log.Error(err, "failed to create cloud init")
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
+				}
+				conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
+				if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
+					log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+					return ctrl.Result{}, err
+				}
+				log.V(1).Info("Call AddIsoToVM")
+				vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'",
+					escapeSingleQuotes(scvmmMachine.Spec.VMName),
+					escapeSingleQuotes(isoPath))
+				if err != nil {
+					return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
+				}
+				log.V(1).Info("AddIsoToVM result", "vm", vm)
 			}
 		}
-		if metaData != nil || bootstrapData != nil || networkConfig != nil {
-			log.V(1).Info("Create cloudinit")
-			if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, isoPath, bootstrapData, metaData, networkConfig); err != nil {
-				r.Log.Error(err, "failed to create cloud init")
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
-			}
-			conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
-			if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
-				log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-				return ctrl.Result{}, err
-			}
-			log.V(1).Info("Call AddIsoToVM")
-			vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'",
-				escapeSingleQuotes(scvmmMachine.Spec.VMName),
-				escapeSingleQuotes(isoPath))
-			if err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
-			}
-			log.V(1).Info("AddIsoToVM result", "vm", vm)
-		} else {
-			log.V(1).Info("Call StartVM")
-			vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s' -AvailabilitySet '%s'",
-				escapeSingleQuotes(scvmmMachine.Spec.VMName),
-				escapeSingleQuotes(scvmmMachine.Spec.AvailabilitySet),
-			)
-			if err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
-			}
-			log.V(1).Info("StartVM result", "vm", vm)
+		log.V(1).Info("Call StartVM")
+		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.VMName))
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 		}
+		log.V(1).Info("StartVM result", "vm", vm)
 		scvmmMachine.Status.VMStatus = vm.Status
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
 			log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
@@ -862,22 +886,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
-	}
-	// If it reported an IP address, assume it's ready and cloudinit is no longer needed
-	for _, iso := range vm.ISOs {
-		if iso.SharePath == isoPath {
-			log.V(1).Info("Call RemoveIsoFromVM")
-			vm, err = sendWinrmCommand(log, cmd, "RemoveIsoFromVM -VMName '%s' -ISOPath '%s'",
-				escapeSingleQuotes(scvmmMachine.Spec.VMName),
-				escapeSingleQuotes(isoPath))
-			if err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "Failed to remove iso from vm")
-			}
-			log.V(1).Info("RemoveIsoFromVM result", "vm", vm)
-			log.Info("Removing cloud-init, reschedule after 10 seconds")
-			r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmUpdatingReason, "Removing cloud-init iso from %s", vm.Name)
-			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
-		}
 	}
 	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
 	log.V(1).Info("Done")
