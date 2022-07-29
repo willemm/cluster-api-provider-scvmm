@@ -63,8 +63,8 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.IntVar(&machineConcurrency, "concurrency", 3, "The number of scvmm machines to handle concurrently.")
-	flag.IntVar(&clusterConcurrency, "concurrency", 1, "The number of scvmm cluster objects to handle concurrently.")
+	flag.IntVar(&machineConcurrency, "machine-concurrency", 3, "The number of scvmm machines to handle concurrently.")
+	flag.IntVar(&clusterConcurrency, "cluster-concurrency", 1, "The number of scvmm cluster objects to handle concurrently.")
 	opts := zap.Options{
 		Development: true,
 	}
