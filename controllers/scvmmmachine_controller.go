@@ -575,6 +575,10 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return r.reconcileNormal(ctx, patchHelper, cluster, provider, machine, scvmmMachine)
 }
 
+func baseName(path string) string {
+	return path[strings.LastIndexAny(path, "\\/")+1:]
+}
+
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, provider *infrav1.ScvmmProviderSpec, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (res ctrl.Result, retErr error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
@@ -734,7 +738,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	if vm.Status == "PowerOff" {
 		addiso := true
 		for _, iso := range vm.ISOs {
-			if filepath.Base(iso.SharePath) == filepath.Base(isoPath) {
+			if baseName(iso.SharePath) == baseName(isoPath) {
 				addiso = false
 			}
 		}
