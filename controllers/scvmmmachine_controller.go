@@ -731,6 +731,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	if strings.HasPrefix(vm.Message, "VMName is taken") {
 		log.V(1).Info("GetVM claims vmname is taken", "message", vm.Message)
+		scvmmMachine.Spec.VMName = ""
 		log.V(1).Info("Call GenerateVMName")
 		newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
 		if err != nil {
