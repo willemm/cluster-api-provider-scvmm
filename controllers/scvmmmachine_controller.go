@@ -729,7 +729,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	if strings.HasPrefix(vm.Message, "VMName may be taken") {
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Waiting for vmname clash resolve")
 	}
-	if strings.HasPrefix(vm.Message, "VMName is taken") {
+	if scvmmMachine.Spec.VMName == "" || strings.HasPrefix(vm.Message, "VMName is taken") {
 		log.V(1).Info("GetVM claims vmname is taken", "message", vm.Message)
 		scvmmMachine.Spec.VMName = ""
 		log.V(1).Info("Call GenerateVMName")
