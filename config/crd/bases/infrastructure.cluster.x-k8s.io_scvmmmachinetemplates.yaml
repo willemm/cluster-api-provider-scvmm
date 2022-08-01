@@ -172,6 +172,9 @@ spec:
                       hostGroup:
                         description: Host Group to run VM in
                         type: string
+                      id:
+                        description: ID is scvmm object ID, will be filled in by controller
+                        type: string
                       memory:
                         anyOf:
                         - type: integer
@@ -206,7 +209,7 @@ spec:
                         description: OperatingSystem
                         type: string
                       providerID:
-                        description: ProviderID is scvmm plus bios-guid
+                        description: ProviderID is scvmm plus vm-guid
                         type: string
                       providerRef:
                         description: ProviderRef points to an ScvmmProvider instance
