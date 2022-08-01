@@ -25,9 +25,12 @@ import (
 
 // ScvmmMachineSpec defines the desired state of ScvmmMachine
 type ScvmmMachineSpec struct {
-	// ProviderID is scvmm plus bios-guid
+	// ProviderID is scvmm plus vm-guid
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+	// ID is scvmm object ID, will be filled in by controller
+	// +optional
+	Id string `json:"id,omitempty"`
 	// VMM cloud to run VM on
 	Cloud string `json:"cloud"`
 	// Host Group to run VM in

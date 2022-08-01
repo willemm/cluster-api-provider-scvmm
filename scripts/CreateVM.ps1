@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain, $availabilityset)
 try {
   $generation = 1
   if ($vmtemplate) {
@@ -64,13 +64,12 @@ try {
     CPUCount = $cpucount
     DynamicMemoryEnabled = $false
   }
-  $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup
+  $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup -AvailabilitySetNames $availabilityset
   $vmargs.Cloud = Get-SCCloud -Name $cloud
 
   if ($description) { $vmargs.Description = "$description" }
   if ($startaction) { $vmargs.StartAction = "$startaction" }
   if ($stopaction) { $vmargs.StopAction = "$stopaction" }
-  if ($replicationgroup) { $vmargs.ReplicationGroup = "$replicationgroup" }
   $bl = $false
   if ([bool]::TryParse($cpulimitformigration, [ref]$bl)) { $vmargs.CPULimitForMigration = $bl }
   if ([bool]::TryParse($cpulimitfunctionality, [ref]$bl)) { $vmargs.CPULimitFunctionality = $bl }

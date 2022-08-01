@@ -590,16 +590,18 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	defer cmd.Close()
 	var vm VMResult
-	if scvmmMachine.Spec.VMName != "" {
+	if scvmmMachine.Spec.VMName != "" || scvmmMachine.Spec.Id != "" {
 		log.V(1).Info("Running GetVM")
-		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s'", escapeSingleQuotes(scvmmMachine.Spec.VMName))
+		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s' -Id '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.VMName),
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
 			return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
 		}
 		log.V(1).Info("GetVM result", "vm", vm)
 	}
-	if vm.Name == "" {
+	if vm.Id == "" {
 		vmName := scvmmMachine.Spec.VMName
 		if vmName == "" {
 			log.V(1).Info("Call GenerateVMName")
@@ -665,7 +667,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				memoryBuffer = *spec.DynamicMemory.BufferPercentage
 			}
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s'",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
@@ -685,6 +687,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			boolPtrStr(spec.CPULimitFunctionality),
 			escapeSingleQuotes(spec.OperatingSystem),
 			escapeSingleQuotes(domain),
+			escapeSingleQuotes(spec.AvailabilitySet),
 		)
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
@@ -718,21 +721,30 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 
-	doasn := scvmmMachine.Spec.AvailabilitySet != ""
-	if doasn {
-		for _, asn := range vm.AvailabilitySetNames {
-			if asn == scvmmMachine.Spec.AvailabilitySet {
-				doasn = false
-			}
-		}
+	if strings.HasPrefix(vm.Message, "VMName may be taken") {
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Waiting for vmname clash resolve")
 	}
-	if doasn {
-		vm, err = sendWinrmCommand(log, cmd, "AddAvailabilitySet -VMName '%s' -AvailabilitySet '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.VMName),
-			escapeSingleQuotes(scvmmMachine.Spec.AvailabilitySet))
+	if strings.HasPrefix(vm.Message, "VMName is taken") {
+		log.V(1).Info("GetVM claims vmname is taken", "message", vm.Message)
+		log.V(1).Info("Call GenerateVMName")
+		newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
 		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "Failed to add availabilityset")
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
 		}
+		log.V(1).Info("GenerateVMName result", "newspec", newspec)
+		if newspec.Error != "" {
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
+		}
+		if newspec.VMName == "" {
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
+		}
+		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.VMName),
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
+		if err != nil {
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed change vmname")
+		}
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
 	}
 
 	isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
