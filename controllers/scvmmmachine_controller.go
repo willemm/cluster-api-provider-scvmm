@@ -729,9 +729,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	if strings.HasPrefix(vm.Message, "VMName may be taken") {
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Waiting for vmname clash resolve")
 	}
-	if scvmmMachine.Spec.VMName == "" || strings.HasPrefix(vm.Message, "VMName is taken") {
+	if strings.HasPrefix(vm.Message, "VMName is taken") {
 		log.V(1).Info("GetVM claims vmname is taken", "message", vm.Message)
 		scvmmMachine.Spec.VMName = ""
+	}
+	if scvmmMachine.Spec.VMName == "" {
 		log.V(1).Info("Call GenerateVMName")
 		newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
 		if err != nil {
@@ -744,6 +746,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if newspec.VMName == "" {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
 		}
+		scvmmMachine.Spec.VMName = newspec.VMName
+	}
+	if scvmmMachine.Spec.VMName != vm.Name {
 		log.V(1).Info("Call RenameVM")
 		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
