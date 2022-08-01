@@ -702,6 +702,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if vm.VMId != "" {
 			scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 		}
+		scvmmMachine.Spec.Id = vm.Id
 		scvmmMachine.Status.Ready = false
 		scvmmMachine.Status.VMStatus = vm.Status
 		scvmmMachine.Status.BiosGuid = vm.BiosGuid
