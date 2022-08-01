@@ -744,12 +744,19 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if newspec.VMName == "" {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
 		}
+		log.V(1).Info("Call RenameVM")
 		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
 			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
+			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "RenameVM", "%v", err)
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed change vmname")
 		}
+		if vm.Error != "" {
+			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "RenameVM", "%s", vm.Error)
+			return ctrl.Result{}, fmt.Errorf("failed to rename VM: %s", vm.Error)
+		}
+		log.V(1).Info("RenameVM result", "vm", vm)
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
 	}
 
