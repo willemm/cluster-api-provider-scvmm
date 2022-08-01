@@ -64,7 +64,11 @@ try {
     CPUCount = $cpucount
     DynamicMemoryEnabled = $false
   }
-  $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup -AvailabilitySetNames $availabilityset
+  if ($availabilityset) {
+    $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup -AvailabilitySetNames $availabilityset
+  } else {
+    $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup
+  }
   $vmargs.Cloud = Get-SCCloud -Name $cloud
 
   if ($description) { $vmargs.Description = "$description" }
