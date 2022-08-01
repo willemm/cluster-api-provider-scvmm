@@ -597,7 +597,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
-			return ctrl.Result{}, errors.Wrap(err, "Failed to get vm")
+			return ctrl.Result{}, errors.Wrap(err, "failed to get vm")
+		}
+		if vm.Error != "" {
+			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%s", vm.Error)
+			return ctrl.Result{}, fmt.Errorf("failed to get VM: %s", vm.Error)
 		}
 		log.V(1).Info("GetVM result", "vm", vm)
 	}
