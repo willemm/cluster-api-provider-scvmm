@@ -24,6 +24,7 @@ import (
 	// "k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -159,10 +160,11 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 	return ctrl.Result{}, nil
 }
 
-func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmCluster{}).
 		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		WithOptions(options).
 		Build(r)
 	if err != nil {
 		return err

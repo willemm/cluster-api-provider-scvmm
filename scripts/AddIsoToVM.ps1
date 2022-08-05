@@ -15,11 +15,13 @@ try {
     throw "Virtual Machine $vmname not found"
   }
   $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | select -first 1
+  if ($DVDDrive.ISO) {
+    Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -NoMedia | out-null
+  }
   Set-SCVirtualDVDDrive -VirtualDVDDrive $DVDDrive -ISO $ISO | out-null
 
-  $vm = Start-SCVirtualMachine -VM $vm -RunAsynchronously
-  Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | Remove-SCISO -RunAsynchronously | out-null
-  return VMToJson $vm "Starting"
+  Remove-SCISO -ISO $ISO -RunAsynchronously | out-null
+  return VMToJson $vm "AddingISO"
 } catch {
   ErrorToJson 'Add ISO to VM' $_
 }
