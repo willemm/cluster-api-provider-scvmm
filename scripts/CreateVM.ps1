@@ -47,8 +47,14 @@ try {
     $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
   } else {
     $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq $hardwareprofile }
-    if (-not $operatingsystem) { $operatingsystem = 'Other Linux (64 bit)' }
-    $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq $operatingsystem }
+    if (-not $operatingsystem -and $VirtualHardDisk -and $VirtualHardDisk.OperatingSystem) {
+      $LinuxOS = $VirtualHardDisk.OperatingSystem
+    } else {
+      if (-not $operatingsystem) {
+        $operatingsystem = 'Other Linux (64 bit)'
+      }
+      $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq $operatingsystem }
+    }
     $generation = $HardwareProfile.generation
 
     $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
