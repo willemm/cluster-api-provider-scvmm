@@ -591,7 +591,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	defer cmd.Close()
 	var vm VMResult
 	if scvmmMachine.Spec.VMName != "" || scvmmMachine.Spec.Id != "" {
-		log.V(1).Info("Running GetVM")
+		log.V(1).Info("Running GetVM", "VMName", scvmmMachine.Spec.VMName, "Id", scvmmMachine.Spec.Id)
 		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
 			escapeSingleQuotes(scvmmMachine.Spec.Id))
@@ -749,6 +749,23 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		scvmmMachine.Spec.VMName = newspec.VMName
 	}
 	if scvmmMachine.Spec.VMName != vm.Name {
+		// Create AD object for new computer name
+		if adspec != nil {
+			log.V(1).Info("Call CreateADComputer")
+			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
+				escapeSingleQuotes(vmName),
+				escapeSingleQuotes(adspec.OUPath),
+				escapeSingleQuotes(domaincontroller),
+				escapeSingleQuotes(adspec.Description),
+				escapeSingleQuotesArray(adspec.MemberOf))
+			if err != nil {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
+			}
+			log.V(1).Info("CreateADComputer Result", "vm", vm)
+			if vm.Error != "" {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to create AD entry: %s", vm.Error)
+			}
+		}
 		log.V(1).Info("Call RenameVM")
 		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
