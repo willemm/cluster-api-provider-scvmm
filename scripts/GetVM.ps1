@@ -39,7 +39,7 @@ try {
       # 'is taken' means we have to give up the name
       $message = "VMName is taken"
       # Return the correct vm
-      $vm = $vm | Where-Object { $_.ID -eq $id) | Select-Object -First 1
+      $vm = $vm | Where-Object { $_.ID -eq $id } | Select-Object -First 1
       if (-not $vm) {
 	return @{ Message = "VM $($vmname) with id $($id) not found" } | convertto-json
       }
