@@ -624,11 +624,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		}
 		spec := scvmmMachine.Spec
 		adspec := spec.ActiveDirectory
-		domaincontroller := adspec.DomainController
-		if domaincontroller == "" {
-			domaincontroller = provider.ADServer
-		}
 		if adspec != nil {
+			domaincontroller := adspec.DomainController
+			if domaincontroller == "" {
+				domaincontroller = provider.ADServer
+			}
 			log.V(1).Info("Call CreateADComputer")
 			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
 				escapeSingleQuotes(vmName),
@@ -749,11 +749,17 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		scvmmMachine.Spec.VMName = newspec.VMName
 	}
 	if scvmmMachine.Spec.VMName != vm.Name {
+		spec := scvmmMachine.Spec
+		adspec := spec.ActiveDirectory
 		// Create AD object for new computer name
 		if adspec != nil {
+			domaincontroller := adspec.DomainController
+			if domaincontroller == "" {
+				domaincontroller = provider.ADServer
+			}
 			log.V(1).Info("Call CreateADComputer")
 			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
-				escapeSingleQuotes(vmName),
+				escapeSingleQuotes(spec.VMName),
 				escapeSingleQuotes(adspec.OUPath),
 				escapeSingleQuotes(domaincontroller),
 				escapeSingleQuotes(adspec.Description),
