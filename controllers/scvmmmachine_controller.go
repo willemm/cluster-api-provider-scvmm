@@ -251,7 +251,7 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *
 		p.ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
 	}
 	if p.ADUsername == "" {
-		p.ADUsername = os.Getenv("ACTIVEDIRECTOYR_USERNAME")
+		p.ADUsername = os.Getenv("ACTIVEDIRECTORY_USERNAME")
 	}
 	if p.ADPassword == "" {
 		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
