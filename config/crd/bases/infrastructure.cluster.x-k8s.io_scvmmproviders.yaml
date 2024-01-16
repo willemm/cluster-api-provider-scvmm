@@ -1,11 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: scvmmproviders.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -22,14 +20,19 @@ spec:
         description: ScvmmProvider is the Schema for the scvmmproviders API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -49,6 +52,7 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               adServer:
                 description: Active Directory server
                 type: string
@@ -65,11 +69,13 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               env:
                 additionalProperties:
                   type: string
-                description: Environment variables to set for scripts Will be supplemented
-                  with scvmm and ad credentials
+                description: |-
+                  Environment variables to set for scripts
+                  Will be supplemented with scvmm and ad credentials
                 type: object
               execHost:
                 description: Jumphost to run scvmm scripts on, instead of directly
@@ -84,7 +90,8 @@ spec:
                 description: Hostname of scvmm server
                 type: string
               scvmmLibraryISOs:
-                description: Library share where ISOs can be placed for cloud-init
+                description: |-
+                  Library share where ISOs can be placed for cloud-init
                   Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
                 type: string
               scvmmSecret:
@@ -100,6 +107,7 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
             required:
             - scvmmHost
             type: object
@@ -111,9 +119,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
