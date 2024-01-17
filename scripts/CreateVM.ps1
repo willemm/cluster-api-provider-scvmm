@@ -11,36 +11,47 @@ try {
 
   $JobGroupID = [GUID]::NewGuid().ToString()
   $disknum = 0
-  $voltype = 'BootAndSystem'
-  $scsi = $generation -ge 2
   foreach ($disk in ($disks | convertfrom-json)) {
     if ($disknum -gt 16) {
       throw "Too many virtual disks"
     }
+    $vhdargs = @{
+      Bus = 0
+      LUN = $disknum
+      JobGroup = $JobGroupID
+      CreateDiffDisk = $false
+      Filename = "$($vmname)_disk_$($disknum + 1)"
+    }
+    if ($disknum -eq 0) {
+      $vhdargs['VolumeType'] = 'BootAndSystem'
+      if ($generation -ge 2) {
+        $vhdargs['SCSI'] = $true
+      } else {
+        $vhdargs['IDE'] = $true
+      }
+    } else {
+      $vhdargs['SCSI'] = $true
+      if ($generation -ge 2) {
+        $vhdargs['VolumeType'] = 'System'
+      } else {
+        $vhdargs['VolumeType'] = 'None'
+      }
+    }
     if ($disk.vhDisk) {
-      $VirtualHardDisk = Get-SCVirtualHardDisk -name $disk.vhDisk
-      if (-not $VirtualHardDisk) {
+      $vhdargs['VirtualHardDisk'] = Get-SCVirtualHardDisk -name $disk.vhDisk
+      if (-not $vhdargs['VirtualHardDisk']) {
         throw "VHD $($disk.vhDisk) not found"
       }
-      if ($scsi) {
-        New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType $voltype -VirtualHardDisk $VirtualHardDisk
-      } else {
-        New-SCVirtualDiskDrive -IDE -Bus 0 -LUN $disknum -JobGroup $JobGroupID -CreateDiffDisk $false -Filename "$($vmname)_disk_1" -VolumeType $voltype -VirtualHardDisk $VirtualHardDisk
-      }
     } else {
-      if ($scsi) {
-        New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType $voltype
+      if ($disk.dynamic) {
+        $vhdargs['Dynamic'] = $true
       } else {
-        New-SCVirtualDiskDrive -IDE -Bus 0 -LUN $disknum -JobGroup $JobGroupID -VirtualHardDiskSizeMB ($disk.sizeMB) -CreateDiffDisk $false -Dynamic:$($disk.dynamic) -Filename "$($vmname)_disk_$($disknum + 1)" -VolumeType $voltype
+        $vhdargs['Fixed'] = $true
       }
+      $vhdargs.VirtualHardDiskSizeMB = $disk.sizeMB
     }
+    New-SCVirtualDiskDrive @vhdargs
     $disknum = $disknum + 1
-    if ($generation -ge 2) {
-      $voltype = 'System'
-    } else {
-      $voltype = 'None'
-      $scsi = $true
-    }
   }
 
   if ($vmtemplate) {
@@ -116,3 +127,4 @@ try {
 } catch {
   ErrorToJson 'Create VM' $_
 }
+
