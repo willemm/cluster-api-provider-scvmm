@@ -623,27 +623,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			vmName = newspec.VMName
 		}
 		spec := scvmmMachine.Spec
-		adspec := spec.ActiveDirectory
-		if adspec != nil {
-			domaincontroller := adspec.DomainController
-			if domaincontroller == "" {
-				domaincontroller = provider.ADServer
-			}
-			log.V(1).Info("Call CreateADComputer")
-			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
-				escapeSingleQuotes(vmName),
-				escapeSingleQuotes(adspec.OUPath),
-				escapeSingleQuotes(domaincontroller),
-				escapeSingleQuotes(adspec.Description),
-				escapeSingleQuotesArray(adspec.MemberOf))
-			if err != nil {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
-			}
-			log.V(1).Info("CreateADComputer Result", "vm", vm)
-			if vm.Error != "" {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to create AD entry: %s", vm.Error)
-			}
-		}
 		log.V(1).Info("Call CreateVM")
 		diskjson, err := makeDisksJSON(spec.Disks)
 		if err != nil {
@@ -750,28 +729,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	if scvmmMachine.Spec.VMName != vm.Name {
 		spec := scvmmMachine.Spec
-		adspec := spec.ActiveDirectory
-		// Create AD object for new computer name
-		if adspec != nil {
-			domaincontroller := adspec.DomainController
-			if domaincontroller == "" {
-				domaincontroller = provider.ADServer
-			}
-			log.V(1).Info("Call CreateADComputer")
-			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
-				escapeSingleQuotes(spec.VMName),
-				escapeSingleQuotes(adspec.OUPath),
-				escapeSingleQuotes(domaincontroller),
-				escapeSingleQuotes(adspec.Description),
-				escapeSingleQuotesArray(adspec.MemberOf))
-			if err != nil {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
-			}
-			log.V(1).Info("CreateADComputer Result", "vm", vm)
-			if vm.Error != "" {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to create AD entry: %s", vm.Error)
-			}
-		}
 		log.V(1).Info("Call RenameVM")
 		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
@@ -890,6 +847,29 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 					return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
 				}
 				log.V(1).Info("AddIsoToVM result", "vm", vm)
+			}
+		}
+                // Add adcomputer here, because we now know the vmname will not change
+                // (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
+		adspec := scvmmMachine.Spec.ActiveDirectory
+		if adspec != nil {
+			domaincontroller := adspec.DomainController
+			if domaincontroller == "" {
+				domaincontroller = provider.ADServer
+			}
+			log.V(1).Info("Call CreateADComputer")
+			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
+				escapeSingleQuotes(vmName),
+				escapeSingleQuotes(adspec.OUPath),
+				escapeSingleQuotes(domaincontroller),
+				escapeSingleQuotes(adspec.Description),
+				escapeSingleQuotesArray(adspec.MemberOf))
+			if err != nil {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
+			}
+			log.V(1).Info("CreateADComputer Result", "vm", vm)
+			if vm.Error != "" {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to create AD entry: %s", vm.Error)
 			}
 		}
 		log.V(1).Info("Call StartVM")
