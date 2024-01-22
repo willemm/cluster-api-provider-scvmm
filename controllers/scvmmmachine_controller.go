@@ -728,7 +728,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		scvmmMachine.Spec.VMName = newspec.VMName
 	}
 	if scvmmMachine.Spec.VMName != vm.Name {
-		spec := scvmmMachine.Spec
 		log.V(1).Info("Call RenameVM")
 		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
@@ -849,8 +848,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				log.V(1).Info("AddIsoToVM result", "vm", vm)
 			}
 		}
-                // Add adcomputer here, because we now know the vmname will not change
-                // (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
+		// Add adcomputer here, because we now know the vmname will not change
+		// (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
 		adspec := scvmmMachine.Spec.ActiveDirectory
 		if adspec != nil {
 			domaincontroller := adspec.DomainController
@@ -859,7 +858,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			}
 			log.V(1).Info("Call CreateADComputer")
 			vm, err = sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
-				escapeSingleQuotes(vmName),
+				escapeSingleQuotes(scvmmMachine.Spec.VMName),
 				escapeSingleQuotes(adspec.OUPath),
 				escapeSingleQuotes(domaincontroller),
 				escapeSingleQuotes(adspec.Description),
