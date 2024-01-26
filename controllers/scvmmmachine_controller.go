@@ -654,7 +654,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				memoryBuffer = *spec.DynamicMemory.BufferPercentage
 			}
 		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
+		custompropertyjson, err := json.Marshal(spec.CustomProperty)
+		if err != nil {
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
+		}
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s' -CustomProperty '%s' -Tag '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
@@ -675,6 +679,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			escapeSingleQuotes(spec.OperatingSystem),
 			escapeSingleQuotes(domain),
 			escapeSingleQuotes(spec.AvailabilitySet),
+			escapeSingleQuotes(string(custompropertyjson)),
+			escapeSingleQuotes(spec.Tag),
 		)
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")

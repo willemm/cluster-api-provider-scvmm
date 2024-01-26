@@ -115,6 +115,13 @@ spec:
               cpuLimitFunctionality:
                 description: CPULimitFunctionality
                 type: boolean
+              customProperty:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Custom VirtualMachine Properties
+                  Named CustomProperty because that's what it's named in SCVMM virtual machines
+                type: object
               description:
                 description: Description
                 type: string
@@ -266,6 +273,9 @@ spec:
                 - ShutdownGuestOS
                 - TurnOffVM
                 - SaveVM
+                type: string
+              tag:
+                description: VirtualMachine tag
                 type: string
               vmName:
                 description: Name of the VM
