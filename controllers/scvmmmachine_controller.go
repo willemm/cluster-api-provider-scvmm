@@ -750,7 +750,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
 	}
 
-	if (vm.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 		log.V(1).Info("Call SetVMProperties")
 		custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
 		if err != nil {
