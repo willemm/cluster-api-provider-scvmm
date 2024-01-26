@@ -347,6 +347,13 @@ func (in *ScvmmMachineSpec) DeepCopyInto(out *ScvmmMachineSpec) {
 		*out = new(CloudInit)
 		**out = **in
 	}
+	if in.CustomProperties != nil {
+		in, out := &in.CustomProperties, &out.CustomProperties
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.ProviderRef != nil {
 		in, out := &in.ProviderRef, &out.ProviderRef
 		*out = new(v1.ObjectReference)

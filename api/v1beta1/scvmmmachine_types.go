@@ -90,6 +90,9 @@ type ScvmmMachineSpec struct {
 	// For testing purposes, or just for creating VMs
 	// +optional
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
+	// Custom VirtualMachine Properties
+	// +optional
+	CustomProperties map[string]string `json:"customProperties,omitempty"`
 	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
 	// Will be copied from scvmmcluster if not using cloudinit
 	// +optional

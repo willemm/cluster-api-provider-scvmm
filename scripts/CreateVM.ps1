@@ -68,7 +68,7 @@ try {
     }
     $generation = $HardwareProfile.generation
 
-    $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template$JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
+    $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template $JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
   }
 
   $VMNetwork = Get-SCVMNetwork -Name $vmnetwork
@@ -106,7 +106,7 @@ try {
     $vmargs.DynamicMemoryEnabled = $true
     $vmargs.MemoryMB = $memorymin
   }
-  if ($memorymin -ge 0) {
+  if ($memorymax -ge 0) {
     $vmargs.DynamicMemoryMax = $memorymax
     $vmargs.DynamicMemoryEnabled = $true
   }
