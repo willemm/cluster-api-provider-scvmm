@@ -282,7 +282,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	}
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
 	// Don't use winrm.DefaultParameters here because of concurrency issues
-	params := NewParameters("PT60S", "en-US", 153600)
+	params := winrm.NewParameters("PT60S", "en-US", 153600)
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
 	params.RequestOptions = map[string]string{
 		"WINRS_CODEPAGE":          "65001",
