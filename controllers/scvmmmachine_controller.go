@@ -281,11 +281,15 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		return &winrm.DirectCommand{}, err
 	}
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
-	params := winrm.DefaultParameters
+	// Don't use winrm.DefaultParameters here because of concurrency issues
+	params := NewParameters("PT60S", "en-US", 153600)
 	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
-	params.RequestOptions["WINRS_CONSOLEMODE_STDIN"] = "FALSE"
-	params.RequestOptions["WINRS_SKIP_CMD_SHELL"] = "TRUE"
+	params.RequestOptions = map[string]string{
+		"WINRS_CODEPAGE":          "65001",
+		"WINRS_NOPROFILE":         "TRUE",
+		"WINRS_CONSOLEMODE_STDIN": "FALSE",
+		"WINRS_SKIP_CMD_SHELL":    "TRUE",
+	}
 
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)
