@@ -1,12 +1,12 @@
-param($vmname, $isopath)
+param($id, $isopath)
 try {
-  $vm = Get-SCVirtualMachine -Name $vmname
+  $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
-    throw "Virtual Machine $vmname not found"
+    throw "Virtual Machine $id not found"
   }
   $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | Where-Object { $_.ISO.SharePath -eq $isopath } | select -first 1
   if (-not $DVDDrive) {
-    throw "Isofile $isopath not connected to $vmname"
+    throw "Isofile $isopath not connected to $id $($vm.name)"
   }
   $ISO = $DVDDrive.ISO
   Remove-SCISO -ISO $ISO | out-null

@@ -1,6 +1,6 @@
-param($vmname)
+param($id)
 try {
-  $vm = Stop-SCVirtualMachine -VM $vmname -RunAsynchronously
+  $vm = Stop-SCVirtualMachine -ID $id -RunAsynchronously
   return VMToJson $vm "Stopping"
 } catch {
   ErrorToJson 'Stop VM' $_

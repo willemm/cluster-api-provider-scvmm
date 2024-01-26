@@ -1,10 +1,10 @@
-param($vmname)
+param($id)
 try {
-  $vm = Get-SCVirtualMachine -Name $vmname
+  $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
-    return @{ Message = "VM $($vmname) not found" } | convertto-json
+    return @{ Message = "VM $($id) not found" } | convertto-json
   }
-  Read-SCVirtualMachine -vm $vm -RunAsynchronously | out-null
+  Read-SCVirtualMachine -vm $vm | out-null
   return VMToJson $vm
 } catch {
   ErrorToJson 'Get VM' $_

@@ -27,5 +27,7 @@ if ($vm.VMId -ne $null) { $vmjson.VMId = "$($vm.VMId)" }
 if ($vm.AvailabilitySetNames -ne $null) { $vmjson.AvailabilitySetNames = $vm.AvailabilitySetNames }
 if ($vm.CreationTime -ne $null) { $vmjson.CreationTime = $vm.CreationTime.ToString('o') }
 if ($vm.ModifiedTime -ne $null) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToString('o') }
+if ($vm.Tag -ne $null) { $vmjson.Tag = "$($vm.Tag)" }
+if ($vm.CustomProperty -ne $null) { $vmjson.CustomProperty = $vm.CustomProperty }
 if ($message) { $vmjson.Message = $message }
 $vmjson | convertto-json -Depth 2 -Compress

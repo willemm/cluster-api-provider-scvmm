@@ -1,4 +1,4 @@
-param($vmname, $isopath)
+param($id, $isopath)
 try {
   $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
   if (-not $shr) {
@@ -10,9 +10,9 @@ try {
   if (-not $ISO) {
     throw "Isofile $isopath not found"
   }
-  $vm = Get-SCVirtualMachine -Name $vmname
+  $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
-    throw "Virtual Machine $vmname not found"
+    throw "Virtual Machine with ID $id not found"
   }
   $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | select -first 1
   if ($DVDDrive.ISO) {

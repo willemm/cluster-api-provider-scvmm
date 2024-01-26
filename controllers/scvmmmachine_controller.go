@@ -116,6 +116,8 @@ type VMResult struct {
 	Id                   string
 	VMId                 string
 	AvailabilitySetNames []string
+	Tag                  string
+	CustomProperty       map[string]string
 	Error                string
 	ScriptErrors         string
 	Message              string
@@ -654,11 +656,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				memoryBuffer = *spec.DynamicMemory.BufferPercentage
 			}
 		}
-		custompropertyjson, err := json.Marshal(spec.CustomProperty)
-		if err != nil {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
-		}
-		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s' -CustomProperty '%s' -Tag '%s'",
+		vm, err = sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
 			escapeSingleQuotes(spec.Cloud),
 			escapeSingleQuotes(spec.HostGroup),
 			escapeSingleQuotes(vmName),
@@ -679,8 +677,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			escapeSingleQuotes(spec.OperatingSystem),
 			escapeSingleQuotes(domain),
 			escapeSingleQuotes(spec.AvailabilitySet),
-			escapeSingleQuotes(string(custompropertyjson)),
-			escapeSingleQuotes(spec.Tag),
 		)
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
@@ -754,6 +750,17 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
 	}
 
+	if vm.Tag != scvmmMachine.Spec.Tag || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+		custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
+		if err != nil {
+			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to set vm properties")
+		}
+		vm, err = sendWinrmCommand(log, cmd, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id),
+			escapeSingleQuotes(string(custompropertyjson)),
+			escapeSingleQuotes(scvmmMachine.Spec.Tag),
+		)
+	}
 	isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 	if vm.Status == "PowerOff" {
 		addiso := true
@@ -792,8 +799,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 				if err != nil {
 					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
 				}
-				vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -VMName '%s' -Disks '%s'",
-					escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -ID '%s' -Disks '%s'",
+					escapeSingleQuotes(scvmmMachine.Spec.Id),
 					escapeSingleQuotes(string(diskjson)))
 				if err != nil {
 					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
@@ -849,8 +856,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 					return ctrl.Result{}, err
 				}
 				log.V(1).Info("Call AddIsoToVM")
-				vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -VMName '%s' -ISOPath '%s'",
-					escapeSingleQuotes(scvmmMachine.Spec.VMName),
+				vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -ID '%s' -ISOPath '%s'",
+					escapeSingleQuotes(scvmmMachine.Spec.Id),
 					escapeSingleQuotes(isoPath))
 				if err != nil {
 					return ctrl.Result{}, errors.Wrap(err, "Failed to add iso to vm")
@@ -882,8 +889,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			}
 		}
 		log.V(1).Info("Call StartVM")
-		vm, err = sendWinrmCommand(log, cmd, "StartVM -VMName '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.VMName))
+		vm, err = sendWinrmCommand(log, cmd, "StartVM -ID '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
 		}
@@ -924,8 +931,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	if vm.IPv4Addresses == nil || vm.Hostname == "" {
 		log.V(1).Info("Call ReadVM")
-		vm, err = sendWinrmCommand(log, cmd, "ReadVM -VMName '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.VMName))
+		vm, err = sendWinrmCommand(log, cmd, "ReadVM -ID '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "Failed to read vm")
 		}
@@ -943,6 +950,19 @@ type VmDiskElem struct {
 	SizeMB  int64  `json:"sizeMB"`
 	VHDisk  string `json:"vhDisk,omitempty"`
 	Dynamic bool   `json:"dynamic"`
+}
+
+func equalStringMap(source, target map[string]string) bool {
+	for key, sourcevalue := range source {
+		targetvalue, ok := target[key]
+		if !ok {
+			return false
+		}
+		if sourcevalue != targetvalue {
+			return false
+		}
+	}
+	return true
 }
 
 func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
@@ -997,8 +1017,8 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	defer cmd.Close()
 
 	log.V(1).Info("Call RemoveVM")
-	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -VMName '%s'",
-		escapeSingleQuotes(scvmmMachine.Spec.VMName))
+	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -ID '%s'",
+		escapeSingleQuotes(scvmmMachine.Spec.Id))
 	if err != nil {
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to delete VM")
 	}

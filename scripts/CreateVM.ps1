@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain, $availabilityset, $customproperty, $tag)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain, $availabilityset)
 try {
   $generation = 1
   if ($vmtemplate) {
@@ -75,19 +75,6 @@ try {
   $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
   Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID 0 -VMNetwork $VMNetwork -VMSubnet $VMSubnet
-
-  if ($customproperty) {
-    $properties = $customproperty | ConvertFrom-Json
-    foreach ($prop in $properties.keys) {
-      $cp = Get-SCCustomProperty -Name $prop
-      if ($cp) {
-        Set-SCCustomPropertyValue -JobGroup $JobGroupID -CustomProperty $cp -Value $properties[$prop]
-      }
-    }
-  }
-  if ($tag) {
-    Set-SCVirtualMachine -JobGroup $JobGroupID -Tag $tag
-  }
 
   $vmargs = @{
     Name = "$vmname"
