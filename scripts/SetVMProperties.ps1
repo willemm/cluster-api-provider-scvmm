@@ -6,18 +6,22 @@ try {
   }
 
   if ($tag) {
-    Set-SCVirtualMachine -VM $vm -Tag $tag -RunAsynchronously -ErrorAction Stop
+    Set-SCVirtualMachine -VM $vm -Tag $tag -RunAsynchronously -ErrorAction Stop | Out-Null
   }
   if ($customproperty) {
     $properties = $customproperty | ConvertFrom-Json
-    foreach ($prop in $properties.keys) {
-      $cp = Get-SCCustomProperty -Name $prop
-      if ($cp) {
-        Set-SCCustomPropertyValue -InputObject $vm -CustomProperty $cp -Value $properties[$prop] -RunAsynchronously -ErrorAction Stop
+    if ($properties) {
+      foreach ($prop in ($properties | Get-Member -Type NoteProperty).Name) {
+	$cp = Get-SCCustomProperty -Name $prop
+	if (-not $cp) {
+	  throw "Custom Property $prop not found"
+	}
+	if ($cp) {
+	  Set-SCCustomPropertyValue -InputObject $vm -CustomProperty $cp -Value $properties.$prop -RunAsynchronously | Out-Null
+	}
       }
     }
   }
-
   return VMToJson $vm "Setting Properties"
 } catch {
   ErrorToJson 'Create VM' $_
