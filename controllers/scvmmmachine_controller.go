@@ -944,9 +944,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
-	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
 	log.V(1).Info("Done")
-	return ctrl.Result{}, nil
+	return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmRunning, VmRunningReason, "VM %s up and running", vm.Name)
 }
 
 type VmDiskElem struct {
