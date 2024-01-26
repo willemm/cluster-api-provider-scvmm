@@ -750,7 +750,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
 	}
 
-	if vm.Tag != scvmmMachine.Spec.Tag || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+	if (vm.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 		log.V(1).Info("Call SetVMProperties")
 		custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
 		if err != nil {
@@ -944,8 +944,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
+	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
 	log.V(1).Info("Done")
-	return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, nil, VmRunning, VmRunningReason, "VM %s up and running", vm.Name)
+	return ctrl.Result{}, nil
 }
 
 type VmDiskElem struct {
