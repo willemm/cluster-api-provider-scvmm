@@ -751,6 +751,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 
 	if vm.Tag != scvmmMachine.Spec.Tag || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+		log.V(1).Info("Call SetVMProperties")
 		custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
 		if err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to set vm properties")
@@ -760,6 +761,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			escapeSingleQuotes(string(custompropertyjson)),
 			escapeSingleQuotes(scvmmMachine.Spec.Tag),
 		)
+		log.V(1).Info("SetVMProperties result", "vm", vm)
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Setting properties")
 	}
 	isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 	if vm.Status == "PowerOff" {
