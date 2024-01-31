@@ -39,13 +39,22 @@ spec:
           spec:
             description: ScvmmNamePoolSpec defines the desired state of ScvmmNamePool
             properties:
-              vmNames:
+              vmNameRanges:
                 description: VMNames is the list of VM name ranges in this pool
                 items:
-                  type: string
+                  properties:
+                    end:
+                      description: End of name range
+                      type: string
+                    start:
+                      description: Start of name range
+                      type: string
+                  required:
+                  - start
+                  type: object
                 type: array
             required:
-            - vmNames
+            - vmNameRanges
             type: object
           status:
             description: ScvmmNamePoolStatus defines the observed state of ScvmmNamePool

@@ -25,7 +25,15 @@ import (
 // ScvmmNamePoolSpec defines the desired state of ScvmmNamePool
 type ScvmmNamePoolSpec struct {
 	// VMNames is the list of VM name ranges in this pool
-	VMNames []string `json:"vmNames"`
+	VMNameRanges []VmNameRange `json:"vmNameRanges"`
+}
+
+type VmNameRange struct {
+	// Start of name range
+	Start string `json:"start"`
+	// End of name range
+	// +optional
+	End string `json:"end,omitempty"`
 }
 
 // ScvmmNamePoolStatus defines the observed state of ScvmmNamePool

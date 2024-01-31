@@ -596,10 +596,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	}
 	defer cmd.Close()
 	var vm VMResult
-	if scvmmMachine.Spec.VMName != "" || scvmmMachine.Spec.Id != "" {
-		log.V(1).Info("Running GetVM", "VMName", scvmmMachine.Spec.VMName, "Id", scvmmMachine.Spec.Id)
-		vm, err = sendWinrmCommand(log, cmd, "GetVM -VMName '%s' -Id '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.VMName),
+	if scvmmMachine.Spec.Id != "" {
+		log.V(1).Info("Running GetVM", "Id", scvmmMachine.Spec.Id)
+		vm, err = sendWinrmCommand(log, cmd, "GetVM -Id '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		if err != nil {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
@@ -612,23 +611,20 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.V(1).Info("GetVM result", "vm", vm)
 	}
 	if vm.Id == "" {
-		vmName := scvmmMachine.Spec.VMName
-		if vmName == "" {
-			log.V(1).Info("Call GenerateVMName")
-			newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
-			if err != nil {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
-			}
-			log.V(1).Info("GenerateVMName result", "newspec", newspec)
-			if newspec.Error != "" {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-			}
-			if newspec.VMName == "" {
-				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-			}
-			vmName = newspec.VMName
-		}
 		spec := scvmmMachine.Spec
+		vmName := spec.VMName
+		if vmName == "" {
+			if spec.VMNameFromPool != nil {
+				vmName, err := r.generateVMName(ctx, log, patchHelper, scvmmMachine)
+				if err != nil {
+					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
+				}
+				scvmmMachine.Spec.VMName = vmName
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
+			} else {
+				vmName = scvmmMachine.ObjectMeta.Name
+			}
+		}
 		log.V(1).Info("Call CreateVM")
 		diskjson, err := makeDisksJSON(spec.Disks)
 		if err != nil {
@@ -710,45 +706,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-
-	if strings.HasPrefix(vm.Message, "VMName may be taken") {
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Waiting for vmname clash resolve")
-	}
-	if strings.HasPrefix(vm.Message, "VMName is taken") {
-		log.V(1).Info("GetVM claims vmname is taken", "message", vm.Message)
-		scvmmMachine.Spec.VMName = ""
-	}
-	if scvmmMachine.Spec.VMName == "" {
-		log.V(1).Info("Call GenerateVMName")
-		newspec, err := sendWinrmSpecCommand(log, cmd, "GenerateVMName", scvmmMachine)
-		if err != nil {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
-		}
-		log.V(1).Info("GenerateVMName result", "newspec", newspec)
-		if newspec.Error != "" {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-		}
-		if newspec.VMName == "" {
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname: "+newspec.Message)
-		}
-		scvmmMachine.Spec.VMName = newspec.VMName
-	}
-	if scvmmMachine.Spec.VMName != vm.Name {
-		log.V(1).Info("Call RenameVM")
-		vm, err = sendWinrmCommand(log, cmd, "RenameVM -VMName '%s' -Id '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.VMName),
-			escapeSingleQuotes(scvmmMachine.Spec.Id))
-		if err != nil {
-			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "RenameVM", "%v", err)
-			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed change vmname")
-		}
-		if vm.Error != "" {
-			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "RenameVM", "%s", vm.Error)
-			return ctrl.Result{}, fmt.Errorf("failed to rename VM: %s", vm.Error)
-		}
-		log.V(1).Info("RenameVM result", "vm", vm)
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Changing vmname")
-	}
 
 	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 		log.V(1).Info("Call SetVMProperties")
@@ -980,6 +937,76 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 		diskarr[i].Dynamic = d.Dynamic
 	}
 	return json.Marshal(diskarr)
+}
+
+func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	// Fetch the instance
+	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
+	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
+	scvmmNamePool := &infrav1.ScvmmNamePool{}
+	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
+		return "", err
+	}
+	var seen map[string]bool
+	for _, n := range scvmmNamePool.Status.VMNames {
+		seen[n.VMName] = true
+	}
+	for _, nameRange := range scvmmNamePool.Spec.VMNameRanges {
+		candidate := nameRange.Start
+		for {
+			if !seen[candidate] {
+				return r.claimVMNameInPool(ctx, log, patchHelper, scvmmNamePool, candidate, scvmmMachine)
+			}
+			candidate = incrementString(candidate)
+			if nameRange.End == "" || candidate >= nameRange.End {
+				break
+			}
+		}
+	}
+
+	return "", fmt.Errorf("All vmnames in range %s claimed", poolName.Name)
+}
+
+// Increment a string as if it's a number, digits remain digits and letters remain letters.
+// Basically increments the last character as either a digit or letter, and rollovers carry
+func incrementString(str string) string {
+	runes := []rune(str)
+carry:
+	for i := len(runes) - 1; i >= 0; i-- {
+		r := runes[i]
+		switch {
+		case '0' <= r && r < '9':
+			fallthrough
+		case 'a' <= r && r < 'z':
+			fallthrough
+		case 'A' <= r && r < 'Z':
+			runes[i] = r + 1
+			break carry
+		case r == '9':
+			runes[i] = '0'
+		case r == 'z':
+			runes[i] = 'a'
+		case r == 'Z':
+			runes[i] = 'A'
+		}
+	}
+	return string(runes)
+}
+
+func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
+		VMName: vmName,
+		Owner: &corev1.TypedLocalObjectReference{
+			APIGroup: &infrav1.GroupVersion.Group,
+			Kind:     "ScvmmMachine",
+			Name:     scvmmMachine.ObjectMeta.Name,
+		},
+	})
+	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
+		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
+		return "", err
+	}
+	return vmName, nil
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
