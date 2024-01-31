@@ -38,6 +38,9 @@ type ScvmmMachineSpec struct {
 	// Name of the VM
 	// +optional
 	VMName string `json:"vmName,omitempty"`
+	// Pool to get VM name from
+	// +optional
+	VMNameFromPool *corev1.LocalObjectReference `json:"vmNameFromPool,omitempty"`
 	// VM template to use
 	// +optional
 	VMTemplate string `json:"vmTemplate,omitempty"`
@@ -229,7 +232,8 @@ type ScvmmMachineList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ScvmmMachine{}, &ScvmmMachineList{})
+	//SchemeBuilder.Register(&ScvmmMachine{}, &ScvmmMachineList{})
+	objectTypes = append(objectTypes, &ScvmmMachine{}, &ScvmmMachineList{})
 }
 
 func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {

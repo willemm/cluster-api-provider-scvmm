@@ -86,5 +86,6 @@ type ScvmmClusterList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ScvmmCluster{}, &ScvmmClusterList{})
+	//SchemeBuilder.Register(&ScvmmCluster{}, &ScvmmClusterList{})
+	objectTypes = append(objectTypes, &ScvmmCluster{}, &ScvmmClusterList{})
 }

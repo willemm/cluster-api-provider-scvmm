@@ -87,5 +87,6 @@ type ScvmmProviderList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ScvmmProvider{}, &ScvmmProviderList{})
+	//SchemeBuilder.Register(&ScvmmProvider{}, &ScvmmProviderList{})
+	objectTypes = append(objectTypes, &ScvmmProvider{}, &ScvmmProviderList{})
 }

@@ -289,6 +289,17 @@ spec:
                       vmName:
                         description: Name of the VM
                         type: string
+                      vmNameFromPool:
+                        description: Pool to get VM name from
+                        properties:
+                          name:
+                            description: |-
+                              Name of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
                       vmNetwork:
                         description: Virtual Network identifier
                         type: string

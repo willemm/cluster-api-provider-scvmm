@@ -47,7 +47,8 @@ type ScvmmMachineTemplateList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ScvmmMachineTemplate{}, &ScvmmMachineTemplateList{})
+	//SchemeBuilder.Register(&ScvmmMachineTemplate{}, &ScvmmMachineTemplateList{})
+	objectTypes = append(objectTypes, &ScvmmMachineTemplate{}, &ScvmmMachineTemplateList{})
 }
 
 // ScvmmMachineTemplateResource describes the data needed to create a ScvmmMachine from a template
