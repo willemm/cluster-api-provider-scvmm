@@ -1028,7 +1028,9 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log log
 	}
 	var vmNames []infrav1.VmPoolName
 	for _, n := range scvmmNamePool.Status.VMNames {
-		if n.Owner != owner {
+		if n.Owner.APIGroup != owner.APIGroup ||
+			n.Owner.Kind != owner.Kind ||
+			n.Owner.Name != owner.Name {
 			vmNames = append(vmNames, n)
 		}
 	}
