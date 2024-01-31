@@ -472,6 +472,8 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command str
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines/finalizers,verbs=update
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmproviders,verbs=get;list;watch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmnamepools,verbs=get;list;watch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmnamepools/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events;,verbs=create;patch
@@ -615,7 +617,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		vmName := spec.VMName
 		if vmName == "" {
 			if spec.VMNameFromPool != nil {
-				vmName, err := r.generateVMName(ctx, log, patchHelper, scvmmMachine)
+				vmName, err := r.generateVMName(ctx, log, scvmmMachine)
 				if err != nil {
 					return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
 				}
@@ -939,7 +941,7 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 	return json.Marshal(diskarr)
 }
 
-func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Logger, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	// Fetch the instance
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
@@ -955,7 +957,7 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Lo
 		candidate := nameRange.Start
 		for {
 			if !seen[candidate] {
-				return r.claimVMNameInPool(ctx, log, patchHelper, scvmmNamePool, candidate, scvmmMachine)
+				return r.claimVMNameInPool(ctx, log, scvmmNamePool, candidate, scvmmMachine)
 			}
 			candidate = incrementString(candidate)
 			if nameRange.End == "" || candidate >= nameRange.End {
@@ -993,7 +995,7 @@ carry:
 	return string(runes)
 }
 
-func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
 		VMName: vmName,
 		Owner: &corev1.TypedLocalObjectReference{
@@ -1002,6 +1004,10 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 			Name:     scvmmMachine.ObjectMeta.Name,
 		},
 	})
+	patchHelper, err := patch.NewHelper(scvmmNamePool, r)
+	if err != nil {
+		return "", errors.Wrap(err, "Get patchhelper")
+	}
 	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return "", err
@@ -1009,7 +1015,7 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 	return vmName, nil
 }
 
-func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
+func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log logr.Logger, scvmmMachine *infrav1.ScvmmMachine) error {
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
@@ -1028,6 +1034,10 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log log
 		}
 	}
 	scvmmNamePool.Status.VMNames = vmNames
+	patchHelper, err := patch.NewHelper(scvmmNamePool, r)
+	if err != nil {
+		return errors.Wrap(err, "Get patchhelper")
+	}
 	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return err
@@ -1101,7 +1111,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		}
 		if scvmmMachine.Spec.VMNameFromPool != nil {
 			log.V(1).Info("Remove namepool reference")
-			if err := r.removeVMNameInPool(ctx, log, patchHelper, scvmmMachine); err != nil {
+			if err := r.removeVMNameInPool(ctx, log, scvmmMachine); err != nil {
 				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 5, err, VmCreated, VmFailedReason, "Failed to remove namepool entry")
 			}
 		}
