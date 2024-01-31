@@ -949,7 +949,7 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Lo
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
 		return "", err
 	}
-	var seen map[string]bool
+	seen := make(map[string]bool)
 	for _, n := range scvmmNamePool.Status.VMNames {
 		seen[n.VMName] = true
 	}
