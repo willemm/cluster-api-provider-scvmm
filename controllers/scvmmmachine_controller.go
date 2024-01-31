@@ -1009,6 +1009,32 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 	return vmName, nil
 }
 
+func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
+	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
+	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
+	scvmmNamePool := &infrav1.ScvmmNamePool{}
+	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
+		return err
+	}
+	owner := &corev1.TypedLocalObjectReference{
+		APIGroup: &infrav1.GroupVersion.Group,
+		Kind:     "ScvmmMachine",
+		Name:     scvmmMachine.ObjectMeta.Name,
+	}
+	var vmNames []infrav1.VmPoolName
+	for _, n := range scvmmNamePool.Status.VMNames {
+		if n.Owner != owner {
+			vmNames = append(vmNames, n)
+		}
+	}
+	scvmmNamePool.Status.VMNames = vmNames
+	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
+		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
+		return err
+	}
+	return nil
+}
+
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
@@ -1071,6 +1097,12 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 			log.V(1).Info("RemoveADComputer Result", "vm", vm)
 			if vm.Error != "" {
 				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 60, nil, VmCreated, VmFailedReason, "Failed to remove AD entry: %s", vm.Error)
+			}
+		}
+		if scvmmMachine.Spec.VMNameFromPool != nil {
+			log.V(1).Info("Remove namepool reference")
+			if err := r.removeVMNameInPool(ctx, log, patchHelper, scvmmMachine); err != nil {
+				return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 5, err, VmCreated, VmFailedReason, "Failed to remove namepool entry")
 			}
 		}
 		log.V(1).Info("Machine is removed, remove finalizer")
