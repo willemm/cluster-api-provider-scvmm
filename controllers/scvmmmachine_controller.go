@@ -1015,20 +1015,20 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 
 func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log logr.Logger, scvmmMachine *infrav1.ScvmmMachine) error {
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
-	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "scvmmmachine", scvmmMachine)
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	owner := &corev1.TypedLocalObjectReference{
+	owner := corev1.TypedLocalObjectReference{
 		APIGroup: &infrav1.GroupVersion.Group,
 		Kind:     "ScvmmMachine",
 		Name:     scvmmMachine.ObjectMeta.Name,
 	}
+	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "owner", owner, "names", scvmmNamePool.Status.VMNames)
 	var vmNames []infrav1.VmPoolName
 	for _, n := range scvmmNamePool.Status.VMNames {
-		if n.Owner.APIGroup != owner.APIGroup ||
+		if *n.Owner.APIGroup != *owner.APIGroup ||
 			n.Owner.Kind != owner.Kind ||
 			n.Owner.Name != owner.Name {
 			vmNames = append(vmNames, n)
