@@ -996,14 +996,16 @@ carry:
 }
 
 func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	owner := &corev1.TypedLocalObjectReference{
+		APIGroup: &infrav1.GroupVersion.Group,
+		Kind:     "ScvmmMachine",
+		Name:     scvmmMachine.ObjectMeta.Name,
+	}
 	scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
 		VMName: vmName,
-		Owner: &corev1.TypedLocalObjectReference{
-			APIGroup: &infrav1.GroupVersion.Group,
-			Kind:     "ScvmmMachine",
-			Name:     scvmmMachine.ObjectMeta.Name,
-		},
+		Owner:  owner,
 	})
+	log.V(1).Info("Registering vmname in pool status", "namepool", scvmmNamePool, "name", vmName, "owner", owner)
 	patchHelper, err := patch.NewHelper(scvmmNamePool, r)
 	if err != nil {
 		return "", errors.Wrap(err, "Get patchhelper")
@@ -1017,10 +1019,11 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 
 func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log logr.Logger, scvmmMachine *infrav1.ScvmmMachine) error {
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
+	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "scvmmmachine", scvmmMachine)
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
-		return err
+		return client.IgnoreNotFound(err)
 	}
 	owner := &corev1.TypedLocalObjectReference{
 		APIGroup: &infrav1.GroupVersion.Group,
