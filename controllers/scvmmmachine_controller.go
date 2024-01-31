@@ -1006,11 +1006,7 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr
 		Owner:  owner,
 	})
 	log.V(1).Info("Registering vmname in pool status", "namepool", scvmmNamePool, "name", vmName, "owner", owner)
-	patchHelper, err := patch.NewHelper(scvmmNamePool, r)
-	if err != nil {
-		return "", errors.Wrap(err, "Get patchhelper")
-	}
-	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
+	if err := r.Client.Update(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return "", err
 	}
@@ -1037,11 +1033,7 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log log
 		}
 	}
 	scvmmNamePool.Status.VMNames = vmNames
-	patchHelper, err := patch.NewHelper(scvmmNamePool, r)
-	if err != nil {
-		return errors.Wrap(err, "Get patchhelper")
-	}
-	if err := patchHelper.Patch(ctx, scvmmNamePool); err != nil {
+	if err := r.Client.Update(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return err
 	}
