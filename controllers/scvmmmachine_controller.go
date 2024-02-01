@@ -405,21 +405,21 @@ func createWinrmPowershell(provider *infrav1.ScvmmProviderSpec, log logr.Logger)
 }
 
 func sendWinrmPing(log logr.Logger, cmd *winrm.DirectCommand, funcName string) error {
-	defer winrmTimer("Ping")()
+	defer winrmTimer(funcName)()
 	log.V(1).Info("Sending WinRM ping")
 	if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
-		winrmErrors.WithLabelValues("Ping").Inc()
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return errors.Wrap(err, "Sending powershell functions post")
 	}
 	log.V(1).Info("Getting WinRM ping")
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
-		winrmErrors.WithLabelValues("Ping").Inc()
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return errors.Wrap(err, "Reading powershell functions post")
 	}
 	log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
 	if strings.TrimSpace(string(stdout)) != "OK" {
-		winrmErrors.WithLabelValues("Ping").Inc()
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
 	}
 	return nil
