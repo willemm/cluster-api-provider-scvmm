@@ -30,7 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -92,7 +95,37 @@ type ScvmmMachineReconciler struct {
 }
 
 // Are global variables bad? Dunno, this one seems fine because it caches an env var
-var ExtraDebug bool = false
+var (
+	ExtraDebug bool = false
+	winrmTotal      = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "winrm",
+			Subsystem: "calls",
+			Name:      "total",
+			Help:      "Number of winrm calls made",
+		},
+		[]string{"function"},
+	)
+	winrmErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "winrm",
+			Subsystem: "calls",
+			Name:      "errors_total",
+			Help:      "Number of winrm calls made that returned an error",
+		},
+		[]string{"function"},
+	)
+	winrmDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "winrm",
+			Subsystem: "calls",
+			Name:      "duration_seconds",
+			Help:      "Duration of winrm call in seconds",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"function"},
+	)
+)
 
 // The result (passed as json) of a call to Scvmm scripts
 type VMResult struct {
@@ -303,31 +336,39 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM shell")
 	}
+	winrmTotal.WithLabelValues("CreateShell").Inc()
 	shell, err := client.CreateShell()
 	if err != nil {
+		winrmErrors.WithLabelValues("CreateShell").Inc()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm shell")
 	}
 	if ExtraDebug {
 		log.V(1).Info("Starting WinRM powershell.exe")
 	}
+	winrmTotal.WithLabelValues("powershell.exe").Inc()
 	cmd, err := shell.ExecuteDirect("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
 	if err != nil {
+		winrmErrors.WithLabelValues("powershell.exe").Inc()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm powershell")
 	}
 	if ExtraDebug {
+		winrmTotal.WithLabelValues("Ping").Inc()
 		log.V(1).Info("Sending WinRM ping")
 		if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
+			winrmErrors.WithLabelValues("Ping").Inc()
 			cmd.Close()
 			return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
 		}
 		log.V(1).Info("Getting WinRM ping")
 		stdout, stderr, _, _, err := cmd.ReadOutput()
 		if err != nil {
+			winrmErrors.WithLabelValues("Ping").Inc()
 			cmd.Close()
 			return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
 		}
 		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
 		if strings.TrimSpace(string(stdout)) != "OK" {
+			winrmErrors.WithLabelValues("Ping").Inc()
 			cmd.Close()
 			return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
 		}
@@ -335,21 +376,27 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM function script")
 	}
+	winrmTotal.WithLabelValues("SendFunctions").Inc()
 	if err := cmd.SendInput(functionScript, false); err != nil {
+		winrmErrors.WithLabelValues("SendFunctions").Inc()
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions")
 	}
 	if ExtraDebug {
 		log.V(1).Info("Calling WinRM function ConnectSCVMM")
 	}
+	winrmTotal.WithLabelValues("ConnectSCVMM").Inc()
 	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s'", provider.ScvmmHost); err != nil {
+		winrmErrors.WithLabelValues("ConnectSCVMM").Inc()
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
 	}
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM ping")
 	}
+	winrmTotal.WithLabelValues("Ping").Inc()
 	if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
+		winrmErrors.WithLabelValues("Ping").Inc()
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
 	}
@@ -358,6 +405,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	}
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
+		winrmErrors.WithLabelValues("Ping").Inc()
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
 	}
@@ -365,15 +413,17 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
 	}
 	if strings.TrimSpace(string(stdout)) != "OK" {
+		winrmErrors.WithLabelValues("Ping").Inc()
 		cmd.Close()
 		return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
 	}
 	return cmd, nil
 }
 
-func getWinrmResult(cmd *winrm.DirectCommand, log logr.Logger) (VMResult, error) {
+func getWinrmResult(cmd *winrm.DirectCommand, funcName string, log logr.Logger) (VMResult, error) {
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMResult{}, errors.Wrap(err, "Failed to read output")
 	}
 	if ExtraDebug {
@@ -381,8 +431,12 @@ func getWinrmResult(cmd *winrm.DirectCommand, log logr.Logger) (VMResult, error)
 	}
 	var res VMResult
 	if err := json.Unmarshal(stdout, &res); err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMResult{}, errors.Wrap(err, "Decode result error: "+string(stdout)+
 			"  (stderr="+string(stderr)+")")
+	}
+	if res.Error != "" {
+		winrmErrors.WithLabelValues(funcName).Inc()
 	}
 	return res, nil
 }
@@ -392,15 +446,27 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.DirectCommand, command string,
 		log.V(1).Info("Sending WinRM command", "command", command, "args", args,
 			"cmdline", fmt.Sprintf(command+"\n", args...))
 	}
+	funcName, _, _ := strings.Cut(command, " ")
+	winrmTotal.WithLabelValues(funcName).Inc()
+	defer winrmTimer(funcName)()
 	if err := cmd.SendCommand(command, args...); err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMResult{}, err
 	}
-	return getWinrmResult(cmd, log)
+	return getWinrmResult(cmd, funcName, log)
 }
 
-func getWinrmSpecResult(cmd *winrm.DirectCommand, log logr.Logger) (VMSpecResult, error) {
+func winrmTimer(funcName string) func() {
+	start := time.Now()
+	return func() {
+		winrmDuration.WithLabelValues(funcName).Observe(time.Since(start).Seconds())
+	}
+}
+
+func getWinrmSpecResult(cmd *winrm.DirectCommand, funcName string, log logr.Logger) (VMSpecResult, error) {
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMSpecResult{}, errors.Wrap(err, "Failed to read output")
 	}
 	if ExtraDebug {
@@ -408,8 +474,12 @@ func getWinrmSpecResult(cmd *winrm.DirectCommand, log logr.Logger) (VMSpecResult
 	}
 	var res VMSpecResult
 	if err := json.Unmarshal(stdout, &res); err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMSpecResult{}, errors.Wrap(err, "Decode result error: "+string(stdout)+
 			"  (stderr="+string(stderr)+")")
+	}
+	if res.Error != "" {
+		winrmErrors.WithLabelValues(funcName).Inc()
 	}
 	return res, nil
 }
@@ -459,12 +529,16 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command str
 				escapeSingleQuotes(string(specjson)),
 				escapeSingleQuotes(string(metajson))))
 	}
+	funcName, _, _ := strings.Cut(command, " ")
+	winrmTotal.WithLabelValues(funcName).Inc()
+	defer winrmTimer(funcName)()
 	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'",
 		escapeSingleQuotes(string(specjson)),
 		escapeSingleQuotes(string(metajson))); err != nil {
+		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMSpecResult{ScriptErrors: "Error executing command"}, errors.Wrap(err, "sending command")
 	}
-	return getWinrmSpecResult(cmd, log)
+	return getWinrmSpecResult(cmd, funcName, log)
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmmachines,verbs=get;list;watch;create;update;patch;delete
@@ -592,6 +666,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
+	defer winrmTimer("session")()
 	cmd, err := createWinrmCmd(provider, log)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
@@ -1074,6 +1149,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 	}
 
 	log.Info("Doing removal of ScvmmMachine")
+	defer winrmTimer("session")()
 	cmd, err := createWinrmCmd(provider, log)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Winrm")
@@ -1248,6 +1324,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager, options cont
 	if extraDebug != "" {
 		ExtraDebug = true
 	}
+	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
 
 	clusterToScvmmMachines, err := util.ClusterToObjectsMapper(mgr.GetClient(), &infrav1.ScvmmMachineList{}, mgr.GetScheme())
 	if err != nil {
