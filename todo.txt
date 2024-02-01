@@ -1,14 +1,11 @@
 Bugs:
-v Apparently, the scvmmmachine controller needs to set the ProviderID on the node
-  (The kubeadm provider doesn't seem to be doing that)
-  . Add a runcmd at the end?  Not sure that works with all images (especially Talos)
-  . Just stick it in the kubeadm templates somehow?  (Doesn't work well with other providers)
-  v Run it remotely via the ControlPlaneEndpoint, assuming the nodename will be the hostname?
-  * It might be that this just caused one of the controlplanes to half-degrade to a workernode
-- The machinecontroller needs to watch something else for changes (machine, cluster or scvmmcluster)
-  Because now, it sometimes doesn't go on reconciling when the owner data is ready
+- Not sure, but the namepool could get out of sync with actual state.
+  It should probably update the owned list when the resource gets updated, simply by scanning all the
+  scvmmmachines in the same namespace, just to be sure.
+- Cosmetic fix: Switch from 'start' and 'end' to 'from' and 'to', just so they appear in alphabetical order?
 
 Todo:
+- ScvmmNamePool should probably have a webhook that checks for overlapping ranges
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
   . Which responsibilities is the cluster controller supposed to have?
   . Looks like at least setting the ControlPlaneEndpoint correctly
@@ -16,27 +13,16 @@ Todo:
     control plane has been initialized?
   . Easiest is probably defining it in the spec, and then using that to setup the LB
     But does the kubeadm init need the endpoint?  The kubeadm join certainly does.
+  . Should probably use a custom orchestrator script to claim the VIP for the kube-api (new-stipaddress)
+  . Claiming the ingress vip should be left to in-cluster
 - Does the cluster reconciler also have to apply a CNI networker?
   (Maybe.  There seems to be a 'cni' label on the cluster)
+  But now, we apply a CNI using argocd.
 
 - Doing kubernetes-api loadbalancing
   . MetalLB?
   . Keepalived?
   . Choice?
-
-v Add the possibility for adding more than one disk to the VM
-
-- The (reference) docker infra-provider also seems to have a watch on other resources to
-  trigger reconciliation.  Look into that and do that also
-
-- Some kind of domain join action?  Or should that be done with user-supplied user-data?
-
-- Make GenerateVMName atomic (probably works OK now because the controller is single threaded)
-  . Needs some way to set and get values from the VMMServer somewhere
-  . Alternatively, handle name clashes (currently it would create two VMs with the same name)
-  . Do we need to store the unique ID of the VM in the spec?  There's the ProviderID, maybe
-    use that to query the VM status instead of the name.  But that's currently BiosGUID, should
-    that be the VM unique ID ?
 
 - Regularly check the status of the VMs
   . What to do when somebody turns off the VM externally?
@@ -45,9 +31,24 @@ v Add the possibility for adding more than one disk to the VM
   . Think about error scenarios
 
 - Keep the WinRM powershell running (stop it after a number of seconds of inactivity)
-   (Powershell startup and module loading takes a few seconds each time)
-   . Probably use a channel to send the commands and get back the results?
-   . Needs decent error handling for reconnection and stuff
+  (Powershell startup and module loading takes a few seconds each time)
+  . Probably use a channel to send the commands and get back the results?
+  . Needs decent error handling for reconnection and stuff
+
+  * Open global channel for winrm calls
+  * A number of worker goroutines, equal to number of concurrent reconciliations setting
+  * Send winrm command + scvmmprovider ref + return channel on global winrm channel
+  * impl idea: Worker has outer and inner loop.
+    - In outer loop it waits for a command on the channel
+    - Open and initialize WinRM, defer close, enter inner loop
+      - Execute command, return result on return channel
+      - Wait for a command on the channel with a timeout
+      - If timeout, break loop
+      - When scvmmprovider ref doesn't match, break loop but keep command
+    But how does that work when there are two scvmmproviders floating around?
+    Will probably be fine unless there are reconciliations on both at the same time,
+    then it will degrade to closing the connection each time.
+    Seems like a rare case, so should be ok for now.
 
 - Better handling of external errors
 
