@@ -1,5 +1,8 @@
 param($id)
 try {
+  if (-not $id) {
+    return (@{ Message = "Removed" } | convertto-json)
+  }
   $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
     return (@{ Message = "Removed" } | convertto-json)
