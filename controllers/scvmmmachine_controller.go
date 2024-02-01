@@ -315,6 +315,33 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if err != nil {
 		return &winrm.DirectCommand{}, err
 	}
+	cmd, err := createWinrmPowershell(provider, log)
+	if err != nil {
+		return &winrm.DirectCommand{}, err
+	}
+	if ExtraDebug {
+		if err := sendWinrmPing(log, cmd); err != nil {
+			cmd.Close()
+			return &winrm.DirectCommand{}, err
+		}
+	}
+	if err := sendWinrmFunctions(log, cmd, functionScript); err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, err
+	}
+	if err := sendWinrmConnect(log, cmd, provider.ScvmmHost); err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, err
+	}
+	if err := sendWinrmPing(log, cmd); err != nil {
+		cmd.Close()
+		return &winrm.DirectCommand{}, err
+	}
+	return cmd, nil
+}
+
+func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.Client, error) {
+	defer winrmTimer("CreateConnection")()
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
 	// Don't use winrm.DefaultParameters here because of concurrency issues
 	params := winrm.NewParameters("PT60S", "en-US", 153600)
@@ -329,95 +356,91 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)
 	}
-	client, err := winrm.NewClientWithParameters(endpoint, provider.ScvmmUsername, provider.ScvmmPassword, params)
+	winrmClient, err := winrm.NewClientWithParameters(endpoint, provider.ScvmmUsername, provider.ScvmmPassword, params)
 	if err != nil {
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm client")
+		winrmErrors.WithLabelValues("CreateConnection").Inc()
+		return nil, errors.Wrap(err, "Creating winrm client")
 	}
+	return winrmClient, nil
+}
+
+func createWinrmShell(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.Shell, error) {
+	winrmClient, err := createWinrmConnection(provider, log)
+	if err != nil {
+		return nil, err
+	}
+	defer winrmTimer("CreateShell")()
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM shell")
 	}
-	winrmTotal.WithLabelValues("CreateShell").Inc()
-	shell, err := client.CreateShell()
+	shell, err := winrmClient.CreateShell()
 	if err != nil {
 		winrmErrors.WithLabelValues("CreateShell").Inc()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm shell")
+		return nil, errors.Wrap(err, "Creating winrm shell")
+	}
+	return shell, nil
+}
+
+func createWinrmPowershell(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.DirectCommand, error) {
+	shell, err := createWinrmShell(provider, log)
+	if err != nil {
+		return nil, err
 	}
 	if ExtraDebug {
 		log.V(1).Info("Starting WinRM powershell.exe")
 	}
-	winrmTotal.WithLabelValues("powershell.exe").Inc()
+	defer winrmTimer("powershell.exe")()
 	cmd, err := shell.ExecuteDirect("powershell.exe", "-NonInteractive", "-NoProfile", "-Command", "-")
 	if err != nil {
 		winrmErrors.WithLabelValues("powershell.exe").Inc()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Creating winrm powershell")
+		return nil, errors.Wrap(err, "Creating winrm powershell")
 	}
-	if ExtraDebug {
-		winrmTotal.WithLabelValues("Ping").Inc()
-		log.V(1).Info("Sending WinRM ping")
-		if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
-			winrmErrors.WithLabelValues("Ping").Inc()
-			cmd.Close()
-			return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
-		}
-		log.V(1).Info("Getting WinRM ping")
-		stdout, stderr, _, _, err := cmd.ReadOutput()
-		if err != nil {
-			winrmErrors.WithLabelValues("Ping").Inc()
-			cmd.Close()
-			return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
-		}
-		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
-		if strings.TrimSpace(string(stdout)) != "OK" {
-			winrmErrors.WithLabelValues("Ping").Inc()
-			cmd.Close()
-			return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
-		}
-	}
-	if ExtraDebug {
-		log.V(1).Info("Sending WinRM function script")
-	}
-	winrmTotal.WithLabelValues("SendFunctions").Inc()
-	if err := cmd.SendInput(functionScript, false); err != nil {
-		winrmErrors.WithLabelValues("SendFunctions").Inc()
-		cmd.Close()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions")
-	}
-	if ExtraDebug {
-		log.V(1).Info("Calling WinRM function ConnectSCVMM")
-	}
-	winrmTotal.WithLabelValues("ConnectSCVMM").Inc()
-	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s'", provider.ScvmmHost); err != nil {
-		winrmErrors.WithLabelValues("ConnectSCVMM").Inc()
-		cmd.Close()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
-	}
-	if ExtraDebug {
-		log.V(1).Info("Sending WinRM ping")
-	}
-	winrmTotal.WithLabelValues("Ping").Inc()
+	return cmd, nil
+}
+
+func sendWinrmPing(log logr.Logger, cmd *winrm.DirectCommand) error {
+	defer winrmTimer("Ping")()
+	log.V(1).Info("Sending WinRM ping")
 	if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
 		winrmErrors.WithLabelValues("Ping").Inc()
-		cmd.Close()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Sending powershell functions post")
+		return errors.Wrap(err, "Sending powershell functions post")
 	}
-	if ExtraDebug {
-		log.V(1).Info("Getting WinRM ping")
-	}
+	log.V(1).Info("Getting WinRM ping")
 	stdout, stderr, _, _, err := cmd.ReadOutput()
 	if err != nil {
 		winrmErrors.WithLabelValues("Ping").Inc()
-		cmd.Close()
-		return &winrm.DirectCommand{}, errors.Wrap(err, "Reading powershell functions post")
+		return errors.Wrap(err, "Reading powershell functions post")
 	}
-	if ExtraDebug {
-		log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
-	}
+	log.V(1).Info("Got WinRM ping", "stdout", string(stdout), "stderr", string(stderr))
 	if strings.TrimSpace(string(stdout)) != "OK" {
 		winrmErrors.WithLabelValues("Ping").Inc()
-		cmd.Close()
-		return &winrm.DirectCommand{}, errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
+		return errors.New("Powershell functions result: " + string(stdout) + " (ERR=" + string(stderr))
 	}
-	return cmd, nil
+	return nil
+}
+
+func sendWinrmFunctions(log logr.Logger, cmd *winrm.DirectCommand, functionScript []byte) error {
+	if ExtraDebug {
+		log.V(1).Info("Sending WinRM function script")
+	}
+	defer winrmTimer("SendFunctions")()
+	if err := cmd.SendInput(functionScript, false); err != nil {
+		winrmErrors.WithLabelValues("SendFunctions").Inc()
+		return errors.Wrap(err, "Sending powershell functions")
+	}
+	return nil
+}
+
+func sendWinrmConnect(log logr.Logger, cmd *winrm.DirectCommand, scvmmHost string) error {
+	defer winrmTimer("ConnectSCVMM")()
+	if ExtraDebug {
+		log.V(1).Info("Calling WinRM function ConnectSCVMM")
+	}
+	if err := cmd.SendCommand("ConnectSCVMM -Computername '%s'", scvmmHost); err != nil {
+		winrmErrors.WithLabelValues("ConnectSCVMM").Inc()
+		return errors.Wrap(err, "Sending powershell functions post")
+	}
+	return nil
 }
 
 func getWinrmResult(cmd *winrm.DirectCommand, funcName string, log logr.Logger) (VMResult, error) {
@@ -447,7 +470,6 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.DirectCommand, command string,
 			"cmdline", fmt.Sprintf(command+"\n", args...))
 	}
 	funcName, _, _ := strings.Cut(command, " ")
-	winrmTotal.WithLabelValues(funcName).Inc()
 	defer winrmTimer(funcName)()
 	if err := cmd.SendCommand(command, args...); err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
@@ -457,6 +479,7 @@ func sendWinrmCommand(log logr.Logger, cmd *winrm.DirectCommand, command string,
 }
 
 func winrmTimer(funcName string) func() {
+	winrmTotal.WithLabelValues(funcName).Inc()
 	start := time.Now()
 	return func() {
 		winrmDuration.WithLabelValues(funcName).Observe(time.Since(start).Seconds())
@@ -530,7 +553,6 @@ func sendWinrmSpecCommand(log logr.Logger, cmd *winrm.DirectCommand, command str
 				escapeSingleQuotes(string(metajson))))
 	}
 	funcName, _, _ := strings.Cut(command, " ")
-	winrmTotal.WithLabelValues(funcName).Inc()
 	defer winrmTimer(funcName)()
 	if err := cmd.SendCommand(command+" -spec '%s' -metadata '%s'",
 		escapeSingleQuotes(string(specjson)),
