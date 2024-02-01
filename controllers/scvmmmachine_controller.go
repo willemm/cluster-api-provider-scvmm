@@ -320,7 +320,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		return &winrm.DirectCommand{}, err
 	}
 	if ExtraDebug {
-		if err := sendWinrmPing(log, cmd); err != nil {
+		if err := sendWinrmPing(log, cmd, "after-powershell.exe"); err != nil {
 			cmd.Close()
 			return &winrm.DirectCommand{}, err
 		}
@@ -329,11 +329,17 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		cmd.Close()
 		return &winrm.DirectCommand{}, err
 	}
+	if ExtraDebug {
+		if err := sendWinrmPing(log, cmd, "after-SendFunctions"); err != nil {
+			cmd.Close()
+			return &winrm.DirectCommand{}, err
+		}
+	}
 	if err := sendWinrmConnect(log, cmd, provider.ScvmmHost); err != nil {
 		cmd.Close()
 		return &winrm.DirectCommand{}, err
 	}
-	if err := sendWinrmPing(log, cmd); err != nil {
+	if err := sendWinrmPing(log, cmd, "after-ConnectSCVMM"); err != nil {
 		cmd.Close()
 		return &winrm.DirectCommand{}, err
 	}
@@ -398,7 +404,7 @@ func createWinrmPowershell(provider *infrav1.ScvmmProviderSpec, log logr.Logger)
 	return cmd, nil
 }
 
-func sendWinrmPing(log logr.Logger, cmd *winrm.DirectCommand) error {
+func sendWinrmPing(log logr.Logger, cmd *winrm.DirectCommand, funcName string) error {
 	defer winrmTimer("Ping")()
 	log.V(1).Info("Sending WinRM ping")
 	if err := cmd.SendCommand("Write-Host 'OK'"); err != nil {
