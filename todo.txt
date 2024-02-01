@@ -6,6 +6,14 @@ Bugs:
 
 Todo:
 - ScvmmNamePool should probably have a webhook that checks for overlapping ranges
+
+- Handle crashing out while creating vms and stuff (currently it could try to create the same VM twice)
+
+- Add metrics, specifically how long WinRM calls take, maybe some more generic things
+  (Also maybe log how long each call takes?)
+
+- Find a way to relate log lines to each other, if there are multiple concurrent reconciliations.
+
 - What should the cluster reconciler do?  Maybe generate a kAPI vip or something?
   . Which responsibilities is the cluster controller supposed to have?
   . Looks like at least setting the ControlPlaneEndpoint correctly
