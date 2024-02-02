@@ -1044,15 +1044,23 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Lo
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
 		return "", err
 	}
+	owner := &corev1.TypedLocalObjectReference{
+		APIGroup: &infrav1.GroupVersion.Group,
+		Kind:     "ScvmmMachine",
+		Name:     scvmmMachine.ObjectMeta.Name,
+	}
 	seen := make(map[string]bool)
 	for _, n := range scvmmNamePool.Status.VMNames {
+		if ownerEquals(owner, n.Owner) {
+			return n.VMName, nil
+		}
 		seen[n.VMName] = true
 	}
 	for _, nameRange := range scvmmNamePool.Spec.VMNameRanges {
 		candidate := nameRange.Start
 		for {
 			if !seen[candidate] {
-				return r.claimVMNameInPool(ctx, log, scvmmNamePool, candidate, scvmmMachine)
+				return r.claimVMNameInPool(ctx, log, scvmmNamePool, candidate, owner)
 			}
 			candidate = incrementString(candidate)
 			if nameRange.End == "" || candidate >= nameRange.End {
@@ -1062,6 +1070,18 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, log logr.Lo
 	}
 
 	return "", fmt.Errorf("All vmnames in range %s claimed", poolName.Name)
+}
+
+func ownerEquals(left *corev1.TypedLocalObjectReference, right *corev1.TypedLocalObjectReference) bool {
+	if right == nil {
+		return left == nil
+	}
+	if left == nil {
+		return false
+	}
+	return *left.APIGroup == *right.APIGroup &&
+		left.Kind == right.Kind &&
+		left.Name == right.Name
 }
 
 // Increment a string as if it's a number, digits remain digits and letters remain letters.
@@ -1090,12 +1110,7 @@ carry:
 	return string(runes)
 }
 
-func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
-	owner := &corev1.TypedLocalObjectReference{
-		APIGroup: &infrav1.GroupVersion.Group,
-		Kind:     "ScvmmMachine",
-		Name:     scvmmMachine.ObjectMeta.Name,
-	}
+func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, log logr.Logger, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, owner *corev1.TypedLocalObjectReference) (string, error) {
 	scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
 		VMName: vmName,
 		Owner:  owner,
@@ -1115,7 +1130,7 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log log
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	owner := corev1.TypedLocalObjectReference{
+	owner := &corev1.TypedLocalObjectReference{
 		APIGroup: &infrav1.GroupVersion.Group,
 		Kind:     "ScvmmMachine",
 		Name:     scvmmMachine.ObjectMeta.Name,
@@ -1123,9 +1138,7 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, log log
 	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "owner", owner, "names", scvmmNamePool.Status.VMNames)
 	var vmNames []infrav1.VmPoolName
 	for _, n := range scvmmNamePool.Status.VMNames {
-		if *n.Owner.APIGroup != *owner.APIGroup ||
-			n.Owner.Kind != owner.Kind ||
-			n.Owner.Name != owner.Name {
+		if !ownerEquals(owner, n.Owner) {
 			vmNames = append(vmNames, n)
 		}
 	}

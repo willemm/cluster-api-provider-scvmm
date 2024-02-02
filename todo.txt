@@ -3,6 +3,9 @@ Bugs:
   It should probably update the owned list when the resource gets updated, simply by scanning all the
   scvmmmachines in the same namespace, just to be sure.
 - Cosmetic fix: Switch from 'start' and 'end' to 'from' and 'to', just so they appear in alphabetical order?
+- Sometimes an scvmmmachine claims two names in a namepool.
+  Would be fixed if the generatevmname function would check if the 'owner' already has a name in the
+  status list, and then just return that.
 
 Todo:
 - ScvmmNamePool should probably have a webhook that checks for overlapping ranges
