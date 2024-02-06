@@ -17,7 +17,6 @@ limitations under the License.
 package v1beta1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -29,7 +28,7 @@ type ScvmmClusterSpec struct {
 	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint,omitEmpty"`
 	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
 	// +optional
-	ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
+	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
 }
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster

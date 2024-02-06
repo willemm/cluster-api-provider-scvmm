@@ -98,3 +98,17 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - scvmmproviders/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - scvmmproviders/status
+  verbs:
+  - get
+  - patch
+  - update

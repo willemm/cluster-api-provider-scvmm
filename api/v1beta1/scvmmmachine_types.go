@@ -103,7 +103,7 @@ type ScvmmMachineSpec struct {
 	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
 	// Will be copied from scvmmcluster if not using cloudinit
 	// +optional
-	ProviderRef *corev1.ObjectReference `json:"providerRef,omitEmpty"`
+	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
 }
 
 type VmDisk struct {

@@ -98,13 +98,23 @@ func main() {
 	}
 	if err = (&controllers.ScvmmMachineReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmCluster"),
+		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmMachine"),
 		// Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, concurrency(machineConcurrency)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmMachine")
 		os.Exit(1)
 	}
+	if err = (&controllers.ScvmmProviderReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ScvmmProvider"),
+		// Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScvmmProvider")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
+
+	controllers.CreateWinrmWorkers(machineConcurrency + clusterConcurrency)
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

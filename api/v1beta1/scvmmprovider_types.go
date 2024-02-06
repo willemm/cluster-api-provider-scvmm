@@ -21,6 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ScvmmProviderReference struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
 // ScvmmProviderSpec defines the desired state of ScvmmProvider
 type ScvmmProviderSpec struct {
 	// Hostname of scvmm server

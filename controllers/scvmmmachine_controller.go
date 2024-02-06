@@ -23,17 +23,12 @@ import (
 	"github.com/pkg/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	// "k8s.io/apimachinery/pkg/runtime"
-	// "sigs.k8s.io/cluster-api/controllers/remote"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -48,17 +43,11 @@ import (
 
 	"k8s.io/client-go/tools/record"
 
-	// "encoding/base64"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/masterzen/winrm"
 )
 
 const (
@@ -98,34 +87,6 @@ type ScvmmMachineReconciler struct {
 // Are global variables bad? Dunno, this one seems fine because it caches an env var
 var (
 	ExtraDebug bool = false
-	winrmTotal      = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "winrm",
-			Subsystem: "calls",
-			Name:      "total",
-			Help:      "Number of winrm calls made",
-		},
-		[]string{"function"},
-	)
-	winrmErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "winrm",
-			Subsystem: "calls",
-			Name:      "errors_total",
-			Help:      "Number of winrm calls made that returned an error",
-		},
-		[]string{"function"},
-	)
-	winrmDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "winrm",
-			Subsystem: "calls",
-			Name:      "duration_seconds",
-			Help:      "Duration of winrm call in seconds",
-			Buckets:   prometheus.DefBuckets,
-		},
-		[]string{"function"},
-	)
 )
 
 // The result (passed as json) of a call to Scvmm scripts
@@ -173,40 +134,6 @@ type ScriptError struct {
 
 func (e *ScriptError) Error() string {
 	return fmt.Sprintf("%s error: %s", e.function, e.message)
-}
-
-func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
-	funcScripts := make(map[string][]byte)
-	scriptfiles, err := filepath.Glob(os.Getenv("SCRIPT_DIR") + "/*.ps1")
-	if err != nil {
-		return nil, fmt.Errorf("error scanning script dir %s: %v", os.Getenv("SCRIPT_DIR"), err)
-	}
-	for _, file := range scriptfiles {
-		name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-		content, err := ioutil.ReadFile(file)
-		if err != nil {
-			return nil, fmt.Errorf("error reading script file %s: %v", file, err)
-		}
-		funcScripts[name] = content
-	}
-	for name, content := range provider.ExtraFunctions {
-		funcScripts[name] = []byte(content)
-	}
-	var functionScripts bytes.Buffer
-	functionScripts.WriteString("$ProgressPreference = 'SilentlyContinue'\n" +
-		"$WarningPreference = 'SilentlyContinue'\n" +
-		"$VerbosePreference = 'SilentlyContinue'\n" +
-		"$InformationPreference = 'SilentlyContinue'\n" +
-		"$DebugPreference = 'SilentlyContinue'\n\n")
-	for name, value := range provider.Env {
-		functionScripts.WriteString("${env:" + name + "} = '" + escapeSingleQuotes(value) + "'\n")
-	}
-	for name, content := range funcScripts {
-		functionScripts.WriteString("\nfunction " + name + " {\n")
-		functionScripts.Write(content)
-		functionScripts.WriteString("}\n\n")
-	}
-	return functionScripts.Bytes(), nil
 }
 
 func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
@@ -476,37 +403,31 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
-	defer winrmTimer("session")()
-	cmd, err := createWinrmCmd(provider, log)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Winrm")
-	}
-	defer cmd.Close()
-	vm, err := r.getVM(log, cmd, scvmmMachine)
+	vm, err := r.getVM(log, scvmmMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if vm.Id == "" {
-		return r.createVM(ctx, log, patchHelper, cmd, scvmmMachine)
+		return r.createVM(ctx, log, patchHelper, scvmmMachine)
 	}
 	log.V(1).Info("Machine is there, fill in status")
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
 	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
-		return r.setVMProperties(ctx, log, patchHelper, cmd, scvmmMachine)
+		return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
 	}
 	if vm.Status == "PowerOff" {
-		if err := r.addVMSpec(ctx, log, patchHelper, cmd, scvmmMachine); err != nil {
+		if err := r.addVMSpec(ctx, log, patchHelper, scvmmMachine); err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
 		}
 		if vmNeedsExpandDisks(scvmmMachine, vm) {
-			return r.expandDisks(ctx, log, patchHelper, cmd, scvmmMachine)
+			return r.expandDisks(ctx, log, patchHelper, scvmmMachine)
 		}
 		isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 		if vmNeedsISO(isoPath, scvmmMachine, vm) {
-			return r.addISOToVM(ctx, log, patchHelper, cmd, cluster, machine, provider, scvmmMachine, vm, isoPath)
+			return r.addISOToVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine, vm, isoPath)
 		}
-		return r.startVM(ctx, log, patchHelper, cmd, cluster, machine, provider, scvmmMachine)
+		return r.startVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine)
 	}
 
 	// Wait for machine to get running state
@@ -514,50 +435,15 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		log.V(1).Info("Not running, Requeue in 30 seconds")
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmRunning, VmStartingReason, "")
 	}
-	return r.getVMInfo(ctx, log, patchHelper, cmd, scvmmMachine, vm)
+	return r.getVMInfo(ctx, log, patchHelper, scvmmMachine, vm)
 }
 
-func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) (ctrl.Result, error) {
-	if vm.IPv4Addresses != nil {
-		scvmmMachine.Status.Addresses = make([]clusterv1.MachineAddress, len(vm.IPv4Addresses))
-		for i := range vm.IPv4Addresses {
-			scvmmMachine.Status.Addresses[i] = clusterv1.MachineAddress{
-				Type:    clusterv1.MachineInternalIP,
-				Address: vm.IPv4Addresses[i],
-			}
-		}
-	}
-	if vm.Hostname != "" {
-		scvmmMachine.Status.Hostname = vm.Hostname
-	}
-	log.V(1).Info("Running, set status true")
-	scvmmMachine.Status.Ready = true
-	conditions.MarkTrue(scvmmMachine, VmRunning)
-	if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
-		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-		return ctrl.Result{}, err
-	}
-	if vm.IPv4Addresses == nil || vm.Hostname == "" {
-		vm, err := sendWinrmCommand(log, cmd, "ReadVM -ID '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.Id))
-		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "Failed to read vm")
-		}
-		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
-		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
-		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
-	}
-	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
-	log.V(1).Info("Done")
-	return ctrl.Result{}, nil
-}
-
-func (r *ScvmmMachineReconciler) getVM(log logr.Logger, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine) (VMResult, error) {
+func (r *ScvmmMachineReconciler) getVM(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine) (VMResult, error) {
 	if scvmmMachine.Spec.Id == "" {
 		return VMResult{}, nil
 	}
 	log.V(1).Info("Running GetVM", "Id", scvmmMachine.Spec.Id)
-	vm, err := sendWinrmCommand(log, cmd, "GetVM -Id '%s'",
+	vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "GetVM -Id '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id))
 	if err != nil {
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
@@ -574,7 +460,7 @@ func (r *ScvmmMachineReconciler) getVM(log logr.Logger, cmd *winrm.DirectCommand
 	return vm, nil
 }
 
-func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	spec := scvmmMachine.Spec
 	vmName := spec.VMName
 	if vmName == "" {
@@ -615,7 +501,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, 
 			memoryBuffer = *spec.DynamicMemory.BufferPercentage
 		}
 	}
-	vm, err := sendWinrmCommand(log, cmd, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
+	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
 		escapeSingleQuotes(spec.Cloud),
 		escapeSingleQuotes(spec.HostGroup),
 		escapeSingleQuotes(vmName),
@@ -655,10 +541,10 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, 
 	return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Creating VM %s", vmName)
 }
 
-func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
 	if err == nil {
-		_, err = sendWinrmCommand(log, cmd, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s'",
+		_, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.Id),
 			escapeSingleQuotes(string(custompropertyjson)),
 			escapeSingleQuotes(scvmmMachine.Spec.Tag),
@@ -687,8 +573,8 @@ func vmNeedsISO(isoPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult)
 	return true
 }
 
-func (r *ScvmmMachineReconciler) addVMSpec(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine) error {
-	newspec, err := sendWinrmSpecCommand(log, cmd, "AddVMSpec", scvmmMachine)
+func (r *ScvmmMachineReconciler) addVMSpec(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
+	newspec, err := sendWinrmSpecCommand(log, scvmmMachine.Spec.ProviderRef, "AddVMSpec", scvmmMachine)
 	if err != nil {
 		return err
 	}
@@ -712,12 +598,12 @@ func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 	return false
 }
 
-func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	spec := scvmmMachine.Spec
 	diskjson, err := makeDisksJSON(spec.Disks)
 	var vm VMResult
 	if err == nil {
-		vm, err = sendWinrmCommand(log, cmd, "ExpandVMDisks -ID '%s' -Disks '%s'",
+		vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "ExpandVMDisks -ID '%s' -Disks '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.Id),
 			escapeSingleQuotes(string(diskjson)))
 	}
@@ -732,7 +618,7 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, log logr.Logge
 	return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Updating Disks")
 }
 
-func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, isoPath string) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, isoPath string) (ctrl.Result, error) {
 	var bootstrapData, metaData, networkConfig []byte
 	var err error
 	if machine != nil {
@@ -774,7 +660,7 @@ func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, log logr.Logger
 		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
 	}
-	vm, err = sendWinrmCommand(log, cmd, "AddIsoToVM -ID '%s' -ISOPath '%s'",
+	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "AddIsoToVM -ID '%s' -ISOPath '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id),
 		escapeSingleQuotes(isoPath))
 	if err != nil {
@@ -783,7 +669,7 @@ func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, log logr.Logger
 	return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Adding ISO to VM %s", vm.Name)
 }
 
-func (r *ScvmmMachineReconciler) startVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cmd *winrm.DirectCommand, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) startVM(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	// Add adcomputer here, because we now know the vmname will not change
 	// (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
 	var err error
@@ -793,7 +679,7 @@ func (r *ScvmmMachineReconciler) startVM(ctx context.Context, log logr.Logger, p
 		if domaincontroller == "" {
 			domaincontroller = provider.ADServer
 		}
-		_, err := sendWinrmCommand(log, cmd, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
+		_, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "CreateADComputer -Name '%s' -OUPath '%s' -DomainController '%s' -Description '%s' -MemberOf @(%s)",
 			escapeSingleQuotes(scvmmMachine.Spec.VMName),
 			escapeSingleQuotes(adspec.OUPath),
 			escapeSingleQuotes(domaincontroller),
@@ -803,7 +689,7 @@ func (r *ScvmmMachineReconciler) startVM(ctx context.Context, log logr.Logger, p
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create AD entry")
 		}
 	}
-	vm, err := sendWinrmCommand(log, cmd, "StartVM -ID '%s'",
+	vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "StartVM -ID '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id))
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Failed to start vm")
@@ -816,6 +702,41 @@ func (r *ScvmmMachineReconciler) startVM(ctx context.Context, log logr.Logger, p
 	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmStartingReason, "Powering on %s", vm.Name)
 	log.V(1).Info("Requeue in 10 seconds")
 	return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+}
+
+func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) (ctrl.Result, error) {
+	if vm.IPv4Addresses != nil {
+		scvmmMachine.Status.Addresses = make([]clusterv1.MachineAddress, len(vm.IPv4Addresses))
+		for i := range vm.IPv4Addresses {
+			scvmmMachine.Status.Addresses[i] = clusterv1.MachineAddress{
+				Type:    clusterv1.MachineInternalIP,
+				Address: vm.IPv4Addresses[i],
+			}
+		}
+	}
+	if vm.Hostname != "" {
+		scvmmMachine.Status.Hostname = vm.Hostname
+	}
+	log.V(1).Info("Running, set status true")
+	scvmmMachine.Status.Ready = true
+	conditions.MarkTrue(scvmmMachine, VmRunning)
+	if err := patchScvmmMachine(ctx, patchHelper, scvmmMachine); err != nil {
+		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
+		return ctrl.Result{}, err
+	}
+	if vm.IPv4Addresses == nil || vm.Hostname == "" {
+		vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "ReadVM -ID '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "Failed to read vm")
+		}
+		log.Info("Reading vm IP addresses, reschedule after 60 seconds")
+		r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "Waiting for IP of %s", vm.Name)
+		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
+	}
+	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
+	log.V(1).Info("Done")
+	return ctrl.Result{}, nil
 }
 
 type VmDiskElem struct {
@@ -989,22 +910,9 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmMachine")
 	}
 
-	log.V(1).Info("Get provider")
-	provider, err := r.getProvider(ctx, scvmmMachine)
-	if err != nil {
-		log.Error(err, "Failed to get provider during deletion, this is probably fatal")
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmDeletingReason, ProviderNotAvailableReason, "Fatal error, manual action required")
-	}
-
 	log.Info("Doing removal of ScvmmMachine")
-	defer winrmTimer("session")()
-	cmd, err := createWinrmCmd(provider, log)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Winrm")
-	}
-	defer cmd.Close()
 
-	vm, err := sendWinrmCommand(log, cmd, "RemoveVM -ID '%s'",
+	vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveVM -ID '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id))
 	if err != nil {
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to delete VM")
@@ -1013,7 +921,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		adspec := scvmmMachine.Spec.ActiveDirectory
 		if adspec != nil {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmDeletingReason, "Removing AD entry %s", scvmmMachine.Spec.VMName)
-			vm, err = sendWinrmCommand(log, cmd, "RemoveADComputer -Name '%s' -OUPath '%s' -DomainController '%s'",
+			vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveADComputer -Name '%s' -OUPath '%s' -DomainController '%s'",
 				escapeSingleQuotes(scvmmMachine.Spec.VMName),
 				escapeSingleQuotes(adspec.OUPath),
 				escapeSingleQuotes(adspec.DomainController))
@@ -1167,7 +1075,6 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager, options cont
 	if extraDebug != "" {
 		ExtraDebug = true
 	}
-	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
 
 	clusterToScvmmMachines, err := util.ClusterToObjectsMapper(mgr.GetClient(), &infrav1.ScvmmMachineList{}, mgr.GetScheme())
 	if err != nil {
