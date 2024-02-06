@@ -35,6 +35,9 @@ type ScvmmProviderSpec struct {
 	// Jumphost to run scvmm scripts on, instead of directly on the scvmm server
 	// +optional
 	ExecHost string `json:"execHost,omitempty"`
+	// How long to keep winrm connections to scvmm alive
+	// Default 20 seconds
+	KeepAliveSeconds int `json:"keepAliveSeconds,omitempty"`
 	// Library share where ISOs can be placed for cloud-init
 	// Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
 	// +optional

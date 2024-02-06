@@ -94,7 +94,7 @@ func winrmWorker(inputs <-chan WinrmCommand) {
 }
 
 // One connection, kept alive, to do commands.
-// Will close after a timeout (TODO: Set timeout in provider)
+// Will close after a timeout
 func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) WinrmCommand {
 	providerRef := inp.providerRef
 	provider, ok := winrmProviders[providerRef]
@@ -123,16 +123,22 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			return WinrmCommand{}
 		}
 		winrmReturn(inp.output, stdout, stderr, nil)
+		keepalive := provider.Spec.KeepAliveSeconds
+		if keepalive == 0 {
+			keepalive = 20
+		}
 		select {
-		case <-time.After(time.Second * 20):
+		case <-time.After(time.Second * time.Duration(keepalive)):
+			// After keepalive seconds, close the connection by returning
 			return WinrmCommand{}
 		case inp = <-inputs:
-		}
-		if providerRef != inp.providerRef ||
-			winrmProviders[providerRef].ResourceVersion != provider.ResourceVersion {
-			// Drop out of this function to reload the provider
-			// Pass back this input for reprocessing
-			return inp
+			if providerRef != inp.providerRef ||
+				winrmProviders[providerRef].ResourceVersion != provider.ResourceVersion {
+				// Drop out of this function to reload the provider
+				// Pass back this input for reprocessing
+				return inp
+			}
+			// Otherwise, continue the loop, keep using the same cmd connection
 		}
 	}
 }

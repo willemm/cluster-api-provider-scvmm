@@ -86,6 +86,11 @@ spec:
                   type: string
                 description: Extra functions to run when provisioning machines
                 type: object
+              keepAliveSeconds:
+                description: |-
+                  How long to keep winrm connections to scvmm alive
+                  Default 20 seconds
+                type: integer
               scvmmHost:
                 description: Hostname of scvmm server
                 type: string
