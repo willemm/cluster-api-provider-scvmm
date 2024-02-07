@@ -75,7 +75,7 @@ func CreateWinrmWorkers(numWorkers int) {
 	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
 	WinrmCommandChannel := make(chan WinrmCommand)
 	for i := 0; i < numWorkers; i++ {
-		go winrmWorker(WinrmCommandChannel, i)
+		go winrmWorker(WinrmCommandChannel, i+1)
 	}
 }
 
@@ -90,7 +90,9 @@ func winrmWorker(inputs <-chan WinrmCommand, instance int) {
 	for {
 		if inp.input == nil {
 			var ok bool
+			log.V(1).Info("getting command")
 			inp, ok = <-inputs
+			log.V(1).Info("got command", "inp", inp, "ok", ok)
 			if !ok {
 				log.Info("Finishing worker")
 				return
@@ -155,7 +157,7 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			log.Info("keepalive timeout", "keepalive", keepalive)
 			return WinrmCommand{}
 		case inp, ok = <-inputs:
-			log.V(1).Info("new input")
+			log.V(1).Info("got new command", "inp", inp, "ok", ok)
 			if !ok || providerRef != inp.providerRef ||
 				winrmProviders[providerRef].ResourceVersion != provider.ResourceVersion {
 				// Drop out of this function to reload the provider
@@ -363,7 +365,12 @@ func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReferen
 		input:       []byte((fmt.Sprintf(command+"\n", args...))),
 		output:      output,
 	}
-	result := <-output
+	log.V(1).Info("waiting for output", "funcname", funcName)
+	result, ok := <-output
+	if !ok {
+		winrmErrors.WithLabelValues(funcName).Inc()
+		return VMResult{}, errors.Wrap(result.err, "Failed to get function output "+funcName)
+	}
 	if result.err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
 		return VMResult{}, errors.Wrap(result.err, "Failed to call function "+funcName)
