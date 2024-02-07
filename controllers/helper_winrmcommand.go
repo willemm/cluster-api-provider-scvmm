@@ -360,6 +360,9 @@ func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReferen
 	log.V(1).Info("Call " + funcName)
 	defer winrmTimer(funcName)()
 	output := make(chan WinrmResult)
+	if providerRef == nil {
+		providerRef = &infrav1.ScvmmProviderReference{}
+	}
 	winrmCommandChannel <- WinrmCommand{
 		providerRef: *providerRef,
 		input:       []byte((fmt.Sprintf(command+"\n", args...))),
@@ -422,6 +425,9 @@ func sendWinrmSpecCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderRef
 	funcName, _, _ := strings.Cut(command, " ")
 	defer winrmTimer(funcName)()
 	output := make(chan WinrmResult)
+	if providerRef == nil {
+		providerRef = &infrav1.ScvmmProviderReference{}
+	}
 	winrmCommandChannel <- WinrmCommand{
 		providerRef: *providerRef,
 		input:       []byte(cmdline),

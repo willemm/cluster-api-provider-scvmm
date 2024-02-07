@@ -18,9 +18,12 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/go-logr/logr"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,8 +50,8 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		Name:      req.NamespacedName.Name,
 		Namespace: req.NamespacedName.Namespace,
 	}
-	scvmmProvider := &infrav1.ScvmmProvider{}
-	if err := r.Client.Get(ctx, req.NamespacedName, scvmmProvider); err != nil {
+	scvmmProvider, err := r.getProvider(ctx, providerRef)
+	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
@@ -70,8 +73,123 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
+func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef infrav1.ScvmmProviderReference) (*infrav1.ScvmmProvider, error) {
+	log := r.Log.WithValues("scvmmprovider", "providerref", providerRef)
+	provider := &infrav1.ScvmmProvider{}
+	if providerRef.Name != "" {
+		log.V(1).Info("Fetching provider ref")
+		key := client.ObjectKey{Namespace: providerRef.Namespace, Name: providerRef.Name}
+		if err := r.Client.Get(ctx, key, provider); err != nil {
+			return nil, fmt.Errorf("Failed to get ScvmmProvider: %v", err)
+		}
+	}
+	p := &provider.Spec
+
+	// Set defaults
+	if p.ScvmmHost == "" {
+		p.ScvmmHost = os.Getenv("SCVMM_HOST")
+		if p.ScvmmHost == "" {
+			return nil, fmt.Errorf("missing required value ScvmmHost")
+		}
+	}
+	if p.ExecHost == "" {
+		p.ExecHost = os.Getenv("SCVMM_EXECHOST")
+		if p.ExecHost == "" {
+			p.ExecHost = p.ScvmmHost
+		}
+	}
+	if p.ScvmmLibraryISOs == "" {
+		p.ScvmmLibraryISOs = os.Getenv("SCVMM_LIBRARY")
+		if p.ScvmmLibraryISOs == "" {
+			p.ScvmmLibraryISOs = `\\` + p.ScvmmHost + `\MSSCVMMLibrary\ISOs\cloud-init`
+		}
+	}
+	if p.ADServer == "" {
+		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
+	}
+	if p.ScvmmSecret != nil {
+		log.V(1).Info("Fetching scvmm secret ref", "secret", p.ScvmmSecret)
+		creds := &corev1.Secret{}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ScvmmSecret.Name}
+		if err := r.Client.Get(ctx, key, creds); err != nil {
+			return nil, fmt.Errorf("Failed to get scvmm credential secretref: %v", err)
+		}
+		if value, ok := creds.Data["username"]; ok {
+			p.ScvmmUsername = string(value)
+		}
+		if value, ok := creds.Data["password"]; ok {
+			p.ScvmmPassword = string(value)
+		}
+	}
+	if p.ADSecret != nil {
+		log.V(1).Info("Fetching AD secret ref", "secret", p.ADSecret)
+		creds := &corev1.Secret{}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ADSecret.Name}
+		if err := r.Client.Get(ctx, key, creds); err != nil {
+			return nil, fmt.Errorf("Failed to get AD credential secretref: %v", err)
+		}
+		if value, ok := creds.Data["username"]; ok {
+			p.ADUsername = string(value)
+		}
+		if value, ok := creds.Data["password"]; ok {
+			p.ADPassword = string(value)
+		}
+	}
+	if p.DomainSecret != nil {
+		log.V(1).Info("Fetching Domain secret ref", "secret", p.DomainSecret)
+		creds := &corev1.Secret{}
+		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.DomainSecret.Name}
+		if err := r.Client.Get(ctx, key, creds); err != nil {
+			return nil, fmt.Errorf("Failed to get Domain credential secretref: %v", err)
+		}
+		if value, ok := creds.Data["username"]; ok {
+			p.DomainUsername = string(value)
+		}
+		if value, ok := creds.Data["password"]; ok {
+			p.DomainPassword = string(value)
+		}
+	}
+	if p.ScvmmUsername == "" {
+		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
+	}
+	if p.ScvmmPassword == "" {
+		p.ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
+	}
+	if p.ADUsername == "" {
+		p.ADUsername = os.Getenv("ACTIVEDIRECTORY_USERNAME")
+	}
+	if p.ADPassword == "" {
+		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
+	}
+	if p.DomainUsername == "" {
+		p.DomainUsername = os.Getenv("DOMAIN_USERNAME")
+	}
+	if p.DomainPassword == "" {
+		p.DomainPassword = os.Getenv("DOMAIN_PASSWORD")
+	}
+	if p.Env == nil {
+		p.Env = make(map[string]string)
+	}
+	p.Env["SCVMM_USERNAME"] = p.ScvmmUsername
+	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
+	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
+	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
+	p.Env["DOMAIN_USERNAME"] = p.ADUsername
+	p.Env["DOMAIN_PASSWORD"] = p.ADPassword
+	return provider, nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ScvmmProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Fill default provider (for when it is not filled)
+	providerRef := infrav1.ScvmmProviderReference{}
+	scvmmProvider, err := r.getProvider(context.TODO(), providerRef)
+	if err == nil {
+		winrmProviders[providerRef] = WinrmProvider{
+			Spec:            scvmmProvider.Spec,
+			ResourceVersion: scvmmProvider.ObjectMeta.ResourceVersion,
+		}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmProvider{}).
 		Complete(r)

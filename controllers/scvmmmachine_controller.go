@@ -136,6 +136,7 @@ func (e *ScriptError) Error() string {
 	return fmt.Sprintf("%s error: %s", e.function, e.message)
 }
 
+// This version doesn't need to get secrets any more
 func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
 	providerRef := scvmmMachine.Spec.ProviderRef
