@@ -11,7 +11,7 @@ try {
     $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
     VMToJson $vm "Removing"
   } else {
-    $vm = Stop-SCVirtualmachine $vm -RunAsynchronously
+    $vm = Stop-SCVirtualmachine $vm -Force -RunAsynchronously
     VMToJson $vm "Stopping"
   }
 } catch {
