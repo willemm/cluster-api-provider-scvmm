@@ -68,7 +68,7 @@ var (
 		[]string{"function"},
 	)
 
-	winrmProviders map[infrav1.ScvmmProviderReference]WinrmProvider
+	winrmProviders = make(map[infrav1.ScvmmProviderReference]WinrmProvider)
 )
 
 func CreateWinrmWorkers(numWorkers int) {
