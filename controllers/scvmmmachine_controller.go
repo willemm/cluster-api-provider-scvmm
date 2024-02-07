@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"sigs.k8s.io/cluster-api/util"
@@ -1074,7 +1075,10 @@ func (r *ScvmmMachineReconciler) SetupWithManager(mgr ctrl.Manager, options cont
 	}
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmMachine{}).
-		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		WithEventFilter(predicate.And(
+			predicates.ResourceNotPaused(r.Log),
+			predicate.GenerationChangedPredicate{},
+		)).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
 			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmMachine"))),
