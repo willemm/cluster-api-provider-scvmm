@@ -73,9 +73,9 @@ var (
 
 func CreateWinrmWorkers(numWorkers int) {
 	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
-	WinrmCommandChannel := make(chan WinrmCommand)
+	winrmCommandChannel = make(chan WinrmCommand)
 	for i := 0; i < numWorkers; i++ {
-		go winrmWorker(WinrmCommandChannel, i+1)
+		go winrmWorker(winrmCommandChannel, i+1)
 	}
 }
 
