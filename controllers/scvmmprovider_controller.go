@@ -74,7 +74,7 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef infrav1.ScvmmProviderReference) (*infrav1.ScvmmProvider, error) {
-	log := r.Log.WithValues("scvmmprovider", "providerref", providerRef)
+	log := r.Log.WithValues("providerref", providerRef)
 	provider := &infrav1.ScvmmProvider{}
 	if providerRef.Name != "" {
 		log.V(1).Info("Fetching provider ref")
