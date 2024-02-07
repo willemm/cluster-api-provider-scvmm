@@ -88,20 +88,26 @@ func winrmWorker(inputs <-chan WinrmCommand, instance int) {
 	inp := WinrmCommand{}
 	log.Info("Starting worker")
 	for {
-		if inp.input == nil {
-			var ok bool
-			log.V(1).Info("getting command")
-			inp, ok = <-inputs
-			log.V(1).Info("got command", "inp", inp, "ok", ok)
-			if !ok {
-				log.Info("Finishing worker")
-				return
-			}
-		}
 		// doWinrmWork could decide not to do work, which means it has to be redone in this next loop
 		// This happens when the resourceVersion of the provider has changed,
 		// or the command references a different provider
-		inp = doWinrmWork(inputs, inp, log)
+		if inp.input != nil {
+			inp = doWinrmWork(inputs, inp, log)
+		} else {
+			var ok bool
+			select {
+			default:
+				// Sleep here to give an already connected worker
+				// the chance to pick up a command first
+				time.Sleep(time.Millisecond * 100)
+			case inp, ok = <-inputs:
+				log.V(1).Info("got command", "inp", inp, "ok", ok)
+				if !ok {
+					log.Info("Finishing worker")
+					return
+				}
+			}
+		}
 	}
 }
 
