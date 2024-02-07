@@ -444,6 +444,10 @@ func (r *ScvmmMachineReconciler) getVM(log logr.Logger, scvmmMachine *infrav1.Sc
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
 		return VMResult{}, errors.Wrap(err, "failed to get vm")
 	}
+	if vm.Id != scvmmMachine.Spec.Id {
+		// Sanity check
+		return VMResult{}, fmt.Errorf("GetVM returned VM with different ID (%s <> %s)", vm.Id, scvmmMachine.Spec.Id)
+	}
 	if vm.VMId != "" {
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	}
