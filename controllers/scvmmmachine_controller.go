@@ -424,10 +424,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return r.startVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine)
 	}
 	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
-		// Send read command because apparently sometimes customproperty
-		// doesn't get updated and we don't want to get stuck in a loop
-		sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "ReadVM -ID '%s'",
-			escapeSingleQuotes(scvmmMachine.Spec.Id))
 		return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
 	}
 

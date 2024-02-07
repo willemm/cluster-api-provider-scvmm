@@ -22,6 +22,7 @@ try {
       }
     }
   }
+  $vm = Read-SCVirtualMachine -VM $vm -RunAsynchronously
   return VMToJson $vm "Setting Properties"
 } catch {
   ErrorToJson 'Set VM Properties' $_
