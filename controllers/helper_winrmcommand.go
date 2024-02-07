@@ -174,6 +174,11 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			log.V(1).Info("return output", "stdout", string(stdout), "stderr", string(stderr))
 		}
 		winrmReturn(inp.output, stdout, stderr, nil)
+		if len(stderr) > 0 {
+			// If there was something on stderr,
+			// drop the connection to be on the safe side
+			return WinrmCommand{}
+		}
 		keepalive := provider.Spec.KeepAliveSeconds
 		if keepalive == 0 {
 			keepalive = 20

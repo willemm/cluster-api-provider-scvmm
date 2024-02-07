@@ -1,6 +1,6 @@
 param($id)
 try {
-  $vm = Get-SCVirtualMachine -ID $id
+  $vm = Get-SCVirtualMachine -ID $id -ErrorAction SilentlyContinue
   if (-not $vm) {
     return @{ Message = "VM with id $($id) not found" } | convertto-json
   }

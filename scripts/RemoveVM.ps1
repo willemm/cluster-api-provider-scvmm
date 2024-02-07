@@ -3,7 +3,7 @@ try {
   if (-not $id) {
     return (@{ Message = "Removed" } | convertto-json)
   }
-  $vm = Get-SCVirtualMachine -ID $id
+  $vm = Get-SCVirtualMachine -ID $id -ErrorAction SilentlyContinue
   if (-not $vm) {
     return (@{ Message = "Removed" } | convertto-json)
   }

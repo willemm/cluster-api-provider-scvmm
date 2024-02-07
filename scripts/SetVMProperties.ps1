@@ -17,7 +17,7 @@ try {
 	  throw "Custom Property $prop not found"
 	}
 	if ($cp) {
-	  Set-SCCustomPropertyValue -InputObject $vm -CustomProperty $cp -Value $properties.$prop -RunAsynchronously | Out-Null
+	  Set-SCCustomPropertyValue -InputObject $vm -CustomProperty $cp -Value $properties.$prop -RunAsynchronously -ErrorAction Stop | Out-Null
 	}
       }
     }
