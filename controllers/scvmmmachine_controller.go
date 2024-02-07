@@ -425,8 +425,8 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 
 	// Wait for machine to get running state
 	if vm.Status != "Running" {
-		log.V(1).Info("Not running, Requeue in 30 seconds")
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmRunning, VmStartingReason, "")
+		log.V(1).Info("Not running, Requeue in 15 seconds")
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 15, nil, VmRunning, VmStartingReason, "")
 	}
 	return r.getVMInfo(ctx, log, patchHelper, scvmmMachine, vm)
 }
@@ -941,8 +941,8 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 		scvmmMachine.Status.VMStatus = vm.Status
 		scvmmMachine.Status.CreationTime = vm.CreationTime
 		scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-		log.V(1).Info("Requeue after 30 seconds")
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 30, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
+		log.V(1).Info("Requeue after 15 seconds")
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 	}
 }
 
