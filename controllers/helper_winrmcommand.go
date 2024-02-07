@@ -90,6 +90,8 @@ func CreateWinrmWorkers(numWorkers int) {
 
 func StopWinrmWorkers() {
 	close(winrmCommandChannel)
+	// Wait a second for the worker goroutines to close
+	time.Sleep(time.Second * 1)
 }
 
 func winrmWorker(inputs <-chan WinrmCommand, instance int) {
