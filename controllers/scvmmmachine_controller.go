@@ -406,8 +406,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	log.V(1).Info("Machine is there, fill in status")
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
-	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
-		return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
+	if vm.Status != "UnderCreation" {
+		if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+			return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
+		}
 	}
 	if vm.Status == "PowerOff" {
 		if err := r.addVMSpec(ctx, log, patchHelper, scvmmMachine); err != nil {

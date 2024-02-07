@@ -24,6 +24,6 @@ try {
   }
   return VMToJson $vm "Setting Properties"
 } catch {
-  ErrorToJson 'Create VM' $_
+  ErrorToJson 'Set VM Properties' $_
 }
 
