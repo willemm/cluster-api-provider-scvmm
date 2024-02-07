@@ -79,12 +79,20 @@ func CreateWinrmWorkers(numWorkers int) {
 	}
 }
 
+func StopWinrmWorkers() {
+	close(winrmCommandChannel)
+}
+
 func winrmWorker(inputs <-chan WinrmCommand) {
 	log := ctrl.Log.WithName("winrmworker")
 	inp := WinrmCommand{}
 	for {
 		if inp.input == nil {
-			inp = <-inputs
+			var ok bool
+			inp, ok = <-inputs
+			if !ok {
+				return
+			}
 		}
 		// doWinrmWork could decide not to do work, which means it has to be redone in this next loop
 		// This happens when the resourceVersion of the provider has changed,
@@ -127,12 +135,13 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		if keepalive == 0 {
 			keepalive = 20
 		}
+		var ok bool
 		select {
 		case <-time.After(time.Second * time.Duration(keepalive)):
 			// After keepalive seconds, close the connection by returning
 			return WinrmCommand{}
-		case inp = <-inputs:
-			if providerRef != inp.providerRef ||
+		case inp, ok = <-inputs:
+			if !ok || providerRef != inp.providerRef ||
 				winrmProviders[providerRef].ResourceVersion != provider.ResourceVersion {
 				// Drop out of this function to reload the provider
 				// Pass back this input for reprocessing

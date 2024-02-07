@@ -115,6 +115,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	controllers.CreateWinrmWorkers(machineConcurrency + clusterConcurrency)
+	defer controllers.StopWinrmWorkers()
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
