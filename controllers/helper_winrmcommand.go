@@ -75,7 +75,7 @@ func CreateWinrmWorkers(numWorkers int) {
 	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
 	WinrmCommandChannel := make(chan WinrmCommand)
 	for i := 0; i < numWorkers; i++ {
-		go winrmWorker(WinrmCommandChannel)
+		go winrmWorker(WinrmCommandChannel, i)
 	}
 }
 
@@ -83,14 +83,16 @@ func StopWinrmWorkers() {
 	close(winrmCommandChannel)
 }
 
-func winrmWorker(inputs <-chan WinrmCommand) {
-	log := ctrl.Log.WithName("winrmworker")
+func winrmWorker(inputs <-chan WinrmCommand, instance int) {
+	log := ctrl.Log.WithName("winrmworker").WithValues("instance", instance)
 	inp := WinrmCommand{}
+	log.Info("Starting worker")
 	for {
 		if inp.input == nil {
 			var ok bool
 			inp, ok = <-inputs
 			if !ok {
+				log.Info("Finishing worker")
 				return
 			}
 		}
@@ -105,6 +107,7 @@ func winrmWorker(inputs <-chan WinrmCommand) {
 // Will close after a timeout
 func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) WinrmCommand {
 	providerRef := inp.providerRef
+	log.V(1).Info("Starting connection", "providerref", providerRef)
 	provider, ok := winrmProviders[providerRef]
 	if !ok {
 		err := fmt.Errorf("ScvmmProvider %s/%s not found",
@@ -113,6 +116,7 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		winrmReturn(inp.output, nil, nil, err)
 		return WinrmCommand{}
 	}
+	log.V(1).Info("Create WinrmCmd")
 	cmd, err := createWinrmCmd(&provider.Spec, log)
 	if err != nil {
 		log.Error(err, "creating winrm cmd", "provider", provider)
@@ -121,14 +125,22 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	}
 	defer cmd.Close()
 	for {
+		if ExtraDebug {
+			log.V(1).Info("Send Input", "input", string(inp.input))
+		}
 		if err := cmd.SendInput(inp.input, false); err != nil {
+			log.Error(err, "winrm sendinput")
 			winrmReturn(inp.output, nil, nil, err)
 			return WinrmCommand{}
 		}
 		stdout, stderr, _, _, err := cmd.ReadOutput()
 		if err != nil {
+			log.Error(err, "winrm readoutput")
 			winrmReturn(inp.output, nil, nil, err)
 			return WinrmCommand{}
+		}
+		if ExtraDebug {
+			log.V(1).Info("return output", "stdout", string(stdout), "stderr", string(stderr))
 		}
 		winrmReturn(inp.output, stdout, stderr, nil)
 		keepalive := provider.Spec.KeepAliveSeconds
@@ -136,17 +148,28 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			keepalive = 20
 		}
 		var ok bool
+		log.V(1).Info("getting new command", "keepalive", keepalive)
 		select {
 		case <-time.After(time.Second * time.Duration(keepalive)):
 			// After keepalive seconds, close the connection by returning
+			log.Info("keepalive timeout", "keepalive", keepalive)
 			return WinrmCommand{}
 		case inp, ok = <-inputs:
+			log.V(1).Info("new input")
 			if !ok || providerRef != inp.providerRef ||
 				winrmProviders[providerRef].ResourceVersion != provider.ResourceVersion {
 				// Drop out of this function to reload the provider
 				// Pass back this input for reprocessing
+				log.Info("new input provider mismatch",
+					"ok", ok,
+					"providerNew", inp.providerRef,
+					"providerOld", providerRef,
+					"versionNew", winrmProviders[providerRef].ResourceVersion,
+					"versionOld", provider.ResourceVersion,
+				)
 				return inp
 			}
+			log.V(1).Info("winrm kept alive")
 			// Otherwise, continue the loop, keep using the same cmd connection
 		}
 	}
