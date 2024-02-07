@@ -32,6 +32,15 @@ type WinrmResult struct {
 	err    error
 }
 
+type ScriptError struct {
+	function string
+	message  string
+}
+
+func (e *ScriptError) Error() string {
+	return fmt.Sprintf("%s error: %s", e.function, e.message)
+}
+
 type WinrmProvider struct {
 	Spec            infrav1.ScvmmProviderSpec
 	ResourceVersion string

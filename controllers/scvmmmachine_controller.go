@@ -127,15 +127,6 @@ type VMSpecResult struct {
 	Message      string
 }
 
-type ScriptError struct {
-	function string
-	message  string
-}
-
-func (e *ScriptError) Error() string {
-	return fmt.Sprintf("%s error: %s", e.function, e.message)
-}
-
 // This version doesn't need to get secrets any more
 func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
 	log := r.Log.WithValues("scvmmmachine", scvmmMachine.Name)
@@ -973,7 +964,7 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, log l
 		log.Error(perr, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 	}
 	if err != nil {
-		var scriptError ScriptError
+		scriptError := &ScriptError{}
 		if !errors.As(err, &scriptError) {
 			return ctrl.Result{}, errors.Wrap(err, reason)
 		}
