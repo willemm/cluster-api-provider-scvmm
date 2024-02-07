@@ -403,14 +403,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	if vm.Id == "" {
 		return r.createVM(ctx, log, patchHelper, scvmmMachine)
 	}
+
+	if vm.Status == "UnderCreation" {
+		log.V(1).Info("Creating, Requeue in 15 seconds")
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 15, nil, VmCreated, VmCreatingReason, "")
+	}
 	log.V(1).Info("Machine is there, fill in status")
 	conditions.MarkTrue(scvmmMachine, VmCreated)
-
-	if vm.Status != "UnderCreation" {
-		if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
-			return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
-		}
-	}
 	if vm.Status == "PowerOff" {
 		if err := r.addVMSpec(ctx, log, patchHelper, scvmmMachine); err != nil {
 			return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
@@ -423,6 +422,13 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return r.addISOToVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine, vm, isoPath)
 		}
 		return r.startVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine)
+	}
+	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+		// Send read command because apparently sometimes customproperty
+		// doesn't get updated and we don't want to get stuck in a loop
+		sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "ReadVM -ID '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id))
+		return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
 	}
 
 	// Wait for machine to get running state

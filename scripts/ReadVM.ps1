@@ -4,7 +4,7 @@ try {
   if (-not $vm) {
     return @{ Message = "VM $($id) not found" } | convertto-json
   }
-  Read-SCVirtualMachine -vm $vm | out-null
+  $vm = Read-SCVirtualMachine -vm $vm -RunAsynchronously
   return VMToJson $vm
 } catch {
   ErrorToJson 'Get VM' $_
