@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $description, $startaction, $stopaction, $cpulimitformigration, $cpulimitfunctionality, $operatingsystem, $domain, $availabilityset)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $operatingsystem, $availabilityset, $options)
 try {
   $generation = 1
   if ($vmtemplate) {
@@ -81,25 +81,16 @@ try {
     CPUCount = $cpucount
     DynamicMemoryEnabled = $false
   }
+  $optionsobject = $options | ConvertFrom-Json
+  foreach ($optkey in @('Description','StartAction','StopAction','CPULimitForMigration','CPULimitFunctionality','EnableNestedVirtualization')) {
+      if ($optionsobject.$optkey -ne $null) { $vmargs[$optkey] = $optionsobject.$optkey }
+  }
   if ($availabilityset) {
     $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup -AvailabilitySetNames $availabilityset
   } else {
     $vmargs.VMConfiguration = New-SCVMConfiguration -VMTemplate $VMTemplateObj -Name $vmname -VMHostGroup $hostgroup
   }
   $vmargs.Cloud = Get-SCCloud -Name $cloud
-
-  if ($description) { $vmargs.Description = "$description" }
-  if ($startaction) { $vmargs.StartAction = "$startaction" }
-  if ($stopaction) { $vmargs.StopAction = "$stopaction" }
-  $bl = $false
-  if ([bool]::TryParse($cpulimitformigration, [ref]$bl)) { $vmargs.CPULimitForMigration = $bl }
-  if ([bool]::TryParse($cpulimitfunctionality, [ref]$bl)) { $vmargs.CPULimitFunctionality = $bl }
-  if ($domain) {
-    if (${env:DOMAIN_USERNAME} -and ${env:DOMAIN_PASSWORD}) {
-      $vmargs.Domain = $domain
-      $vmargs.DomainJoinCredential = new-object PSCredential(${env:DOMAIN_USERNAME}, (ConvertTo-Securestring -force -AsPlainText -String ${env:DOMAIN_PASSWORD}))
-    }
-  }
 
   if ($memorymin -ge 0) {
     $vmargs.DynamicMemoryMin = $memorymin

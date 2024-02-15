@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -135,20 +135,6 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 			p.ADPassword = string(value)
 		}
 	}
-	if p.DomainSecret != nil {
-		log.V(1).Info("Fetching Domain secret ref", "secret", p.DomainSecret)
-		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.DomainSecret.Name}
-		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get Domain credential secretref: %v", err)
-		}
-		if value, ok := creds.Data["username"]; ok {
-			p.DomainUsername = string(value)
-		}
-		if value, ok := creds.Data["password"]; ok {
-			p.DomainPassword = string(value)
-		}
-	}
 	if p.ScvmmUsername == "" {
 		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	}
@@ -161,12 +147,6 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 	if p.ADPassword == "" {
 		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
 	}
-	if p.DomainUsername == "" {
-		p.DomainUsername = os.Getenv("DOMAIN_USERNAME")
-	}
-	if p.DomainPassword == "" {
-		p.DomainPassword = os.Getenv("DOMAIN_PASSWORD")
-	}
 	if p.Env == nil {
 		p.Env = make(map[string]string)
 	}
@@ -174,8 +154,6 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
 	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
 	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
-	p.Env["DOMAIN_USERNAME"] = p.ADUsername
-	p.Env["DOMAIN_PASSWORD"] = p.ADPassword
 	return provider, nil
 }
 

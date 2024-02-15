@@ -39,7 +39,7 @@ spec:
       jsonPath: .status.creationTime
       name: AGE
       type: date
-    name: v1beta1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ScvmmMachine is the Schema for the scvmmmachines API
@@ -84,9 +84,6 @@ spec:
                 required:
                 - ouPath
                 type: object
-              availabilitySet:
-                description: AvailabilitySet
-                type: string
               cloud:
                 description: VMM cloud to run VM on
                 type: string
@@ -109,12 +106,6 @@ spec:
               cpuCount:
                 description: Number of CPU's
                 type: integer
-              cpuLimitForMigration:
-                description: CPULimitForMigration
-                type: boolean
-              cpuLimitFunctionality:
-                description: CPULimitFunctionality
-                type: boolean
               customProperty:
                 additionalProperties:
                   type: string
@@ -122,9 +113,6 @@ spec:
                   Custom VirtualMachine Properties
                   Named CustomProperty because that's what it's named in SCVMM virtual machines
                 type: object
-              description:
-                description: Description
-                type: string
               disks:
                 description: Extra disks (after the VHDisk) to connect to the VM
                 items:
@@ -188,25 +176,77 @@ spec:
               networking:
                 description: Network settings
                 properties:
+                  devices:
+                    description: Network devices
+                    items:
+                      properties:
+                        addressesFromPools:
+                          description: |-
+                            List of IPAddressPools that should be assigned
+                            to IPAddressClaims. The machine's cloud-init metadata will be populated
+                            with IPAddresses fulfilled by an IPAM provider.
+                          items:
+                            description: |-
+                              TypedLocalObjectReference contains enough information to let you locate the
+                              typed referenced object inside the same namespace.
+                            properties:
+                              apiGroup:
+                                description: |-
+                                  APIGroup is the group for the resource being referenced.
+                                  If APIGroup is not specified, the specified Kind must be in the core API group.
+                                  For any other third-party types, APIGroup is required.
+                                type: string
+                              kind:
+                                description: Kind is the type of resource being referenced
+                                type: string
+                              name:
+                                description: Name is the name of resource being referenced
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          type: array
+                        deviceName:
+                          description: Network device name
+                          type: string
+                        domain:
+                          description: Domain
+                          type: string
+                        gateway:
+                          description: Gateway
+                          type: string
+                        ipAddress:
+                          description: IP Address
+                          type: string
+                        nameservers:
+                          description: Nameservers
+                          items:
+                            type: string
+                          type: array
+                        searchDomains:
+                          description: List of search domains used when resolving
+                            with DNS
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
                   domain:
-                    description: Domain
+                    description: Domain (deprecated, use devices)
                     type: string
                   gateway:
-                    description: Gateway
+                    description: Gateway (deprecated, use devices)
                     type: string
                   ipAddress:
-                    description: IP Address
+                    description: IP Address (deprecated, use devices)
                     type: string
                   nameservers:
-                    description: Nameservers
+                    description: Nameservers (deprecated, use devices)
                     items:
                       type: string
                     type: array
-                required:
-                - domain
-                - gateway
-                - ipAddress
-                - nameservers
                 type: object
               operatingSystem:
                 description: OperatingSystem
@@ -227,20 +267,6 @@ spec:
                 - name
                 - namespace
                 type: object
-              startAction:
-                description: Start Action
-                enum:
-                - NeverAutoTurnOnVM
-                - AlwaysAutoTurnOnVM
-                - TurnOnVMIfRunningWhenVSStopped
-                type: string
-              stopAction:
-                description: Stop Action
-                enum:
-                - ShutdownGuestOS
-                - TurnOffVM
-                - SaveVM
-                type: string
               tag:
                 description: VirtualMachine tag
                 type: string
@@ -261,6 +287,36 @@ spec:
               vmNetwork:
                 description: Virtual Network identifier
                 type: string
+              vmOptions:
+                description: Options for New-SCVirtualMachine
+                properties:
+                  availabilitySet:
+                    description: AvailabilitySet
+                    type: string
+                  cpuLimitForMigration:
+                    description: CPULimitForMigration
+                    type: boolean
+                  cpuLimitFunctionality:
+                    description: CPULimitFunctionality
+                    type: boolean
+                  description:
+                    description: Description
+                    type: string
+                  startAction:
+                    description: Start Action
+                    enum:
+                    - NeverAutoTurnOnVM
+                    - AlwaysAutoTurnOnVM
+                    - TurnOnVMIfRunningWhenVSStopped
+                    type: string
+                  stopAction:
+                    description: Stop Action
+                    enum:
+                    - ShutdownGuestOS
+                    - TurnOffVM
+                    - SaveVM
+                    type: string
+                type: object
               vmTemplate:
                 description: VM template to use
                 type: string

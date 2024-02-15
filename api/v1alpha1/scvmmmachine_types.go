@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -59,35 +59,21 @@ type ScvmmMachineSpec struct {
 	VMNetwork string `json:"vmNetwork"`
 	// Hardware profile
 	HardwareProfile string `json:"hardwareProfile"`
-	// Description
-	// +optional
-	Description string `json:"description,omitempty"`
-	// Start Action
-	// +optional
-	// +kubebuilder:validation:Enum=NeverAutoTurnOnVM;AlwaysAutoTurnOnVM;TurnOnVMIfRunningWhenVSStopped
-	StartAction string `json:"startAction,omitempty"`
-	// Stop Action
-	// +optional
-	// +kubebuilder:validation:Enum=ShutdownGuestOS;TurnOffVM;SaveVM
-	StopAction string `json:"stopAction,omitempty"`
-	// CPULimitForMigration
-	// +optional
-	CPULimitForMigration *bool `json:"cpuLimitForMigration,omitempty"`
-	// CPULimitFunctionality
-	// +optional
-	CPULimitFunctionality *bool `json:"cpuLimitFunctionality,omitempty"`
 	// OperatingSystem
 	// +optional
 	OperatingSystem string `json:"operatingSystem,omitempty"`
-	// AvailabilitySet
-	// +optional
-	AvailabilitySet string `json:"availabilitySet,omitempty"`
 	// Network settings
 	// +optional
 	Networking *Networking `json:"networking,omitempty"`
 	// Active Directory entry
 	// +optional
 	ActiveDirectory *ActiveDirectory `json:"activeDirectory,omitempty"`
+	// AvailabilitySet
+	// +optional
+	AvailabilitySet string `json:"availabilitySet,omitempty"`
+	// Options for New-SCVirtualMachine
+	// +optional
+	Options *VmOptions `json:"vmOptions,omitempty"`
 	// Cloud-Init data
 	// This triggers the controller to create the machine without a (cluster-api) cluster
 	// For testing purposes, or just for creating VMs
@@ -106,6 +92,29 @@ type ScvmmMachineSpec struct {
 	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
 }
 
+type VmOptions struct {
+	// Description
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Start Action
+	// +optional
+	// +kubebuilder:validation:Enum=NeverAutoTurnOnVM;AlwaysAutoTurnOnVM;TurnOnVMIfRunningWhenVSStopped
+	StartAction string `json:"startAction,omitempty"`
+	// Stop Action
+	// +optional
+	// +kubebuilder:validation:Enum=ShutdownGuestOS;TurnOffVM;SaveVM
+	StopAction string `json:"stopAction,omitempty"`
+	// CPULimitForMigration
+	// +optional
+	CPULimitForMigration *bool `json:"cpuLimitForMigration,omitempty"`
+	// CPULimitFunctionality
+	// +optional
+	CPULimitFunctionality *bool `json:"cpuLimitFunctionality,omitempty"`
+	// CPULimitFunctionality
+	// +optional
+	EnableNestedVirtualization *bool `json:"EnableNestedVirtualization,omitempty"`
+}
+
 type VmDisk struct {
 	// Size of the virtual disk
 	// +optional
@@ -118,15 +127,43 @@ type VmDisk struct {
 	VHDisk string `json:"vhDisk,omitempty"`
 }
 
-type Networking struct {
+type NetworkDevice struct {
+	// Network device name
+	// +optional
+	DeviceName string `json:"deviceName,omitempty"`
 	// IP Address
-	IPAddress string `json:"ipAddress"`
+	// +optional
+	IPAddress string `json:"ipAddress,omitempty"`
 	// Gateway
-	Gateway string `json:"gateway"`
+	Gateway string `json:"gateway,omitempty"`
 	// Nameservers
-	Nameservers []string `json:"nameservers"`
-	// Domain
-	Domain string `json:"domain"`
+	Nameservers []string `json:"nameservers,omitempty"`
+	// List of search domains used when resolving with DNS
+	// +optional
+	SearchDomains []string `json:"searchDomains,omitempty"`
+	// List of IPAddressPools that should be assigned
+	// to IPAddressClaims. The machine's cloud-init metadata will be populated
+	// with IPAddresses fulfilled by an IPAM provider.
+	// +optional
+	AddressesFromPools []corev1.TypedLocalObjectReference `json:"addressesFromPools,omitempty"`
+}
+
+type Networking struct {
+	// Network devices
+	// +optional
+	Devices []NetworkDevice `json:"devices,omitempty"`
+	// IP Address (deprecated, use devices)
+	// +optional
+	IPAddress string `json:"ipAddress,omitempty"`
+	// Gateway (deprecated, use devices)
+	// +optional
+	Gateway string `json:"gateway,omitempty"`
+	// Nameservers (deprecated, use devices)
+	// +optional
+	Nameservers []string `json:"nameservers,omitempty"`
+	// Domain (deprecated, use devices)
+	// +optional
+	Domain string `json:"domain,omitempty"`
 }
 
 type ActiveDirectory struct {
@@ -238,6 +275,9 @@ func init() {
 
 func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	changed := false
+	if out.Options == nil {
+		out.Options = &VmOptions{}
+	}
 	if in.Cloud != "" && in.Cloud != out.Cloud {
 		changed = true
 		out.Cloud = in.Cloud
@@ -274,18 +314,6 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.HardwareProfile = in.HardwareProfile
 	}
-	if in.Description != "" && in.Description != out.Description {
-		changed = true
-		out.Description = in.Description
-	}
-	if in.StartAction != "" && in.StartAction != out.StartAction {
-		changed = true
-		out.StartAction = in.StartAction
-	}
-	if in.StopAction != "" && in.StopAction != out.StopAction {
-		changed = true
-		out.StopAction = in.StopAction
-	}
 	if in.Networking != nil && !in.Networking.Equals(out.Networking) {
 		changed = true
 		out.Networking = in.Networking
@@ -293,6 +321,34 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	if in.CloudInit != nil && !in.CloudInit.Equals(out.CloudInit) {
 		changed = true
 		out.CloudInit = in.CloudInit
+	}
+	if in.AvailabilitySet != "" && in.AvailabilitySet != out.AvailabilitySet {
+		changed = true
+		out.AvailabilitySet = in.AvailabilitySet
+	}
+	if in.Options.Description != "" && in.Options.Description != out.Options.Description {
+		changed = true
+		out.Options.Description = in.Options.Description
+	}
+	if in.Options.StartAction != "" && in.Options.StartAction != out.Options.StartAction {
+		changed = true
+		out.Options.StartAction = in.Options.StartAction
+	}
+	if in.Options.StopAction != "" && in.Options.StopAction != out.Options.StopAction {
+		changed = true
+		out.Options.StopAction = in.Options.StopAction
+	}
+	if in.Options.CPULimitForMigration != nil && *in.Options.CPULimitForMigration != *out.Options.CPULimitForMigration {
+		changed = true
+		*out.Options.CPULimitForMigration = *in.Options.CPULimitForMigration
+	}
+	if in.Options.CPULimitFunctionality != nil && *in.Options.CPULimitFunctionality != *out.Options.CPULimitFunctionality {
+		changed = true
+		*out.Options.CPULimitFunctionality = *in.Options.CPULimitFunctionality
+	}
+	if in.Options.EnableNestedVirtualization != nil && *in.Options.EnableNestedVirtualization != *out.Options.EnableNestedVirtualization {
+		changed = true
+		*out.Options.EnableNestedVirtualization = *in.Options.EnableNestedVirtualization
 	}
 	return changed
 }

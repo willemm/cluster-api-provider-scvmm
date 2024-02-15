@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -48,9 +48,6 @@ type ScvmmProviderSpec struct {
 	// Reference to secret containing user and password for activediractory
 	// +optional
 	ADSecret *corev1.SecretReference `json:"adSecret,omitempty"`
-	// Reference to secret containing user and password for domain join
-	// +optional
-	DomainSecret *corev1.SecretReference `json:"domainSecret,omitempty"`
 	// Extra functions to run when provisioning machines
 	// +optional
 	ExtraFunctions map[string]string `json:"extraFunctions,omitempty"`

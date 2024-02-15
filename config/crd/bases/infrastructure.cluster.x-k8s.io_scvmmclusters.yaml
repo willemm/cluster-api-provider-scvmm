@@ -16,7 +16,7 @@ spec:
     singular: scvmmcluster
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ScvmmCluster is the Schema for the scvmmclusters API

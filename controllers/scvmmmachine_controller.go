@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -167,75 +167,6 @@ func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *
 	if p.ADServer == "" {
 		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
 	}
-	if p.ScvmmSecret != nil {
-		log.V(1).Info("Fetching scvmm secret ref", "secret", p.ScvmmSecret)
-		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ScvmmSecret.Name}
-		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get scvmm credential secretref: %v", err)
-		}
-		if value, ok := creds.Data["username"]; ok {
-			p.ScvmmUsername = string(value)
-		}
-		if value, ok := creds.Data["password"]; ok {
-			p.ScvmmPassword = string(value)
-		}
-	}
-	if p.ADSecret != nil {
-		log.V(1).Info("Fetching AD secret ref", "secret", p.ADSecret)
-		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ADSecret.Name}
-		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get AD credential secretref: %v", err)
-		}
-		if value, ok := creds.Data["username"]; ok {
-			p.ADUsername = string(value)
-		}
-		if value, ok := creds.Data["password"]; ok {
-			p.ADPassword = string(value)
-		}
-	}
-	if p.DomainSecret != nil {
-		log.V(1).Info("Fetching Domain secret ref", "secret", p.DomainSecret)
-		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.DomainSecret.Name}
-		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get Domain credential secretref: %v", err)
-		}
-		if value, ok := creds.Data["username"]; ok {
-			p.DomainUsername = string(value)
-		}
-		if value, ok := creds.Data["password"]; ok {
-			p.DomainPassword = string(value)
-		}
-	}
-	if p.ScvmmUsername == "" {
-		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
-	}
-	if p.ScvmmPassword == "" {
-		p.ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
-	}
-	if p.ADUsername == "" {
-		p.ADUsername = os.Getenv("ACTIVEDIRECTORY_USERNAME")
-	}
-	if p.ADPassword == "" {
-		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
-	}
-	if p.DomainUsername == "" {
-		p.DomainUsername = os.Getenv("DOMAIN_USERNAME")
-	}
-	if p.DomainPassword == "" {
-		p.DomainPassword = os.Getenv("DOMAIN_PASSWORD")
-	}
-	if p.Env == nil {
-		p.Env = make(map[string]string)
-	}
-	p.Env["SCVMM_USERNAME"] = p.ScvmmUsername
-	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
-	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
-	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
-	p.Env["DOMAIN_USERNAME"] = p.ADUsername
-	p.Env["DOMAIN_PASSWORD"] = p.ADPassword
 	return p, nil
 }
 
@@ -365,8 +296,6 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	log.V(1).Info("Check finalizer")
-	// Add finalizer.  Apparently we should return here to avoid a race condition
-	// (Presumably the change/patch will trigger another reconciliation so it continues)
 	if !controllerutil.ContainsFinalizer(scvmmMachine, MachineFinalizer) {
 		log.V(1).Info("Add finalizer")
 		controllerutil.AddFinalizer(scvmmMachine, MachineFinalizer)
@@ -374,7 +303,6 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
 	}
 
 	log.V(1).Info("Get provider")
@@ -421,8 +349,12 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if vmNeedsISO(isoPath, scvmmMachine, vm) {
 			return r.addISOToVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine, vm, isoPath)
 		}
+		if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
+			return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
+		}
 		return r.startVM(ctx, log, patchHelper, cluster, machine, provider, scvmmMachine)
 	}
+	// Support changing properties or tags
 	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 		return r.setVMProperties(ctx, log, patchHelper, scvmmMachine)
 	}
@@ -478,11 +410,11 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, 
 	}
 	diskjson, err := makeDisksJSON(spec.Disks)
 	if err != nil {
-		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize disks"), VmCreated, VmFailedReason, "Failed to create vm")
 	}
-	domain := ""
-	if spec.Networking != nil {
-		domain = spec.Networking.Domain
+	optionsjson, err := json.Marshal(spec.Options)
+	if err != nil {
+		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize options"), VmCreated, VmFailedReason, "Failed to create vm")
 	}
 	memoryFixed := int64(-1)
 	memoryMin := int64(-1)
@@ -502,7 +434,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, 
 			memoryBuffer = *spec.DynamicMemory.BufferPercentage
 		}
 	}
-	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -Description '%s' -StartAction '%s' -StopAction '%s' -CPULimitForMigration '%s' -CPULimitFunctionality '%s' -OperatingSystem '%s' -Domain '%s' -AvailabilitySet '%s'",
+	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -OperatingSystem '%s' -AvailabilitySet '%s' -Options '%s'",
 		escapeSingleQuotes(spec.Cloud),
 		escapeSingleQuotes(spec.HostGroup),
 		escapeSingleQuotes(vmName),
@@ -515,14 +447,9 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, log logr.Logger, 
 		escapeSingleQuotes(string(diskjson)),
 		escapeSingleQuotes(spec.VMNetwork),
 		escapeSingleQuotes(spec.HardwareProfile),
-		escapeSingleQuotes(spec.Description),
-		escapeSingleQuotes(spec.StartAction),
-		escapeSingleQuotes(spec.StopAction),
-		boolPtrStr(spec.CPULimitForMigration),
-		boolPtrStr(spec.CPULimitFunctionality),
 		escapeSingleQuotes(spec.OperatingSystem),
-		escapeSingleQuotes(domain),
 		escapeSingleQuotes(spec.AvailabilitySet),
+		escapeSingleQuotes(string(optionsjson)),
 	)
 	if err != nil {
 		return r.patchReasonCondition(ctx, log, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to create vm")

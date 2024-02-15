@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 )
 
 type WinrmCommand struct {

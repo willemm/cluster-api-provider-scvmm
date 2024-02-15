@@ -18,7 +18,7 @@ package controllers
 
 import (
 	"github.com/go-logr/logr"
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1beta1"
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 
 	"encoding/binary"
 	"net"
