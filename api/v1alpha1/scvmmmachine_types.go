@@ -112,7 +112,7 @@ type VmOptions struct {
 	CPULimitFunctionality *bool `json:"cpuLimitFunctionality,omitempty"`
 	// CPULimitFunctionality
 	// +optional
-	EnableNestedVirtualization *bool `json:"EnableNestedVirtualization,omitempty"`
+	EnableNestedVirtualization *bool `json:"enableNestedVirtualization,omitempty"`
 }
 
 type VmDisk struct {

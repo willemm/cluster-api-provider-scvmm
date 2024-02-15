@@ -92,6 +92,9 @@ spec:
                         required:
                         - ouPath
                         type: object
+                      availabilitySet:
+                        description: AvailabilitySet
+                        type: string
                       cloud:
                         description: VMM cloud to run VM on
                         type: string
@@ -222,9 +225,6 @@ spec:
                                 deviceName:
                                   description: Network device name
                                   type: string
-                                domain:
-                                  description: Domain
-                                  type: string
                                 gateway:
                                   description: Gateway
                                   type: string
@@ -301,9 +301,6 @@ spec:
                       vmOptions:
                         description: Options for New-SCVirtualMachine
                         properties:
-                          availabilitySet:
-                            description: AvailabilitySet
-                            type: string
                           cpuLimitForMigration:
                             description: CPULimitForMigration
                             type: boolean
@@ -313,6 +310,9 @@ spec:
                           description:
                             description: Description
                             type: string
+                          enableNestedVirtualization:
+                            description: CPULimitFunctionality
+                            type: boolean
                           startAction:
                             description: Start Action
                             enum:
