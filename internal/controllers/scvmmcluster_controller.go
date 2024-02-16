@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,22 +19,21 @@ package controllers
 import (
 	"context"
 
-	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	"github.com/pkg/errors"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
-
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -48,15 +47,14 @@ const (
 // ScvmmClusterReconciler reconciles a ScvmmCluster object
 type ScvmmClusterReconciler struct {
 	client.Client
-	Log logr.Logger
-	// Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters/finalizers,verbs=update
 
 func (r *ScvmmClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, retErr error) {
-	log := r.Log.WithValues("scvmmcluster", req.NamespacedName)
+	log := log.FromContext(ctx).WithValues("scvmmcluster", req.NamespacedName)
 
 	// Fetch the ScvmmCluster instance
 	scvmmCluster := &infrav1.ScvmmCluster{}
@@ -159,18 +157,24 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 	return ctrl.Result{}, nil
 }
 
-func (r *ScvmmClusterReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1.ScvmmCluster{}).
-		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
-		WithOptions(options).
-		Build(r)
+// SetupWithManager sets up the controller with the Manager.
+func (r *ScvmmClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	log := ctrl.LoggerFrom(ctx)
+	clusterToScvmm, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.ScvmmClusterList{}, mgr.GetScheme())
 	if err != nil {
 		return err
 	}
-	return c.Watch(
-		&source.Kind{Type: &clusterv1.Cluster{}},
-		handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("ScvmmCluster"))),
-		predicates.ClusterUnpausedAndInfrastructureReady(r.Log),
-	)
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&infrav1.ScvmmCluster{}).
+		WithOptions(options).
+		WithEventFilter(predicate.And(
+			predicates.ResourceNotPaused(log),
+			predicate.GenerationChangedPredicate{},
+		)).
+		Watches(
+			&clusterv1.Cluster{},
+			handler.EnqueueRequestsFromMapFunc(clusterToScvmm),
+			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
+		).
+		Complete(r)
 }

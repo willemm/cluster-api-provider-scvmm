@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,21 +42,8 @@ type ScvmmClusterStatus struct {
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
-/*
-// APIEndpoint represents a reachable Kubernetes API endpoint.
-type APIEndpoint struct {
-	// Host is the hostname on which the API server is serving.
-	Host string `json:"host"`
-
-	// Port is the port on which the API server is serving.
-	Port int `json:"port"`
-}
-*/
-
-// +kubebuilder:resource:path=scvmmclusters,scope=Namespaced,categories=cluster-api
-// +kubebuilder:subresource:status
-// +kubebuilder:storageversion
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // ScvmmCluster is the Schema for the scvmmclusters API
 type ScvmmCluster struct {
@@ -75,7 +62,7 @@ func (c *ScvmmCluster) SetConditions(conditions clusterv1.Conditions) {
 	c.Status.Conditions = conditions
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ScvmmClusterList contains a list of ScvmmCluster
 type ScvmmClusterList struct {

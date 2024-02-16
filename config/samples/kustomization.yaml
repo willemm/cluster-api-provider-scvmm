@@ -1,0 +1,8 @@
+## Append samples of your project ##
+resources:
+- infrastructure_v1alpha1_scvmmprovider.yaml
+- infrastructure_v1alpha1_scvmmmachine.yaml
+- infrastructure_v1alpha1_scvmmmachinetemplate.yaml
+- infrastructure_v1alpha1_scvmmcluster.yaml
+- infrastructure_v1alpha1_scvmmnamepool.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

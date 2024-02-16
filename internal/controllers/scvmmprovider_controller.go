@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,19 +21,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-logr/logr"
-	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 )
 
 // ScvmmProviderReconciler reconciles a ScvmmProvider object
 type ScvmmProviderReconciler struct {
 	client.Client
-	Log logr.Logger
-	// Scheme *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmproviders,verbs=get;list;watch
@@ -44,7 +43,7 @@ type ScvmmProviderReconciler struct {
 // Seemed the easiest way to force the workers to reload when the provider changes, without having
 // to read them every time
 func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// log := r.Log.WithValues("scvmmprovider", req.NamespacedName)
+	// log := log.FromContext(ctx).WithValues("scvmmprovider", req.NamespacedName)
 
 	providerRef := infrav1.ScvmmProviderReference{
 		Name:      req.NamespacedName.Name,
@@ -70,11 +69,13 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		ResourceVersion: scvmmProvider.ObjectMeta.ResourceVersion,
 	}
 
+	// TODO(user): your logic here
+
 	return ctrl.Result{}, nil
 }
 
 func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef infrav1.ScvmmProviderReference) (*infrav1.ScvmmProvider, error) {
-	log := r.Log.WithValues("providerref", providerRef)
+	log := log.FromContext(ctx).WithValues("providerref", providerRef)
 	provider := &infrav1.ScvmmProvider{}
 	if providerRef.Name != "" {
 		log.V(1).Info("Fetching provider ref")
@@ -158,7 +159,7 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ScvmmProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ScvmmProviderReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	// Fill default provider (for when it is not filled)
 	providerRef := infrav1.ScvmmProviderReference{}
 	scvmmProvider, err := r.getProvider(context.TODO(), providerRef)

@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,9 +25,8 @@ type ScvmmMachineTemplateSpec struct {
 	Template ScvmmMachineTemplateResource `json:"template"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:path=scvmmmachinetemplates,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // ScvmmMachineTemplate is the Schema for the scvmmmachinetemplates API
 type ScvmmMachineTemplate struct {
@@ -37,7 +36,7 @@ type ScvmmMachineTemplate struct {
 	Spec ScvmmMachineTemplateSpec `json:"spec,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ScvmmMachineTemplateList contains a list of ScvmmMachineTemplate
 type ScvmmMachineTemplateList struct {

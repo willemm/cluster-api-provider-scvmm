@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type WinrmCommand struct {
@@ -30,6 +31,44 @@ type WinrmResult struct {
 	stdout []byte
 	stderr []byte
 	err    error
+}
+
+// The result (passed as json) of a call to Scvmm scripts
+type VMResult struct {
+	Cloud          string
+	Name           string
+	Hostname       string
+	Status         string
+	Memory         int
+	CpuCount       int
+	VirtualNetwork string
+	IPv4Addresses  []string
+	VirtualDisks   []struct {
+		Size        int64
+		MaximumSize int64
+	}
+	ISOs []struct {
+		Size      int64
+		SharePath string
+	}
+	BiosGuid             string
+	Id                   string
+	VMId                 string
+	AvailabilitySetNames []string
+	Tag                  string
+	CustomProperty       map[string]string
+	Error                string
+	ScriptErrors         string
+	Message              string
+	CreationTime         metav1.Time
+	ModifiedTime         metav1.Time
+}
+
+type VMSpecResult struct {
+	infrav1.ScvmmMachineSpec
+	Error        string
+	ScriptErrors string
+	Message      string
 }
 
 type ScriptError struct {
