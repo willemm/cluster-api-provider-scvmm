@@ -69,8 +69,6 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		ResourceVersion: scvmmProvider.ObjectMeta.ResourceVersion,
 	}
 
-	// TODO(user): your logic here
-
 	return ctrl.Result{}, nil
 }
 
@@ -162,7 +160,7 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 func (r *ScvmmProviderReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	// Fill default provider (for when it is not filled)
 	providerRef := infrav1.ScvmmProviderReference{}
-	scvmmProvider, err := r.getProvider(context.TODO(), providerRef)
+	scvmmProvider, err := r.getProvider(ctx, providerRef)
 	if err == nil {
 		winrmProviders[providerRef] = WinrmProvider{
 			Spec:            scvmmProvider.Spec,

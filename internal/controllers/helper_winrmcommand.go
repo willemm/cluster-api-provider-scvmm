@@ -119,6 +119,17 @@ var (
 	winrmProviders = make(map[infrav1.ScvmmProviderReference]WinrmProvider)
 )
 
+// Grab provider spec from the cache, needed for cloudinit iso generation
+func getProvider(providerRef *infrav1.ScvmmProviderReference) (*infrav1.ScvmmProviderSpec, error) {
+	if providerRef == nil {
+		providerRef = &infrav1.ScvmmProviderReference{}
+	}
+	if provider, ok := winrmProviders[*providerRef]; ok {
+		return &provider.Spec, nil
+	}
+	return nil, fmt.Errorf("ScvmmProvider %s/%s not found", providerRef.Namespace, providerRef.Name)
+}
+
 func CreateWinrmWorkers(numWorkers int) {
 	metrics.Registry.MustRegister(winrmTotal, winrmErrors, winrmDuration)
 	winrmCommandChannel = make(chan WinrmCommand)

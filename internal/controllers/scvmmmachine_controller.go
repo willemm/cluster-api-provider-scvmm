@@ -188,7 +188,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	log.V(1).Info("Get provider")
-	provider, err := r.getProvider(ctx, scvmmMachine)
+	provider, err := getProvider(scvmmMachine.Spec.ProviderRef)
 	if err != nil {
 		log.Error(err, "Failed to get provider")
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
@@ -855,48 +855,6 @@ func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *
 	}
 
 	return value, nil
-}
-
-// This version doesn't need to get secrets any more
-func (r *ScvmmMachineReconciler) getProvider(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (*infrav1.ScvmmProviderSpec, error) {
-	log := k8slog.FromContext(ctx)
-	providerRef := scvmmMachine.Spec.ProviderRef
-	provider := &infrav1.ScvmmProvider{}
-	if providerRef != nil {
-		log.V(1).Info("Fetching provider ref", "ref", providerRef)
-		key := client.ObjectKey{Namespace: providerRef.Namespace, Name: providerRef.Name}
-		if key.Namespace == "" {
-			key.Namespace = scvmmMachine.Namespace
-		}
-		if err := r.Client.Get(ctx, key, provider); err != nil {
-			return nil, fmt.Errorf("Failed to get ScvmmProvider: %v", err)
-		}
-	}
-	p := &provider.Spec
-
-	// Set defaults
-	if p.ScvmmHost == "" {
-		p.ScvmmHost = os.Getenv("SCVMM_HOST")
-		if p.ScvmmHost == "" {
-			return nil, fmt.Errorf("missing required value ScvmmHost")
-		}
-	}
-	if p.ExecHost == "" {
-		p.ExecHost = os.Getenv("SCVMM_EXECHOST")
-		if p.ExecHost == "" {
-			p.ExecHost = p.ScvmmHost
-		}
-	}
-	if p.ScvmmLibraryISOs == "" {
-		p.ScvmmLibraryISOs = os.Getenv("SCVMM_LIBRARY")
-		if p.ScvmmLibraryISOs == "" {
-			p.ScvmmLibraryISOs = `\\` + p.ScvmmHost + `\MSSCVMMLibrary\ISOs\cloud-init`
-		}
-	}
-	if p.ADServer == "" {
-		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
-	}
-	return p, nil
 }
 
 func escapeSingleQuotes(str string) string {
