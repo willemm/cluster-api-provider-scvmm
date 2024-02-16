@@ -215,9 +215,11 @@ spec:
                         gateway:
                           description: Gateway
                           type: string
-                        ipAddress:
+                        ipAddresses:
                           description: IP Address
-                          type: string
+                          items:
+                            type: string
+                          type: array
                         nameservers:
                           description: Nameservers
                           items:
@@ -237,8 +239,6 @@ spec:
                   domain:
                     description: Host domain
                     type: string
-                required:
-                - domain
                 type: object
               operatingSystem:
                 description: OperatingSystem

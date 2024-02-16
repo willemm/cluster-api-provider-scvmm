@@ -85,6 +85,9 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 		hostname := scvmmMachine.Spec.VMName
 		domainname := ""
 		if networking != nil {
+			if networking.Domain == "" {
+				return fmt.Errorf("missing required parameter networking.Domain")
+			}
 			domainname = "." + networking.Domain
 		}
 		data := "instance-id: " + machineid + "\n" +
@@ -98,15 +101,27 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 			data.WriteString("version: 2\n" +
 				"ethernets:\n")
 			for slot, nwd := range networking.Devices {
-				data.WriteString("  eth" + fmt.Sprint(slot) + ":\n" +
-					"    addresses:\n" +
-					"    - " + nwd.IPAddress + "\n" +
-					"    gateway4: " + nwd.Gateway + "\n" +
-					"    nameservers:\n" +
-					"      addresses:\n" +
-					"      - " + strings.Join(nwd.Nameservers, "\n      - ") + "\n" +
-					"      search:\n" +
-					"      - " + strings.Join(nwd.SearchDomains, "\n      -") + "\n")
+				devicename := nwd.DeviceName
+				if devicename == "" {
+					devicename = fmt.Sprintf("eth%d", slot)
+				}
+				data.WriteString("  " + devicename + ":\n")
+				if len(nwd.IPAddresses) > 0 {
+					data.WriteString("    addresses:\n" +
+						"    - " + strings.Join(nwd.IPAddresses, "\n    - ") + "\n")
+				}
+				if nwd.Gateway != "" {
+					data.WriteString("    gateway4: " + nwd.Gateway + "\n")
+				}
+				if len(nwd.Nameservers) > 0 {
+					data.WriteString("    nameservers:\n" +
+						"      addresses:\n" +
+						"      - " + strings.Join(nwd.Nameservers, "\n      - ") + "\n")
+					if len(nwd.SearchDomains) > 0 {
+						data.WriteString("      search:\n" +
+							"      - " + strings.Join(nwd.SearchDomains, "\n      -") + "\n")
+					}
+				}
 			}
 
 			networkConfig = data.Bytes()

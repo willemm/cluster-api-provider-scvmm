@@ -138,7 +138,7 @@ type NetworkDevice struct {
 	DeviceName string `json:"deviceName,omitempty"`
 	// IP Address
 	// +optional
-	IPAddress string `json:"ipAddress,omitempty"`
+	IPAddresses []string `json:"ipAddresses,omitempty"`
 	// Gateway
 	// +optional
 	Gateway string `json:"gateway,omitempty"`
@@ -160,7 +160,8 @@ type Networking struct {
 	// +optional
 	Devices []NetworkDevice `json:"devices,omitempty"`
 	// Host domain
-	Domain string `json:"domain"`
+	// +optional
+	Domain string `json:"domain,omitempty"`
 }
 
 type ActiveDirectory struct {
