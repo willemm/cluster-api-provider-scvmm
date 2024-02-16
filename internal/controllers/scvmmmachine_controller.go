@@ -931,7 +931,10 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		WithOptions(options).
 		WithEventFilter(predicate.And(
 			predicates.ResourceNotPaused(log),
-			predicate.GenerationChangedPredicate{},
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				ownerChangedPredicate{},
+			),
 		)).
 		Watches(
 			&clusterv1.Machine{},

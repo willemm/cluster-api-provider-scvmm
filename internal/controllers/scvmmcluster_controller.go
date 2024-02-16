@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"reflect"
 
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -157,6 +159,21 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 	return ctrl.Result{}, nil
 }
 
+type ownerChangedPredicate struct {
+	predicate.Funcs
+}
+
+func (ownerChangedPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil {
+		return false
+	}
+	if e.ObjectNew == nil {
+		return false
+	}
+
+	return !reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ScvmmClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := ctrl.LoggerFrom(ctx)
@@ -169,7 +186,10 @@ func (r *ScvmmClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		WithOptions(options).
 		WithEventFilter(predicate.And(
 			predicates.ResourceNotPaused(log),
-			predicate.GenerationChangedPredicate{},
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				ownerChangedPredicate{},
+			),
 		)).
 		Watches(
 			&clusterv1.Cluster{},
