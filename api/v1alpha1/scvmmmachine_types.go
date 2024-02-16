@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"reflect"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,8 +57,9 @@ type ScvmmMachineSpec struct {
 	// Dynamic Memory
 	// +optional
 	DynamicMemory *DynamicMemory `json:"dynamicMemory,omitempty"`
-	// Virtual Network identifier
-	VMNetwork string `json:"vmNetwork"`
+	// Virtual Network identifier, deprecated
+	// +optional
+	VMNetwork string `json:"vmNetwork,omitempty"`
 	// Hardware profile
 	HardwareProfile string `json:"hardwareProfile"`
 	// OperatingSystem
@@ -128,6 +131,8 @@ type VmDisk struct {
 }
 
 type NetworkDevice struct {
+	// Virtual Network identifier
+	VMNetwork string `json:"vmNetwork,omitempty"`
 	// Network device name
 	// +optional
 	DeviceName string `json:"deviceName,omitempty"`
@@ -135,8 +140,10 @@ type NetworkDevice struct {
 	// +optional
 	IPAddress string `json:"ipAddress,omitempty"`
 	// Gateway
+	// +optional
 	Gateway string `json:"gateway,omitempty"`
 	// Nameservers
+	// +optional
 	Nameservers []string `json:"nameservers,omitempty"`
 	// List of search domains used when resolving with DNS
 	// +optional
@@ -152,18 +159,8 @@ type Networking struct {
 	// Network devices
 	// +optional
 	Devices []NetworkDevice `json:"devices,omitempty"`
-	// IP Address (deprecated, use devices)
-	// +optional
-	IPAddress string `json:"ipAddress,omitempty"`
-	// Gateway (deprecated, use devices)
-	// +optional
-	Gateway string `json:"gateway,omitempty"`
-	// Nameservers (deprecated, use devices)
-	// +optional
-	Nameservers []string `json:"nameservers,omitempty"`
-	// Domain (deprecated, use devices)
-	// +optional
-	Domain string `json:"domain,omitempty"`
+	// Host domain
+	Domain string `json:"domain"`
 }
 
 type ActiveDirectory struct {
@@ -309,11 +306,11 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.HardwareProfile = in.HardwareProfile
 	}
-	if in.Networking != nil && !in.Networking.Equals(out.Networking) {
+	if in.Networking != nil && !reflect.DeepEqual(in.Networking, out.Networking) {
 		changed = true
 		out.Networking = in.Networking
 	}
-	if in.CloudInit != nil && !in.CloudInit.Equals(out.CloudInit) {
+	if in.CloudInit != nil && !reflect.DeepEqual(in.CloudInit, out.CloudInit) {
 		changed = true
 		out.CloudInit = in.CloudInit
 	}
@@ -321,34 +318,9 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.AvailabilitySet = in.AvailabilitySet
 	}
-	if in.VMOptions != nil {
-		if out.VMOptions == nil {
-			out.VMOptions = &VmOptions{}
-		}
-		if in.VMOptions.Description != "" && in.VMOptions.Description != out.VMOptions.Description {
-			changed = true
-			out.VMOptions.Description = in.VMOptions.Description
-		}
-		if in.VMOptions.StartAction != "" && in.VMOptions.StartAction != out.VMOptions.StartAction {
-			changed = true
-			out.VMOptions.StartAction = in.VMOptions.StartAction
-		}
-		if in.VMOptions.StopAction != "" && in.VMOptions.StopAction != out.VMOptions.StopAction {
-			changed = true
-			out.VMOptions.StopAction = in.VMOptions.StopAction
-		}
-		if in.VMOptions.CPULimitForMigration != nil && *in.VMOptions.CPULimitForMigration != *out.VMOptions.CPULimitForMigration {
-			changed = true
-			*out.VMOptions.CPULimitForMigration = *in.VMOptions.CPULimitForMigration
-		}
-		if in.VMOptions.CPULimitFunctionality != nil && *in.VMOptions.CPULimitFunctionality != *out.VMOptions.CPULimitFunctionality {
-			changed = true
-			*out.VMOptions.CPULimitFunctionality = *in.VMOptions.CPULimitFunctionality
-		}
-		if in.VMOptions.EnableNestedVirtualization != nil && *in.VMOptions.EnableNestedVirtualization != *out.VMOptions.EnableNestedVirtualization {
-			changed = true
-			*out.VMOptions.EnableNestedVirtualization = *in.VMOptions.EnableNestedVirtualization
-		}
+	if in.VMOptions != nil && !reflect.DeepEqual(in.VMOptions, out.VMOptions) {
+		changed = true
+		out.VMOptions = in.VMOptions
 	}
 	return changed
 }
@@ -366,31 +338,4 @@ func VmDiskEquals(left []VmDisk, right []VmDisk) bool {
 		}
 	}
 	return true
-}
-
-func (left *Networking) Equals(right *Networking) bool {
-	if right == nil {
-		return false
-	}
-	if left.IPAddress != right.IPAddress ||
-		left.Gateway != right.Gateway ||
-		left.Domain != right.Domain ||
-		len(left.Nameservers) != len(right.Nameservers) {
-		return false
-	}
-	for i, v := range left.Nameservers {
-		if v != right.Nameservers[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func (left *CloudInit) Equals(right *CloudInit) bool {
-	if right == nil {
-		return false
-	}
-	return left.MetaData == right.MetaData &&
-		left.UserData == right.UserData &&
-		left.NetworkConfig == right.NetworkConfig
 }

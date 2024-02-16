@@ -187,22 +187,15 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	log.V(1).Info("Get provider")
-	provider, err := getProvider(scvmmMachine.Spec.ProviderRef)
-	if err != nil {
-		log.Error(err, "Failed to get provider")
-		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
-	}
-
 	// Handle non-deleted machines
-	return r.reconcileNormal(ctx, patchHelper, cluster, provider, machine, scvmmMachine)
+	return r.reconcileNormal(ctx, patchHelper, cluster, machine, scvmmMachine)
 }
 
 func baseName(path string) string {
 	return path[strings.LastIndexAny(path, "\\/")+1:]
 }
 
-func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, provider *infrav1.ScvmmProviderSpec, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := k8slog.FromContext(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
 	ctx = k8slog.IntoContext(ctx, log)
 
@@ -228,6 +221,14 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if vmNeedsExpandDisks(scvmmMachine, vm) {
 			return r.expandDisks(ctx, patchHelper, scvmmMachine)
 		}
+
+		log.V(1).Info("Get provider")
+		provider, err := getProvider(scvmmMachine.Spec.ProviderRef)
+		if err != nil {
+			log.Error(err, "Failed to get provider")
+			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
+		}
+
 		isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
 		if vmNeedsISO(isoPath, scvmmMachine, vm) {
 			return r.addISOToVM(ctx, patchHelper, cluster, machine, provider, scvmmMachine, vm, isoPath)
@@ -301,6 +302,10 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 	if err != nil {
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize vmoptions"), VmCreated, VmFailedReason, "Failed to create vm")
 	}
+	networkjson, err := json.Marshal(spec.Networking.Devices)
+	if err != nil {
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize networking"), VmCreated, VmFailedReason, "Failed to create vm")
+	}
 	memoryFixed := int64(-1)
 	memoryMin := int64(-1)
 	memoryMax := int64(-1)
@@ -319,7 +324,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 			memoryBuffer = *spec.DynamicMemory.BufferPercentage
 		}
 	}
-	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -OperatingSystem '%s' -AvailabilitySet '%s' -VMOptions '%s'",
+	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -NetworkDevices '%s' -HardwareProfile '%s' -OperatingSystem '%s' -AvailabilitySet '%s' -VMOptions '%s'",
 		escapeSingleQuotes(spec.Cloud),
 		escapeSingleQuotes(spec.HostGroup),
 		escapeSingleQuotes(vmName),
@@ -330,7 +335,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 		memoryBuffer,
 		spec.CPUCount,
 		escapeSingleQuotes(string(diskjson)),
-		escapeSingleQuotes(spec.VMNetwork),
+		escapeSingleQuotes(string(networkjson)),
 		escapeSingleQuotes(spec.HardwareProfile),
 		escapeSingleQuotes(spec.OperatingSystem),
 		escapeSingleQuotes(spec.AvailabilitySet),

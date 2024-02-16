@@ -229,22 +229,16 @@ spec:
                           items:
                             type: string
                           type: array
+                        vmNetwork:
+                          description: Virtual Network identifier
+                          type: string
                       type: object
                     type: array
                   domain:
-                    description: Domain (deprecated, use devices)
+                    description: Host domain
                     type: string
-                  gateway:
-                    description: Gateway (deprecated, use devices)
-                    type: string
-                  ipAddress:
-                    description: IP Address (deprecated, use devices)
-                    type: string
-                  nameservers:
-                    description: Nameservers (deprecated, use devices)
-                    items:
-                      type: string
-                    type: array
+                required:
+                - domain
                 type: object
               operatingSystem:
                 description: OperatingSystem
@@ -283,7 +277,7 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
               vmNetwork:
-                description: Virtual Network identifier
+                description: Virtual Network identifier, deprecated
                 type: string
               vmOptions:
                 description: Options for New-SCVirtualMachine
@@ -323,7 +317,6 @@ spec:
             - cpuCount
             - hardwareProfile
             - hostGroup
-            - vmNetwork
             type: object
           status:
             description: ScvmmMachineStatus defines the observed state of ScvmmMachine

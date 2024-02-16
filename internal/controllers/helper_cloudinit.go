@@ -17,6 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/go-logr/logr"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 
@@ -90,19 +93,23 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 		metaData = []byte(data)
 	}
 	if networkConfig == nil {
-		if networking != nil {
-			data := "version: 2\n" +
-				"ethernets:\n" +
-				"  eth0:\n" +
-				"    addresses:\n" +
-				"    - " + networking.IPAddress + "\n" +
-				"    gateway4: " + networking.Gateway + "\n" +
-				"    nameservers:\n" +
-				"      search:\n" +
-				"      - " + networking.Domain + "\n" +
-				"      addresses:\n" +
-				"      - " + strings.Join(networking.Nameservers, "\n      - ") + "\n"
-			networkConfig = []byte(data)
+		if networking != nil && networking.Devices != nil {
+			var data bytes.Buffer
+			data.WriteString("version: 2\n" +
+				"ethernets:\n")
+			for slot, nwd := range networking.Devices {
+				data.WriteString("  eth" + fmt.Sprint(slot) + ":\n" +
+					"    addresses:\n" +
+					"    - " + nwd.IPAddress + "\n" +
+					"    gateway4: " + nwd.Gateway + "\n" +
+					"    nameservers:\n" +
+					"      addresses:\n" +
+					"      - " + strings.Join(nwd.Nameservers, "\n      - ") + "\n" +
+					"      search:\n" +
+					"      - " + strings.Join(nwd.SearchDomains, "\n      -") + "\n")
+			}
+
+			networkConfig = data.Bytes()
 		}
 	}
 	numFiles := 2
