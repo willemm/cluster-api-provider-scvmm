@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $operatingsystem, $availabilityset, $options)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $vmnetwork, $hardwareprofile, $operatingsystem, $availabilityset, $vmoptions)
 try {
   $generation = 1
   if ($vmtemplate) {
@@ -81,7 +81,7 @@ try {
     CPUCount = $cpucount
     DynamicMemoryEnabled = $false
   }
-  $optionsobject = $options | ConvertFrom-Json
+  $optionsobject = $vmoptions | ConvertFrom-Json
   foreach ($optkey in @('Description','StartAction','StopAction','CPULimitForMigration','CPULimitFunctionality','EnableNestedVirtualization')) {
       if ($optionsobject.$optkey -ne $null) { $vmargs[$optkey] = $optionsobject.$optkey }
   }

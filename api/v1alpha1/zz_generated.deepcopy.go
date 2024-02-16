@@ -375,8 +375,8 @@ func (in *ScvmmMachineSpec) DeepCopyInto(out *ScvmmMachineSpec) {
 		*out = new(ActiveDirectory)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Options != nil {
-		in, out := &in.Options, &out.Options
+	if in.VMOptions != nil {
+		in, out := &in.VMOptions, &out.VMOptions
 		*out = new(VmOptions)
 		(*in).DeepCopyInto(*out)
 	}

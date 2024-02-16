@@ -297,9 +297,9 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 	if err != nil {
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize disks"), VmCreated, VmFailedReason, "Failed to create vm")
 	}
-	optionsjson, err := json.Marshal(spec.Options)
+	optionsjson, err := json.Marshal(spec.VMOptions)
 	if err != nil {
-		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize options"), VmCreated, VmFailedReason, "Failed to create vm")
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errors.Wrap(err, "Failed to serialize vmoptions"), VmCreated, VmFailedReason, "Failed to create vm")
 	}
 	memoryFixed := int64(-1)
 	memoryMin := int64(-1)
@@ -319,7 +319,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 			memoryBuffer = *spec.DynamicMemory.BufferPercentage
 		}
 	}
-	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -OperatingSystem '%s' -AvailabilitySet '%s' -Options '%s'",
+	vm, err := sendWinrmCommand(log, spec.ProviderRef, "CreateVM -Cloud '%s' -HostGroup '%s' -VMName '%s' -VMTemplate '%s' -Memory %d -MemoryMin %d -MemoryMax %d -MemoryBuffer %d -CPUCount %d -Disks '%s' -VMNetwork '%s' -HardwareProfile '%s' -OperatingSystem '%s' -AvailabilitySet '%s' -VMOptions '%s'",
 		escapeSingleQuotes(spec.Cloud),
 		escapeSingleQuotes(spec.HostGroup),
 		escapeSingleQuotes(vmName),

@@ -73,7 +73,7 @@ type ScvmmMachineSpec struct {
 	AvailabilitySet string `json:"availabilitySet,omitempty"`
 	// Options for New-SCVirtualMachine
 	// +optional
-	Options *VmOptions `json:"vmOptions,omitempty"`
+	VMOptions *VmOptions `json:"vmOptions,omitempty"`
 	// Cloud-Init data
 	// This triggers the controller to create the machine without a (cluster-api) cluster
 	// For testing purposes, or just for creating VMs
@@ -321,33 +321,33 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.AvailabilitySet = in.AvailabilitySet
 	}
-	if in.Options != nil {
-		if out.Options == nil {
-			out.Options = &VmOptions{}
+	if in.VMOptions != nil {
+		if out.VMOptions == nil {
+			out.VMOptions = &VmOptions{}
 		}
-		if in.Options.Description != "" && in.Options.Description != out.Options.Description {
+		if in.VMOptions.Description != "" && in.VMOptions.Description != out.VMOptions.Description {
 			changed = true
-			out.Options.Description = in.Options.Description
+			out.VMOptions.Description = in.VMOptions.Description
 		}
-		if in.Options.StartAction != "" && in.Options.StartAction != out.Options.StartAction {
+		if in.VMOptions.StartAction != "" && in.VMOptions.StartAction != out.VMOptions.StartAction {
 			changed = true
-			out.Options.StartAction = in.Options.StartAction
+			out.VMOptions.StartAction = in.VMOptions.StartAction
 		}
-		if in.Options.StopAction != "" && in.Options.StopAction != out.Options.StopAction {
+		if in.VMOptions.StopAction != "" && in.VMOptions.StopAction != out.VMOptions.StopAction {
 			changed = true
-			out.Options.StopAction = in.Options.StopAction
+			out.VMOptions.StopAction = in.VMOptions.StopAction
 		}
-		if in.Options.CPULimitForMigration != nil && *in.Options.CPULimitForMigration != *out.Options.CPULimitForMigration {
+		if in.VMOptions.CPULimitForMigration != nil && *in.VMOptions.CPULimitForMigration != *out.VMOptions.CPULimitForMigration {
 			changed = true
-			*out.Options.CPULimitForMigration = *in.Options.CPULimitForMigration
+			*out.VMOptions.CPULimitForMigration = *in.VMOptions.CPULimitForMigration
 		}
-		if in.Options.CPULimitFunctionality != nil && *in.Options.CPULimitFunctionality != *out.Options.CPULimitFunctionality {
+		if in.VMOptions.CPULimitFunctionality != nil && *in.VMOptions.CPULimitFunctionality != *out.VMOptions.CPULimitFunctionality {
 			changed = true
-			*out.Options.CPULimitFunctionality = *in.Options.CPULimitFunctionality
+			*out.VMOptions.CPULimitFunctionality = *in.VMOptions.CPULimitFunctionality
 		}
-		if in.Options.EnableNestedVirtualization != nil && *in.Options.EnableNestedVirtualization != *out.Options.EnableNestedVirtualization {
+		if in.VMOptions.EnableNestedVirtualization != nil && *in.VMOptions.EnableNestedVirtualization != *out.VMOptions.EnableNestedVirtualization {
 			changed = true
-			*out.Options.EnableNestedVirtualization = *in.Options.EnableNestedVirtualization
+			*out.VMOptions.EnableNestedVirtualization = *in.VMOptions.EnableNestedVirtualization
 		}
 	}
 	return changed
