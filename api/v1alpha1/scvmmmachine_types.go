@@ -273,9 +273,6 @@ func init() {
 
 func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	changed := false
-	if out.Options == nil {
-		out.Options = &VmOptions{}
-	}
 	if in.Cloud != "" && in.Cloud != out.Cloud {
 		changed = true
 		out.Cloud = in.Cloud
@@ -324,29 +321,34 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 		changed = true
 		out.AvailabilitySet = in.AvailabilitySet
 	}
-	if in.Options.Description != "" && in.Options.Description != out.Options.Description {
-		changed = true
-		out.Options.Description = in.Options.Description
-	}
-	if in.Options.StartAction != "" && in.Options.StartAction != out.Options.StartAction {
-		changed = true
-		out.Options.StartAction = in.Options.StartAction
-	}
-	if in.Options.StopAction != "" && in.Options.StopAction != out.Options.StopAction {
-		changed = true
-		out.Options.StopAction = in.Options.StopAction
-	}
-	if in.Options.CPULimitForMigration != nil && *in.Options.CPULimitForMigration != *out.Options.CPULimitForMigration {
-		changed = true
-		*out.Options.CPULimitForMigration = *in.Options.CPULimitForMigration
-	}
-	if in.Options.CPULimitFunctionality != nil && *in.Options.CPULimitFunctionality != *out.Options.CPULimitFunctionality {
-		changed = true
-		*out.Options.CPULimitFunctionality = *in.Options.CPULimitFunctionality
-	}
-	if in.Options.EnableNestedVirtualization != nil && *in.Options.EnableNestedVirtualization != *out.Options.EnableNestedVirtualization {
-		changed = true
-		*out.Options.EnableNestedVirtualization = *in.Options.EnableNestedVirtualization
+	if in.Options != nil {
+		if out.Options == nil {
+			out.Options = &VmOptions{}
+		}
+		if in.Options.Description != "" && in.Options.Description != out.Options.Description {
+			changed = true
+			out.Options.Description = in.Options.Description
+		}
+		if in.Options.StartAction != "" && in.Options.StartAction != out.Options.StartAction {
+			changed = true
+			out.Options.StartAction = in.Options.StartAction
+		}
+		if in.Options.StopAction != "" && in.Options.StopAction != out.Options.StopAction {
+			changed = true
+			out.Options.StopAction = in.Options.StopAction
+		}
+		if in.Options.CPULimitForMigration != nil && *in.Options.CPULimitForMigration != *out.Options.CPULimitForMigration {
+			changed = true
+			*out.Options.CPULimitForMigration = *in.Options.CPULimitForMigration
+		}
+		if in.Options.CPULimitFunctionality != nil && *in.Options.CPULimitFunctionality != *out.Options.CPULimitFunctionality {
+			changed = true
+			*out.Options.CPULimitFunctionality = *in.Options.CPULimitFunctionality
+		}
+		if in.Options.EnableNestedVirtualization != nil && *in.Options.EnableNestedVirtualization != *out.Options.EnableNestedVirtualization {
+			changed = true
+			*out.Options.EnableNestedVirtualization = *in.Options.EnableNestedVirtualization
+		}
 	}
 	return changed
 }
