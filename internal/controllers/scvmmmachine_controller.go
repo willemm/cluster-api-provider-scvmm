@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -946,6 +948,22 @@ func (r *ScvmmMachineReconciler) ipAddressClaimToVSphereVM(ctx context.Context, 
 		}
 	}
 	return result
+}
+
+type ownerOrGenerationChangedPredicate struct {
+	predicate.Funcs
+}
+
+func (ownerOrGenerationChangedPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil {
+		return false
+	}
+	if e.ObjectNew == nil {
+		return false
+	}
+
+	return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() ||
+		!reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
 }
 
 // SetupWithManager sets up the controller with the Manager.
