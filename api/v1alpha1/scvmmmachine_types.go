@@ -57,9 +57,6 @@ type ScvmmMachineSpec struct {
 	// Dynamic Memory
 	// +optional
 	DynamicMemory *DynamicMemory `json:"dynamicMemory,omitempty"`
-	// Virtual Network identifier, deprecated
-	// +optional
-	VMNetwork string `json:"vmNetwork,omitempty"`
 	// Hardware profile
 	HardwareProfile string `json:"hardwareProfile"`
 	// OperatingSystem
@@ -298,10 +295,6 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	if in.Memory != nil && in.Memory != out.Memory {
 		changed = true
 		out.Memory = in.Memory
-	}
-	if in.VMNetwork != "" && in.VMNetwork != out.VMNetwork {
-		changed = true
-		out.VMNetwork = in.VMNetwork
 	}
 	if in.HardwareProfile != "" && in.HardwareProfile != out.HardwareProfile {
 		changed = true

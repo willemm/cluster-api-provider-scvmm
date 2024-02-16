@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1alpha1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -38,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	k8slog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/pkg/errors"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
@@ -94,7 +95,7 @@ type ScvmmMachineReconciler struct {
 //+kubebuilder:rbac:groups="",resources=events;,verbs=create;patch
 
 func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	log.V(1).Info("Fetching scvmmmachine")
 	// Fetch the instance
@@ -196,10 +197,15 @@ func baseName(path string) string {
 }
 
 func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
-	ctx = k8slog.IntoContext(ctx, log)
+	log := ctrl.LoggerFrom(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
+	ctx = ctrl.LoggerInto(ctx, log)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
+	if err := r.reconcileIPAddressClaims(ctx, scvmmMachine); err != nil {
+		return ctrl.Result{}, err
+	}
+	// TODO: https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/blob/main/pkg/services/govmomi/ipam/status.go#L121
+
 	vm, err := r.getVM(ctx, scvmmMachine)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -252,7 +258,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 }
 
 func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (VMResult, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	if scvmmMachine.Spec.Id == "" {
 		return VMResult{}, nil
 	}
@@ -279,7 +285,7 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 }
 
 func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	spec := scvmmMachine.Spec
 	vmName := spec.VMName
 	if vmName == "" {
@@ -360,7 +366,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 }
 
 func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
 	if err == nil {
 		_, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s'",
@@ -393,7 +399,7 @@ func vmNeedsISO(isoPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult)
 }
 
 func (r *ScvmmMachineReconciler) addVMSpec(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) error {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	newspec, err := sendWinrmSpecCommand(log, scvmmMachine.Spec.ProviderRef, "AddVMSpec", scvmmMachine)
 	if err != nil {
 		return err
@@ -419,7 +425,7 @@ func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 }
 
 func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	spec := scvmmMachine.Spec
 	diskjson, err := makeDisksJSON(spec.Disks)
 	var vm VMResult
@@ -440,7 +446,7 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, patchHelper *p
 }
 
 func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, isoPath string) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	var bootstrapData, metaData, networkConfig []byte
 	var err error
 	if machine != nil {
@@ -492,7 +498,7 @@ func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, patchHelper *pa
 }
 
 func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	// Add adcomputer here, because we now know the vmname will not change
 	// (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
 	var err error
@@ -528,7 +534,7 @@ func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch
 }
 
 func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	if vm.IPv4Addresses != nil {
 		scvmmMachine.Status.Addresses = make([]clusterv1.MachineAddress, len(vm.IPv4Addresses))
 		for i := range vm.IPv4Addresses {
@@ -598,7 +604,7 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 
 func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	// Fetch the instance
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
@@ -672,7 +678,7 @@ carry:
 }
 
 func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, scvmmNamePool *infrav1.ScvmmNamePool, vmName string, owner *corev1.TypedLocalObjectReference) (string, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
 		VMName: vmName,
 		Owner:  owner,
@@ -686,7 +692,7 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, scvmmNam
 }
 
 func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) error {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
@@ -715,8 +721,8 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, scvmmMa
 }
 
 func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
-	ctx = k8slog.IntoContext(ctx, log)
+	log := ctrl.LoggerFrom(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
+	ctx = ctrl.LoggerInto(ctx, log)
 
 	log.V(1).Info("Do delete reconciliation")
 	// If there's no finalizer do nothing
@@ -763,6 +769,9 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 5, err, VmCreated, VmFailedReason, "Failed to remove namepool entry")
 			}
 		}
+		if err := r.deleteIPAddressClaims(ctx, scvmmMachine); err != nil {
+			return ctrl.Result{}, err
+		}
 		log.V(1).Info("Machine is removed, remove finalizer")
 		controllerutil.RemoveFinalizer(scvmmMachine, MachineFinalizer)
 		if perr := patchScvmmMachine(ctx, patchHelper, scvmmMachine); perr != nil {
@@ -782,7 +791,7 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, patchHelpe
 }
 
 func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine, requeue int, err error, condition clusterv1.ConditionType, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
-	log := k8slog.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 	scvmmMachine.Status.Ready = false
 	if err != nil {
 		if message != "" {
@@ -885,8 +894,8 @@ func escapeSingleQuotesArray(str []string) string {
 // requests for reconciliation of ScvmmMachines.
 func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context, o client.Object) []ctrl.Request {
 	result := []ctrl.Request{}
+	log := ctrl.LoggerFrom(ctx)
 	c, ok := o.(*infrav1.ScvmmCluster)
-	log := k8slog.FromContext(ctx)
 	if !ok {
 		log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o), "failed to get ScvmmMachine for ScvmmCluster")
 		return nil
@@ -904,7 +913,7 @@ func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context
 
 	labels := map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
 	machineList := &clusterv1.MachineList{}
-	if err := r.Client.List(context.TODO(), machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
+	if err := r.Client.List(ctx, machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
 		log.Error(err, "failed to list ScvmmMachines")
 		return nil
 	}
@@ -916,6 +925,26 @@ func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context
 		result = append(result, ctrl.Request{NamespacedName: name})
 	}
 
+	return result
+}
+
+func (r *ScvmmMachineReconciler) ipAddressClaimToVSphereVM(ctx context.Context, o client.Object) []reconcile.Request {
+	result := []ctrl.Request{}
+	log := ctrl.LoggerFrom(ctx)
+	c, ok := o.(*ipamv1.IPAddressClaim)
+	if !ok {
+		log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o), "failed to get ScvmmMachine for ScvmmCluster")
+		return nil
+	}
+
+	if util.HasOwner(c.OwnerReferences, infrav1.GroupVersion.String(), []string{"ScvmmMachine"}) {
+		for _, ref := range c.OwnerReferences {
+			if ref.Kind == "ScvmmMachine" {
+				name := client.ObjectKey{Namespace: c.Namespace, Name: ref.Name}
+				result = append(result, ctrl.Request{NamespacedName: name})
+			}
+		}
+	}
 	return result
 }
 
@@ -936,10 +965,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		WithOptions(options).
 		WithEventFilter(predicate.And(
 			predicates.ResourceNotPaused(log),
-			predicate.Or(
-				predicate.GenerationChangedPredicate{},
-				ownerChangedPredicate{},
-			),
+			ownerOrGenerationChangedPredicate{},
 		)).
 		Watches(
 			&clusterv1.Machine{},
@@ -953,6 +979,10 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToScvmmMachines),
 			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
+		).
+		Watches(
+			&ipamv1.IPAddressClaim{},
+			handler.EnqueueRequestsFromMapFunc(r.ipAddressClaimToVSphereVM),
 		).
 		Complete(r)
 }

@@ -276,9 +276,6 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              vmNetwork:
-                description: Virtual Network identifier, deprecated
-                type: string
               vmOptions:
                 description: Options for New-SCVirtualMachine
                 properties:

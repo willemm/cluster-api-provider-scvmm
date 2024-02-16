@@ -25,7 +25,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 )
@@ -43,7 +42,7 @@ type ScvmmProviderReconciler struct {
 // Seemed the easiest way to force the workers to reload when the provider changes, without having
 // to read them every time
 func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// log := log.FromContext(ctx).WithValues("scvmmprovider", req.NamespacedName)
+	// log := ctrl.LoggerFrom(ctx).WithValues("scvmmprovider", req.NamespacedName)
 
 	providerRef := infrav1.ScvmmProviderReference{
 		Name:      req.NamespacedName.Name,
@@ -73,7 +72,7 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef infrav1.ScvmmProviderReference) (*infrav1.ScvmmProvider, error) {
-	log := log.FromContext(ctx).WithValues("providerref", providerRef)
+	log := ctrl.LoggerFrom(ctx).WithValues("providerref", providerRef)
 	provider := &infrav1.ScvmmProvider{}
 	if providerRef.Name != "" {
 		log.V(1).Info("Fetching provider ref")

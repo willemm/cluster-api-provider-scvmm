@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/pkg/errors"
@@ -56,7 +55,7 @@ type ScvmmClusterReconciler struct {
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=scvmmclusters/finalizers,verbs=update
 
 func (r *ScvmmClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, retErr error) {
-	log := log.FromContext(ctx).WithValues("scvmmcluster", req.NamespacedName)
+	log := ctrl.LoggerFrom(ctx).WithValues("scvmmcluster", req.NamespacedName)
 
 	// Fetch the ScvmmCluster instance
 	scvmmCluster := &infrav1.ScvmmCluster{}
@@ -159,11 +158,11 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 	return ctrl.Result{}, nil
 }
 
-type ownerChangedPredicate struct {
+type ownerOrGenerationChangedPredicate struct {
 	predicate.Funcs
 }
 
-func (ownerChangedPredicate) Update(e event.UpdateEvent) bool {
+func (ownerOrGenerationChangedPredicate) Update(e event.UpdateEvent) bool {
 	if e.ObjectOld == nil {
 		return false
 	}
@@ -171,7 +170,8 @@ func (ownerChangedPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	return !reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
+	return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() ||
+		!reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -186,10 +186,7 @@ func (r *ScvmmClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		WithOptions(options).
 		WithEventFilter(predicate.And(
 			predicates.ResourceNotPaused(log),
-			predicate.Or(
-				predicate.GenerationChangedPredicate{},
-				ownerChangedPredicate{},
-			),
+			ownerOrGenerationChangedPredicate{},
 		)).
 		Watches(
 			&clusterv1.Cluster{},
