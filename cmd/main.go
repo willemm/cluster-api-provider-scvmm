@@ -30,11 +30,11 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1alpha1"
+	"sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
@@ -57,20 +57,22 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
+	var diagnosticsOptions flags.DiagnosticsOptions
 	var enableLeaderElection bool
 	var probeAddr string
-	var secureMetrics bool
 	var enableHTTP2 bool
 	var machineConcurrency int
 	var clusterConcurrency int
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&diagnosticsOptions.MetricsBindAddr, "metrics-bind-address", "", "The address the metric endpoint binds to (deprecated).")
+	flag.StringVar(&diagnosticsOptions.DiagnosticsAddress, "diagnostics-address", ":8443",
+		"The address the diagnostics endpoint binds to.")
+	flag.BoolVar(&diagnosticsOptions.InsecureDiagnostics, "insecure-diagnostics", false,
+		"If set the diagnostics endpoint is served insecurely")
+
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", false,
-		"If set the metrics endpoint is served securely")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.IntVar(&machineConcurrency, "machine-concurrency", 3, "The number of scvmm machines to handle concurrently.")
@@ -105,12 +107,8 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress:   metricsAddr,
-			SecureServing: secureMetrics,
-			TLSOpts:       tlsOpts,
-		},
+		Scheme:                 scheme,
+		Metrics:                flags.GetDiagnosticsOptions(diagnosticsOptions),
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
