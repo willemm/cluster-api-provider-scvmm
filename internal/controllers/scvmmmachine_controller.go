@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1alpha1"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
