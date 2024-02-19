@@ -70,10 +70,10 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 		addresses := make([]string, len(device.AddressesFromPools))
 		for poolRefIdx, poolRef := range device.AddressesFromPools {
 			totalClaims++
-			ipAddrClaimName := fmt.Sprintf("%s-%d-%d", scvmmMachine.ObjectMeta.Name, devIdx, poolRefIdx)
+			ipAddrClaimName := fmt.Sprintf("%s-%d-%d", scvmmMachine.Name, devIdx, poolRefIdx)
 			ipAddrClaim := &ipamv1.IPAddressClaim{}
 			ipAddrClaimKey := client.ObjectKey{
-				Namespace: scvmmMachine.ObjectMeta.Namespace,
+				Namespace: scvmmMachine.Namespace,
 				Name:      ipAddrClaimName,
 			}
 
@@ -94,7 +94,7 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 			if ipAddrClaim.Status.AddressRef.Name != "" {
 				ipAddr := &ipamv1.IPAddress{}
 				ipAddrKey := client.ObjectKey{
-					Namespace: scvmmMachine.ObjectMeta.Namespace,
+					Namespace: scvmmMachine.Namespace,
 					Name:      ipAddrClaim.Status.AddressRef.Name,
 				}
 				log.V(1).Info("Get ipaddress", "namespacedname", ipAddrKey)
@@ -173,7 +173,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 	claim := &ipamv1.IPAddressClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: scvmmMachine.ObjectMeta.Namespace,
+			Namespace: scvmmMachine.Namespace,
 		},
 	}
 	mutateFn := func() (err error) {
@@ -182,8 +182,8 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 			metav1.OwnerReference{
 				APIVersion: infrav1.GroupVersion.String(),
 				Kind:       "ScvmmMachine",
-				Name:       scvmmMachine.ObjectMeta.Name,
-				UID:        scvmmMachine.ObjectMeta.UID,
+				Name:       scvmmMachine.Name,
+				UID:        scvmmMachine.UID,
 			}))
 
 		controllerutil.AddFinalizer(claim, IPAddressClaimFinalizer)
@@ -191,7 +191,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		if claim.Labels == nil {
 			claim.Labels = make(map[string]string)
 		}
-		claim.Labels[clusterv1.ClusterNameLabel] = scvmmMachine.ObjectMeta.Labels[clusterv1.ClusterNameLabel]
+		claim.Labels[clusterv1.ClusterNameLabel] = scvmmMachine.Labels[clusterv1.ClusterNameLabel]
 
 		if claim.Annotations == nil {
 			claim.Annotations = make(map[string]string)
@@ -230,9 +230,9 @@ func (r *ScvmmMachineReconciler) deleteIPAddressClaims(ctx context.Context, scvm
 		for poolRefIdx := range device.AddressesFromPools {
 			// check if claim exists
 			ipAddrClaim := &ipamv1.IPAddressClaim{}
-			ipAddrClaimName := fmt.Sprintf("%s-%d-%d", scvmmMachine.ObjectMeta.Name, devIdx, poolRefIdx)
+			ipAddrClaimName := fmt.Sprintf("%s-%d-%d", scvmmMachine.Name, devIdx, poolRefIdx)
 			ipAddrClaimKey := client.ObjectKey{
-				Namespace: scvmmMachine.ObjectMeta.Namespace,
+				Namespace: scvmmMachine.Namespace,
 				Name:      ipAddrClaimName,
 			}
 			if err := r.Client.Get(ctx, ipAddrClaimKey, ipAddrClaim); err != nil {

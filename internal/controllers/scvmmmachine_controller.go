@@ -120,7 +120,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, errors.Wrap(err, "Get patchhelper")
 	}
 
-	if !scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !scvmmMachine.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, patchHelper, scvmmMachine)
 	}
 
@@ -302,7 +302,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 			scvmmMachine.Spec.VMName = vmName
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
 		} else {
-			vmName = scvmmMachine.ObjectMeta.Name
+			vmName = scvmmMachine.Name
 		}
 	}
 	diskjson, err := makeDisksJSON(spec.Disks)
@@ -610,7 +610,7 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	// Fetch the instance
 	log := ctrl.LoggerFrom(ctx)
-	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
+	poolName := client.ObjectKey{Namespace: scvmmMachine.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
@@ -619,7 +619,7 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachin
 	owner := &corev1.TypedLocalObjectReference{
 		APIGroup: &infrav1.GroupVersion.Group,
 		Kind:     "ScvmmMachine",
-		Name:     scvmmMachine.ObjectMeta.Name,
+		Name:     scvmmMachine.Name,
 	}
 	seen := make(map[string]bool)
 	for _, n := range scvmmNamePool.Status.VMNames {
@@ -698,7 +698,7 @@ func (r *ScvmmMachineReconciler) claimVMNameInPool(ctx context.Context, scvmmNam
 
 func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) error {
 	log := ctrl.LoggerFrom(ctx)
-	poolName := client.ObjectKey{Namespace: scvmmMachine.ObjectMeta.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
+	poolName := client.ObjectKey{Namespace: scvmmMachine.Namespace, Name: scvmmMachine.Spec.VMNameFromPool.Name}
 	log.V(1).Info("Fetching scvmmnamepool", "namepool", poolName)
 	scvmmNamePool := &infrav1.ScvmmNamePool{}
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
@@ -707,7 +707,7 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, scvmmMa
 	owner := &corev1.TypedLocalObjectReference{
 		APIGroup: &infrav1.GroupVersion.Group,
 		Kind:     "ScvmmMachine",
-		Name:     scvmmMachine.ObjectMeta.Name,
+		Name:     scvmmMachine.Name,
 	}
 	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "owner", owner, "names", scvmmNamePool.Status.VMNames)
 	var vmNames []infrav1.VmPoolName
@@ -842,7 +842,7 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 			VmCreated,
 			VmRunning,
 		),
-		conditions.WithStepCounterIf(scvmmMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounterIf(scvmmMachine.DeletionTimestamp.IsZero()),
 	)
 
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.

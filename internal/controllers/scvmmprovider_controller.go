@@ -65,7 +65,7 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	winrmProviders[providerRef] = WinrmProvider{
 		Spec:            scvmmProvider.Spec,
-		ResourceVersion: scvmmProvider.ObjectMeta.ResourceVersion,
+		ResourceVersion: scvmmProvider.ResourceVersion,
 	}
 
 	return ctrl.Result{}, nil
@@ -163,7 +163,7 @@ func (r *ScvmmProviderReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 	if err == nil {
 		winrmProviders[providerRef] = WinrmProvider{
 			Spec:            scvmmProvider.Spec,
-			ResourceVersion: scvmmProvider.ObjectMeta.ResourceVersion,
+			ResourceVersion: scvmmProvider.ResourceVersion,
 		}
 	}
 	return ctrl.NewControllerManagedBy(mgr).

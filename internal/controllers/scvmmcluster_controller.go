@@ -107,7 +107,7 @@ func patchScvmmCluster(ctx context.Context, patchHelper *patch.Helper, scvmmClus
 		conditions.WithConditions(
 			ClusterCreated,
 		),
-		conditions.WithStepCounterIf(scvmmCluster.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounterIf(scvmmCluster.DeletionTimestamp.IsZero()),
 	)
 
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.
