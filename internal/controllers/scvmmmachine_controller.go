@@ -203,17 +203,17 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	log.Info("Doing reconciliation of ScvmmMachine")
-	if err := r.reconcileIPAddressClaims(ctx, scvmmMachine); err != nil {
-		return ctrl.Result{}, err
-	}
-	// TODO: https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/blob/main/pkg/services/govmomi/ipam/status.go#L121
-
 	vm, err := r.getVM(ctx, scvmmMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if vm.Id == "" {
 		return r.createVM(ctx, patchHelper, scvmmMachine)
+	}
+
+	// Create IPAddressClaims after we create the VM because we need vm name
+	if err := r.reconcileIPAddressClaims(ctx, scvmmMachine); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	if vm.Status == "UnderCreation" {
@@ -235,6 +235,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if err != nil {
 			log.Error(err, "Failed to get provider")
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
+		}
+		if !hasAllIPAddresses(scvmmMachine.Spec.Networking) {
+			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForIPAddressReason, "")
 		}
 
 		isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
@@ -904,7 +907,7 @@ func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context
 	}
 	log = log.WithValues("ScvmmCluster", c.Name, "Namespace", c.Namespace)
 
-	cluster, err := util.GetOwnerCluster(context.TODO(), r.Client, c.ObjectMeta)
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
 	switch {
 	case apierrors.IsNotFound(errors.Cause(err)) || cluster == nil:
 		return result

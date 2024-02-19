@@ -1,6 +1,6 @@
 param($spec, $metadata)
 try {
-  return $spec
+  return '{}'
 } catch {
   ErrorToJson 'Add VM Spec' $_
 }

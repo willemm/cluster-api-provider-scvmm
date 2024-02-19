@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -50,8 +51,10 @@ const (
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses,verbs=get;list;watch
 
-// reconcileIPAddressClaims ensures that VSphereVMs that are configured with
+// reconcileIPAddressClaims ensures that ScvmmMachines that are configured with
 // .spec.networking.devices.addressFromPools have corresponding IPAddressClaims.
+// If claims are fulfilled, it also fills those in in the spec
+// TODO: Use the status to store fulfilled claims instead of amending the spec
 func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) error {
 	totalClaims, claimsCreated := 0, 0
 	claimsFulfilled := 0
@@ -63,6 +66,8 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 	)
 
 	for devIdx, device := range scvmmMachine.Spec.Networking.Devices {
+		var gateway string
+		addresses := make([]string, len(device.AddressesFromPools))
 		for poolRefIdx, poolRef := range device.AddressesFromPools {
 			totalClaims++
 			ipAddrClaimName := fmt.Sprintf("%s-%d-%d", scvmmMachine.ObjectMeta.Name, devIdx, poolRefIdx)
@@ -87,13 +92,38 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 				claimsCreated++
 			}
 			if ipAddrClaim.Status.AddressRef.Name != "" {
+				ipAddr := &ipamv1.IPAddress{}
+				ipAddrKey := client.ObjectKey{
+					Namespace: scvmmMachine.ObjectMeta.Namespace,
+					Name:      ipAddrClaim.Status.AddressRef.Name,
+				}
+				if err := r.Client.Get(loopctx, ipAddrKey, ipAddr); err != nil {
+					// Should not happen but you never know
+					errList = append(errList, err)
+					continue
+				}
+				if gateway != "" && gateway != ipAddr.Spec.Gateway {
+					err := fmt.Errorf("Different gateways: %s <> %s", gateway, ipAddr.Spec.Gateway)
+					errList = append(errList, err)
+					continue
+				}
+				gateway = ipAddr.Spec.Gateway
+				addresses[poolRefIdx] = fmt.Sprintf("%s/%d", ipAddr.Spec.Address, ipAddr.Spec.Prefix)
 				claimsFulfilled++
 			}
 
 			// Since this is eventually used to calculate the status of the
-			// IPAddressClaimed condition for the VSphereVM object.
+			// IPAddressClaimed condition for the ScvmmMachine object.
 			if conditions.Has(ipAddrClaim, clusterv1.ReadyCondition) {
 				claims = append(claims, ipAddrClaim)
+			}
+		}
+		if gateway != "" {
+			if gateway != device.Gateway {
+				device.Gateway = gateway
+			}
+			if !reflect.DeepEqual(device.IPAddresses, addresses) {
+				device.IPAddresses = addresses
 			}
 		}
 	}
@@ -149,7 +179,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 			claim.OwnerReferences,
 			metav1.OwnerReference{
 				APIVersion: infrav1.GroupVersion.String(),
-				Kind:       "VSphereVM",
+				Kind:       "ScvmmMachine",
 				Name:       scvmmMachine.ObjectMeta.Name,
 				UID:        scvmmMachine.ObjectMeta.UID,
 			}))
@@ -160,6 +190,11 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 			claim.Labels = make(map[string]string)
 		}
 		claim.Labels[clusterv1.ClusterNameLabel] = scvmmMachine.ObjectMeta.Labels[clusterv1.ClusterNameLabel]
+
+		if claim.Annotations == nil {
+			claim.Annotations = make(map[string]string)
+		}
+		claim.Annotations["infrastructure.x-k8s.io/hostname"] = scvmmMachine.Spec.VMName
 
 		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup
 		claim.Spec.PoolRef.Kind = poolRef.Kind
@@ -213,4 +248,24 @@ func (r *ScvmmMachineReconciler) deleteIPAddressClaims(ctx context.Context, scvm
 		}
 	}
 	return nil
+}
+
+func hasAllIPAddresses(networking *infrav1.Networking) bool {
+	for _, device := range networking.Devices {
+		if device.Gateway == "" {
+			return false
+		}
+		if len(device.IPAddresses) == 0 {
+			return false
+		}
+		if len(device.IPAddresses) < len(device.AddressesFromPools) {
+			return false
+		}
+		for _, address := range device.IPAddresses {
+			if address == "" {
+				return false
+			}
+		}
+	}
+	return true
 }
