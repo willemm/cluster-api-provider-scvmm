@@ -97,6 +97,7 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 					Namespace: scvmmMachine.ObjectMeta.Namespace,
 					Name:      ipAddrClaim.Status.AddressRef.Name,
 				}
+				log.V(1).Info("Get ipaddress", "namespacedname", ipAddrKey)
 				if err := r.Client.Get(loopctx, ipAddrKey, ipAddr); err != nil {
 					// Should not happen but you never know
 					errList = append(errList, err)
@@ -118,12 +119,13 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 				claims = append(claims, ipAddrClaim)
 			}
 		}
+		log.V(1).Info("Reconciling addresses, got claims", "gateway", gateway, "addresses", addresses)
 		if gateway != "" {
 			if gateway != device.Gateway {
-				device.Gateway = gateway
+				scvmmMachine.Spec.Networking.Devices[devIdx].Gateway = gateway
 			}
 			if !reflect.DeepEqual(device.IPAddresses, addresses) {
-				device.IPAddresses = addresses
+				scvmmMachine.Spec.Networking.Devices[devIdx].IPAddresses = addresses
 			}
 		}
 	}
@@ -204,6 +206,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 	log := ctrl.LoggerFrom(ctx)
 
 	result, err := controllerutil.CreateOrPatch(ctx, c, claim, mutateFn)
+	log.V(1).Info("Create or patch ipaddressclaim result", "claim", claim)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to CreateOrPatch IPAddressClaim")
 	}

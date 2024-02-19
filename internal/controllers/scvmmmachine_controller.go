@@ -229,15 +229,15 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if vmNeedsExpandDisks(scvmmMachine, vm) {
 			return r.expandDisks(ctx, patchHelper, scvmmMachine)
 		}
+		if !hasAllIPAddresses(scvmmMachine.Spec.Networking) {
+			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForIPAddressReason, "")
+		}
 
 		log.V(1).Info("Get provider")
 		provider, err := getProvider(scvmmMachine.Spec.ProviderRef)
 		if err != nil {
 			log.Error(err, "Failed to get provider")
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
-		}
-		if !hasAllIPAddresses(scvmmMachine.Spec.Networking) {
-			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForIPAddressReason, "")
 		}
 
 		isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
