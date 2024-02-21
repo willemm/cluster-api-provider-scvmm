@@ -85,16 +85,16 @@ func (r *ScvmmClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}()
 
+	// Handle deleted clusters
+	if !scvmmCluster.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, scvmmCluster)
+	}
+
 	// Add finalizer.  Apparently we should return here to avoid a race condition
 	// (Presumably the change/patch will trigger another reconciliation so it continues)
 	if !controllerutil.ContainsFinalizer(scvmmCluster, ClusterFinalizer) {
 		controllerutil.AddFinalizer(scvmmCluster, ClusterFinalizer)
 		return ctrl.Result{}, nil
-	}
-
-	// Handle deleted clusters
-	if !scvmmCluster.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, scvmmCluster)
 	}
 
 	// Handle non-deleted clusters

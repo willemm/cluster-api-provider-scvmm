@@ -933,7 +933,7 @@ func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context
 	return result
 }
 
-func (r *ScvmmMachineReconciler) ipAddressClaimToVSphereVM(ctx context.Context, o client.Object) []reconcile.Request {
+func (r *ScvmmMachineReconciler) ipAddressClaimToScvmmMachine(ctx context.Context, o client.Object) []reconcile.Request {
 	result := []ctrl.Request{}
 	log := ctrl.LoggerFrom(ctx)
 	c, ok := o.(*ipamv1.IPAddressClaim)
@@ -1003,7 +1003,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		).
 		Watches(
 			&ipamv1.IPAddressClaim{},
-			handler.EnqueueRequestsFromMapFunc(r.ipAddressClaimToVSphereVM),
+			handler.EnqueueRequestsFromMapFunc(r.ipAddressClaimToScvmmMachine),
 		).
 		Complete(r)
 }
