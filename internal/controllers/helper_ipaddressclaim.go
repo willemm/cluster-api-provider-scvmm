@@ -46,6 +46,8 @@ const (
 	IPAddressInvalidReason            = "IPAddressInvalid"
 	IPAddressClaimNotFoundReason      = "IPAddressClaimNotFound"
 	IPAddressClaimFinalizer           = "scvmmmachine.finalizers.cluster.x-k8s.io/ip-claim-protection"
+
+	HostnameAnnotation = "infrastructure.x-k8s.io/hostname"
 )
 
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
@@ -170,6 +172,10 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 // support pausing reconciliation.
 // The responsibility of the IP address resolution is handled by an external IPAM provider.
 func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMachine *infrav1.ScvmmMachine, name string, poolRef corev1.TypedLocalObjectReference) (*ipamv1.IPAddressClaim, bool, error) {
+	hostname := scvmmMachine.Spec.Networking.Domain
+	if hostname == "" {
+		return nil, false, fmt.Errorf("missing required parameter networking.Domain")
+	}
 	claim := &ipamv1.IPAddressClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -196,7 +202,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		if claim.Annotations == nil {
 			claim.Annotations = make(map[string]string)
 		}
-		claim.Annotations["infrastructure.x-k8s.io/hostname"] = scvmmMachine.Spec.VMName
+		claim.Annotations[HostnameAnnotation] = fmt.Sprintf("%s.%s", scvmmMachine.Spec.VMName, hostname)
 
 		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup
 		claim.Spec.PoolRef.Kind = poolRef.Kind
