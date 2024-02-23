@@ -1001,9 +1001,6 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 			handler.EnqueueRequestsFromMapFunc(clusterToScvmmMachines),
 			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
 		).
-		Watches(
-			&ipamv1.IPAddressClaim{},
-			handler.EnqueueRequestsFromMapFunc(r.ipAddressClaimToScvmmMachine),
-		).
+		Owns(&ipamv1.IPAddressClaim{}).
 		Complete(r)
 }
