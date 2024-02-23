@@ -42,8 +42,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -933,40 +933,24 @@ func (r *ScvmmMachineReconciler) ScvmmClusterToScvmmMachines(ctx context.Context
 	return result
 }
 
-func (r *ScvmmMachineReconciler) ipAddressClaimToScvmmMachine(ctx context.Context, o client.Object) []reconcile.Request {
-	result := []ctrl.Request{}
-	log := ctrl.LoggerFrom(ctx)
-	c, ok := o.(*ipamv1.IPAddressClaim)
-	if !ok {
-		log.Error(errors.Errorf("expected a ScvmmCluster but got a %T", o), "failed to get ScvmmMachine for ScvmmCluster")
-		return nil
-	}
-
-	if util.HasOwner(c.OwnerReferences, infrav1.GroupVersion.String(), []string{"ScvmmMachine"}) {
-		for _, ref := range c.OwnerReferences {
-			if ref.Kind == "ScvmmMachine" {
-				name := client.ObjectKey{Namespace: c.Namespace, Name: ref.Name}
-				result = append(result, ctrl.Request{NamespacedName: name})
-			}
-		}
-	}
-	return result
-}
-
 type ownerOrGenerationChangedPredicate struct {
 	predicate.Funcs
+	log logr.Logger
 }
 
-func (ownerOrGenerationChangedPredicate) Update(e event.UpdateEvent) bool {
+func (p ownerOrGenerationChangedPredicate) Update(e event.UpdateEvent) bool {
 	if e.ObjectOld == nil {
-		return false
+		return true
 	}
 	if e.ObjectNew == nil {
-		return false
+		return true
 	}
+	if _, ok := e.ObjectNew.(*infrav1.ScvmmMachine); ok {
+		return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() ||
+			!reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
+	}
+	return true
 
-	return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() ||
-		!reflect.DeepEqual(e.ObjectNew.GetOwnerReferences(), e.ObjectOld.GetOwnerReferences())
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -986,7 +970,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		WithOptions(options).
 		WithEventFilter(predicate.And(
 			predicates.ResourceNotPaused(log),
-			ownerOrGenerationChangedPredicate{},
+			ownerOrGenerationChangedPredicate{log: log},
 		)).
 		Watches(
 			&clusterv1.Machine{},
