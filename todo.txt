@@ -8,11 +8,15 @@ Bugs:
   status list, and then just return that.
 
 Todo:
+- Remove cloud-init section from spec, as that can be achieved by having a Machine
+  resource that references a handmade secret containing the cloud init stuff
+  (It needs a dummy cluster to reference anyway because of ipaddress controller looking for that)
+
 - ScvmmNamePool should probably have a webhook that checks for overlapping ranges
 
 - Handle crashing out while creating vms and stuff (currently it could try to create the same VM twice)
 
-- Add metrics, specifically how long WinRM calls take, maybe some more generic things
+v Add metrics, specifically how long WinRM calls take, maybe some more generic things
   (Also maybe log how long each call takes?)
 
 - Find a way to relate log lines to each other, if there are multiple concurrent reconciliations.
@@ -24,7 +28,9 @@ Todo:
     control plane has been initialized?
   . Easiest is probably defining it in the spec, and then using that to setup the LB
     But does the kubeadm init need the endpoint?  The kubeadm join certainly does.
-  . Should probably use a custom orchestrator script to claim the VIP for the kube-api (new-stipaddress)
+  x Should probably use a custom orchestrator script to claim the VIP for the kube-api (new-stipaddress)
+  . Should use IPAddressClaim to claim the VIP for the kube-api.
+    But (how) should it set the DNS entry?  Maybe have ipam provider do that ?
   . Claiming the ingress vip should be left to in-cluster
 - Does the cluster reconciler also have to apply a CNI networker?
   (Maybe.  There seems to be a 'cni' label on the cluster)
@@ -41,7 +47,7 @@ Todo:
     that would surprise some sysadmins
   . Think about error scenarios
 
-- Keep the WinRM powershell running (stop it after a number of seconds of inactivity)
+v Keep the WinRM powershell running (stop it after a number of seconds of inactivity)
   (Powershell startup and module loading takes a few seconds each time)
   . Probably use a channel to send the commands and get back the results?
   . Needs decent error handling for reconnection and stuff
@@ -63,5 +69,6 @@ Todo:
 
 - Better handling of external errors
 
-- Maybe look into setting networking via hyper-v integration instead of cloud-init networkconfig ??
+x Maybe look into setting networking via hyper-v integration instead of cloud-init networkconfig ??
+  * Would need hyper-v stuff running inside the host.  Also, cloud-init is there already.
 
