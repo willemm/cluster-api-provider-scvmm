@@ -5,4 +5,5 @@ resources:
 - infrastructure_v1alpha1_scvmmmachinetemplate.yaml
 - infrastructure_v1alpha1_scvmmcluster.yaml
 - infrastructure_v1alpha1_scvmmnamepool.yaml
+- infrastructure_v1alpha1_scvmmclustertemplate.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

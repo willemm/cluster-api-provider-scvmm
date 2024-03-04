@@ -1,0 +1,12 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ScvmmClusterTemplate
+metadata:
+  labels:
+    app.kubernetes.io/name: scvmmclustertemplate
+    app.kubernetes.io/instance: scvmmclustertemplate-sample
+    app.kubernetes.io/part-of: cluster-api-provider-scvmm
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: cluster-api-provider-scvmm
+  name: scvmmclustertemplate-sample
+spec:
+  # TODO(user): Add fields here
