@@ -296,6 +296,9 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 	for name, value := range provider.Env {
 		functionScripts.WriteString("${env:" + name + "} = '" + escapeSingleQuotes(value) + "'\n")
 	}
+	for name, value := range provider.SensitiveEnv {
+		functionScripts.WriteString("${env:" + name + "} = '" + escapeSingleQuotes(value) + "'\n")
+	}
 	for name, content := range funcScripts {
 		functionScripts.WriteString("\nfunction " + name + " {\n")
 		functionScripts.Write(content)
@@ -329,13 +332,16 @@ func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger)
 	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
 	// Don't use winrm.DefaultParameters here because of concurrency issues
 	params := winrm.NewParameters("PT60S", "en-US", 153600)
-	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-	params.RequestOptions = map[string]string{
-		"WINRS_CODEPAGE":          "65001",
-		"WINRS_NOPROFILE":         "TRUE",
-		"WINRS_CONSOLEMODE_STDIN": "FALSE",
-		"WINRS_SKIP_CMD_SHELL":    "TRUE",
+	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
+	params.RequestOptions["WINRS_CONSOLEMODE_STDIN"] = "FALSE"
+	params.RequestOptions["WINRS_SKIP_CMD_SHELL"] = "TRUE"
+	// params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
+	enc, err := winrm.NewEncryption("ntlm")
+	if err != nil {
+		winrmErrors.WithLabelValues("CreateConnection").Inc()
+		return nil, errors.Wrap(err, "Creating winrm client")
 	}
+	params.TransportDecorator = func() winrm.Transporter { return enc }
 
 	if ExtraDebug {
 		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)

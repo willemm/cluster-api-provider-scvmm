@@ -145,13 +145,12 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 	if p.ADPassword == "" {
 		p.ADPassword = os.Getenv("ACTIVEDIRECTOYR_PASSWORD")
 	}
-	if p.Env == nil {
-		p.Env = make(map[string]string)
+	p.SensitiveEnv = map[string]string{
+		"SCVMM_USERNAME":           p.ScvmmUsername,
+		"SCVMM_PASSWORD":           p.ScvmmPassword,
+		"ACTIVEDIRECTORY_USERNAME": p.ADUsername,
+		"ACTIVEDIRECTORY_PASSWORD": p.ADPassword,
 	}
-	p.Env["SCVMM_USERNAME"] = p.ScvmmUsername
-	p.Env["SCVMM_PASSWORD"] = p.ScvmmPassword
-	p.Env["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
-	p.Env["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
 	return provider, nil
 }
 

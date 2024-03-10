@@ -53,17 +53,18 @@ type ScvmmProviderSpec struct {
 	ExtraFunctions map[string]string `json:"extraFunctions,omitempty"`
 
 	// Scvmm/AD username and Password (not serialized)
-	ScvmmUsername  string `json:"-"`
-	ScvmmPassword  string `json:"-"`
-	ADUsername     string `json:"-"`
-	ADPassword     string `json:"-"`
-	DomainUsername string `json:"-"`
-	DomainPassword string `json:"-"`
+	ScvmmUsername string `json:"-"`
+	ScvmmPassword string `json:"-"`
+	ADUsername    string `json:"-"`
+	ADPassword    string `json:"-"`
 
 	// Environment variables to set for scripts
 	// Will be supplemented with scvmm and ad credentials
 	// +optional
 	Env map[string]string `json:"env,omitempty"`
+
+	// Sensitive env variables
+	SensitiveEnv map[string]string `json:"-"`
 }
 
 // ScvmmProviderStatus defines the observed state of ScvmmProvider

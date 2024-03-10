@@ -75,7 +75,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.IntVar(&machineConcurrency, "machine-concurrency", 3, "The number of scvmm machines to handle concurrently.")
+	// Keep to 1 because of ntlm concurrency issue
+	flag.IntVar(&machineConcurrency, "machine-concurrency", 1, "The number of scvmm machines to handle concurrently.")
 	flag.IntVar(&clusterConcurrency, "cluster-concurrency", 1, "The number of scvmm cluster objects to handle concurrently.")
 	opts := zap.Options{
 		Development: true,
@@ -150,7 +151,11 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 
-	controllers.CreateWinrmWorkers(machineConcurrency + clusterConcurrency)
+	// Keep to 1 until ntlm concurrency issue is fixed:
+	// https://github.com/masterzen/winrm/issues/142
+	// https://github.com/bodgit/ntlmssp/issues/51
+	//controllers.CreateWinrmWorkers(machineConcurrency + clusterConcurrency)
+	controllers.CreateWinrmWorkers(1)
 	defer controllers.StopWinrmWorkers()
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
