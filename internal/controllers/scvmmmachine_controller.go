@@ -616,57 +616,55 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachin
 	if err := r.Get(ctx, poolName, scvmmNamePool); err != nil {
 		return "", err
 	}
-	owner := &corev1.TypedLocalObjectReference{
-		APIGroup: &infrav1.GroupVersion.Group,
-		Kind:     "ScvmmMachine",
-		Name:     scvmmMachine.Name,
-	}
 	log.V(1).Info("Retrieving vmnames from ScvmmMachines", "namespace", scvmmNamePool.Namespace)
-	seen := make(map[string]bool)
-	for _, n := range scvmmNamePool.Status.VMNames {
-		if ownerEquals(owner, n.Owner) {
-			return n.VMName, nil
+	if scvmmNamePool.Status.VMNameOwners == nil {
+		scvmmNamePool.Status.VMNameOwners = make(map[string]string)
+	}
+	owners := scvmmNamePool.Status.VMNameOwners
+	for vmName, owner := range owners {
+		if owner == scvmmMachine.Name {
+			return vmName, nil
 		}
-		seen[n.VMName] = true
 	}
 	vmList := &infrav1.ScvmmMachineList{}
 	if err := r.List(ctx, vmList, client.InNamespace(scvmmNamePool.Namespace)); err != nil {
 		return "", err
 	}
-	// If this function is called then this should never match the current machcine
-	// So no need to check if the current machine is already given
 	for _, vm := range vmList.Items {
-		if vm.Spec.VMName != "" && !seen[vm.Spec.VMName] {
-			scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
-				Owner: &corev1.TypedLocalObjectReference{
-					APIGroup: &infrav1.GroupVersion.Group,
-					Kind:     "ScvmmMachine",
-					Name:     scvmmMachine.Name,
-				},
-				VMName: vm.Name,
-			})
-			seen[vm.Spec.VMName] = true
+		if vm.Spec.VMName != "" && owners[vm.Spec.VMName] == "" {
+			for _, nameRange := range scvmmNamePool.Spec.VMNameRanges {
+				if (nameRange.End == "" && nameRange.Start == vm.Spec.VMName) ||
+					(nameRange.Start <= vm.Spec.VMName && nameRange.End >= vm.Spec.VMName) {
+					owners[vm.Spec.VMName] = vm.Name
+					break
+				}
+			}
 		}
 	}
 	vmName := ""
+	counts := &infrav1.ScvmmPoolCounts{}
 	for _, nameRange := range scvmmNamePool.Spec.VMNameRanges {
 		candidate := nameRange.Start
 		for {
-			if vmName == "" && !seen[candidate] {
+			if vmName == "" && owners[candidate] == "" {
 				vmName = candidate
-				scvmmNamePool.Status.VMNames = append(scvmmNamePool.Status.VMNames, infrav1.VmPoolName{
-					VMName: vmName,
-					Owner:  owner,
-				})
-				log.V(1).Info("Registering vmname in pool status", "names", scvmmNamePool.Status.VMNames, "namepool", scvmmNamePool, "name", vmName, "owner", owner)
+				owners[candidate] = scvmmMachine.Name
+				log.V(1).Info("Registering vmname in pool status", "vmnameOwners", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool, "name", vmName, "owner", scvmmMachine.Name)
+			}
+			counts.Total++
+			if owners[candidate] == "" {
+				counts.Free++
+			} else {
+				counts.Used++
 			}
 			candidate = incrementString(candidate)
-			if nameRange.End == "" || candidate >= nameRange.End {
+			if nameRange.End == "" || candidate > nameRange.End {
 				break
 			}
 		}
 	}
 
+	scvmmNamePool.Status.Counts = counts
 	if err := r.Client.Status().Update(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return "", err
@@ -675,18 +673,6 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachin
 		return "", fmt.Errorf("All vmnames in range %s claimed", poolName.Name)
 	}
 	return vmName, nil
-}
-
-func ownerEquals(left *corev1.TypedLocalObjectReference, right *corev1.TypedLocalObjectReference) bool {
-	if right == nil {
-		return left == nil
-	}
-	if left == nil {
-		return false
-	}
-	return *left.APIGroup == *right.APIGroup &&
-		left.Kind == right.Kind &&
-		left.Name == right.Name
 }
 
 // Increment a string as if it's a number, digits remain digits and letters remain letters.
@@ -727,26 +713,27 @@ func (r *ScvmmMachineReconciler) removeVMNameInPool(ctx context.Context, scvmmMa
 	if err := r.List(ctx, vmList, client.InNamespace(scvmmNamePool.Namespace)); err != nil {
 		return err
 	}
+	// Also remove status vmname entries whose owner is no longer there
 	seen := make(map[string]bool)
 	for _, vm := range vmList.Items {
-		if vm.Spec.VMName != "" {
-			seen[vm.Spec.VMName] = true
+		seen[vm.Name] = true
+	}
+	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "owner", scvmmMachine.Name, "names", scvmmNamePool.Status.VMNameOwners)
+	vmNameOwners := make(map[string]string)
+	for vmName, owner := range scvmmNamePool.Status.VMNameOwners {
+		if seen[owner] {
+			if owner == scvmmMachine.Name {
+				if scvmmNamePool.Status.Counts != nil {
+					scvmmNamePool.Status.Counts.Used--
+					scvmmNamePool.Status.Counts.Free++
+				}
+			} else {
+				vmNameOwners[vmName] = owner
+			}
 		}
 	}
-	owner := &corev1.TypedLocalObjectReference{
-		APIGroup: &infrav1.GroupVersion.Group,
-		Kind:     "ScvmmMachine",
-		Name:     scvmmMachine.Name,
-	}
-	log.V(1).Info("Removing scvmmmachine from namepool", "namepool", poolName, "owner", owner, "names", scvmmNamePool.Status.VMNames)
-	var vmNames []infrav1.VmPoolName
-	for _, n := range scvmmNamePool.Status.VMNames {
-		if seen[n.VMName] && !ownerEquals(owner, n.Owner) {
-			vmNames = append(vmNames, n)
-		}
-	}
-	scvmmNamePool.Status.VMNames = vmNames
-	log.V(1).Info("Patching pool status", "names", scvmmNamePool.Status.VMNames, "namepool", scvmmNamePool, "owner", owner)
+	scvmmNamePool.Status.VMNameOwners = vmNameOwners
+	log.V(1).Info("Patching pool status", "names", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool)
 	if err := r.Client.Status().Update(ctx, scvmmNamePool); err != nil {
 		log.Error(err, "Failed to patch scvmmNamePool", "scvmmnamepool", scvmmNamePool)
 		return err

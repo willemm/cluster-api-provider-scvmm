@@ -14,7 +14,20 @@ spec:
     singular: scvmmnamepool
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Count of names configured for the pool
+      jsonPath: .status.counts.total
+      name: Total
+      type: integer
+    - description: Number of free names
+      jsonPath: .status.counts.free
+      name: Free
+      type: integer
+    - description: Number of allocated names
+      jsonPath: .status.counts.used
+      name: Used
+      type: integer
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ScvmmNamePool is the Schema for the scvmmnamepools API
@@ -104,38 +117,28 @@ spec:
                   - type
                   type: object
                 type: array
-              vmNames:
+              counts:
+                description: Info about the pool counts
+                properties:
+                  free:
+                    description: Number of available addresses
+                    type: integer
+                  total:
+                    description: Total number of addresses
+                    type: integer
+                  used:
+                    description: Number of used addresses
+                    type: integer
+                required:
+                - free
+                - total
+                - used
+                type: object
+              vmNameOwners:
+                additionalProperties:
+                  type: string
                 description: List of vmnames in use by ScvmmMachines
-                items:
-                  properties:
-                    owner:
-                      description: Scvmmmachine referencing the name
-                      properties:
-                        apiGroup:
-                          description: |-
-                            APIGroup is the group for the resource being referenced.
-                            If APIGroup is not specified, the specified Kind must be in the core API group.
-                            For any other third-party types, APIGroup is required.
-                          type: string
-                        kind:
-                          description: Kind is the type of resource being referenced
-                          type: string
-                        name:
-                          description: Name is the name of resource being referenced
-                          type: string
-                      required:
-                      - kind
-                      - name
-                      type: object
-                      x-kubernetes-map-type: atomic
-                    vmName:
-                      description: Name given to Scvmmmachine
-                      type: string
-                  required:
-                  - owner
-                  - vmName
-                  type: object
-                type: array
+                type: object
             type: object
         type: object
     served: true

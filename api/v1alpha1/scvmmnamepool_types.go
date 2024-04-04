@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -43,18 +42,26 @@ type ScvmmNamePoolStatus struct {
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 	// List of vmnames in use by ScvmmMachines
 	// +optional
-	VMNames []VmPoolName `json:"vmNames,omitempty"`
+	VMNameOwners map[string]string `json:"vmNameOwners,omitempty"`
+	// Info about the pool counts
+	// +optional
+	Counts *ScvmmPoolCounts `json:"counts,omitEmpty"`
 }
 
-type VmPoolName struct {
-	// Name given to Scvmmmachine
-	VMName string `json:"vmName"`
-	// Scvmmmachine referencing the name
-	Owner *corev1.TypedLocalObjectReference `json:"owner"`
+type ScvmmPoolCounts struct {
+	// Total number of addresses
+	Total int `json:"total"`
+	// Number of available addresses
+	Free int `json:"free"`
+	// Number of used addresses
+	Used int `json:"used"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:JSONPath=".status.counts.total",type="integer",name="Total",description="Count of names configured for the pool"
+// +kubebuilder:printcolumn:JSONPath=".status.counts.free",type="integer",name="Free",description="Number of free names"
+// +kubebuilder:printcolumn:JSONPath=".status.counts.used",type="integer",name="Used",description="Number of allocated names"
 
 // ScvmmNamePool is the Schema for the scvmmnamepools API
 type ScvmmNamePool struct {
