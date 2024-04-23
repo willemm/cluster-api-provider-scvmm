@@ -158,7 +158,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// Copy cluster provider ref to machine because the cluster can go away on deletion
 		// and then we wouldn't have access to it any more
-		if scvmmMachine.Spec.ProviderRef == nil {
+		if scvmmMachine.Spec.ProviderRef == nil || scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
 			// Fetch the Scvmm Cluster to get the providerRef.
 			scvmmClusterName := client.ObjectKey{
 				Namespace: cluster.Spec.InfrastructureRef.Namespace,
@@ -171,6 +171,21 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, ClusterNotAvailableReason, "")
 			}
 			scvmmMachine.Spec.ProviderRef = scvmmCluster.Spec.ProviderRef
+			// Get cloud and hostgroup from failureDomains if needed
+			if scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
+				if machine.Spec.FailureDomain == nil {
+					return ctrl.Result{}, fmt.Errorf("missing failureDomain")
+				}
+				fd, ok := scvmmCluster.Spec.FailureDomains[*machine.Spec.FailureDomain]
+				if !ok {
+					return ctrl.Result{}, fmt.Errorf("unknown failureDomain %s", *machine.Spec.FailureDomain)
+				}
+				scvmmMachine.Spec.Cloud = fd.Cloud
+				scvmmMachine.Spec.HostGroup = fd.HostGroup
+				if scvmmMachine.Spec.Networking == nil {
+					scvmmMachine.Spec.Networking = fd.Networking
+				}
+			}
 		}
 
 		// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
@@ -206,18 +221,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	vm, err := r.getVM(ctx, scvmmMachine)
 	if err != nil {
 		return ctrl.Result{}, err
-	}
-	// Get cloud and hostgroup from failureDomains if needed
-	if scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
-		if machine.Spec.FailureDomain == nil {
-			return ctrl.Result{}, fmt.Errorf("missing failureDomain")
-		}
-		fd, ok := cluster.Status.FailureDomains[*machine.Spec.FailureDomain]
-		if !ok {
-			return ctrl.Result{}, fmt.Errorf("unknown failureDomain %s", *machine.Spec.FailureDomain)
-		}
-		scvmmMachine.Spec.Cloud = fd.Attributes["cloud"]
-		scvmmMachine.Spec.HostGroup = fd.Attributes["hostGroup"]
 	}
 	if vm.Id == "" {
 		return r.createVM(ctx, patchHelper, scvmmMachine)

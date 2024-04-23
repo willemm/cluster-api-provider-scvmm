@@ -44,6 +44,10 @@ type ScvmmFailureDomainSpec struct {
 
 	// Host Group for this failure domain
 	HostGroup string `json:"hostGroup"`
+
+	// Networking settings for this failure domain
+	// +optional
+	Networking *Networking `json:"networking,omitempty"`
 }
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster
