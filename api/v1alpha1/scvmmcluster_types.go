@@ -29,6 +29,21 @@ type ScvmmClusterSpec struct {
 	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
 	// +optional
 	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
+	// FailureDomains is a slice of failure domain objects which will be copied to the status field
+	// +optional
+	FailureDomains map[string]ScvmmFailureDomainSpec `json:"failureDomains,omitempty"`
+}
+
+type ScvmmFailureDomainSpec struct {
+	// ControlPlane determines if this failure domain is suitable for use by control plane machines.
+	// +optional
+	ControlPlane bool `json:"controlPlane,omitempty"`
+
+	// Cloud for this failure domain
+	Cloud string `json:"cloud"`
+
+	// Host Group for this failure domain
+	HostGroup string `json:"hostGroup"`
 }
 
 // ScvmmClusterStatus defines the observed state of ScvmmCluster
@@ -40,6 +55,10 @@ type ScvmmClusterStatus struct {
 	// Conditions defines current service state of the ScvmmCluster.
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+
+	// FailureDomains is a slice of failure domain objects copied from the spec
+	// +optional
+	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
 }
 
 //+kubebuilder:object:root=true

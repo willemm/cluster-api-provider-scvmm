@@ -321,10 +321,8 @@ spec:
                         description: VM template to use
                         type: string
                     required:
-                    - cloud
                     - cpuCount
                     - hardwareProfile
-                    - hostGroup
                     type: object
                 required:
                 - spec

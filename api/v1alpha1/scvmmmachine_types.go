@@ -34,9 +34,11 @@ type ScvmmMachineSpec struct {
 	// +optional
 	Id string `json:"id,omitempty"`
 	// VMM cloud to run VM on
-	Cloud string `json:"cloud"`
+	// +optional
+	Cloud string `json:"cloud,omitEmpty"`
 	// Host Group to run VM in
-	HostGroup string `json:"hostGroup"`
+	// +optional
+	HostGroup string `json:"hostGroup,omitEmpty"`
 	// Name of the VM
 	// +optional
 	VMName string `json:"vmName,omitempty"`

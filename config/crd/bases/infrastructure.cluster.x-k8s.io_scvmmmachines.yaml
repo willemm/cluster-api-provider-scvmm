@@ -310,10 +310,8 @@ spec:
                 description: VM template to use
                 type: string
             required:
-            - cloud
             - cpuCount
             - hardwareProfile
-            - hostGroup
             type: object
           status:
             description: ScvmmMachineStatus defines the observed state of ScvmmMachine

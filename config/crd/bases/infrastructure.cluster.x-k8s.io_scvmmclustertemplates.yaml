@@ -85,6 +85,26 @@ spec:
                         - host
                         - port
                         type: object
+                      failureDomains:
+                        additionalProperties:
+                          properties:
+                            cloud:
+                              description: Cloud for this failure domain
+                              type: string
+                            controlPlane:
+                              description: ControlPlane determines if this failure
+                                domain is suitable for use by control plane machines.
+                              type: boolean
+                            hostGroup:
+                              description: Host Group for this failure domain
+                              type: string
+                          required:
+                          - cloud
+                          - hostGroup
+                          type: object
+                        description: FailureDomains is a slice of failure domain objects
+                          which will be copied to the status field
+                        type: object
                       providerRef:
                         description: ProviderRef points to an ScvmmProvider instance
                           that defines the provider settings for this cluster.

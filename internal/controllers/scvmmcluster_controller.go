@@ -129,6 +129,18 @@ func (r *ScvmmClusterReconciler) reconcileNormal(ctx context.Context, scvmmClust
 			Port: 6443,
 		}
 	*/
+	// Copy failureDomains spec to status
+	failureDomains := make(clusterv1.FailureDomains)
+	for key, fd := range scvmmCluster.Spec.FailureDomains {
+		failureDomains[key] = clusterv1.FailureDomainSpec{
+			ControlPlane: fd.ControlPlane,
+			Attributes: map[string]string{
+				"cloud":     fd.Cloud,
+				"hostGroup": fd.HostGroup,
+			},
+		}
+	}
+	scvmmCluster.Status.FailureDomains = failureDomains
 
 	// Mark the scvmmCluster ready
 	scvmmCluster.Status.Ready = true

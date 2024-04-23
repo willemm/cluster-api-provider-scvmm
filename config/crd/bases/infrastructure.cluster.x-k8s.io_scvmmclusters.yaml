@@ -54,6 +54,26 @@ spec:
                 - host
                 - port
                 type: object
+              failureDomains:
+                additionalProperties:
+                  properties:
+                    cloud:
+                      description: Cloud for this failure domain
+                      type: string
+                    controlPlane:
+                      description: ControlPlane determines if this failure domain
+                        is suitable for use by control plane machines.
+                      type: boolean
+                    hostGroup:
+                      description: Host Group for this failure domain
+                      type: string
+                  required:
+                  - cloud
+                  - hostGroup
+                  type: object
+                description: FailureDomains is a slice of failure domain objects which
+                  will be copied to the status field
+                type: object
               providerRef:
                 description: ProviderRef points to an ScvmmProvider instance that
                   defines the provider settings for this cluster.
@@ -115,6 +135,26 @@ spec:
                   - type
                   type: object
                 type: array
+              failureDomains:
+                additionalProperties:
+                  description: |-
+                    FailureDomainSpec is the Schema for Cluster API failure domains.
+                    It allows controllers to understand how many failure domains a cluster can optionally span across.
+                  properties:
+                    attributes:
+                      additionalProperties:
+                        type: string
+                      description: Attributes is a free form map of attributes an
+                        infrastructure provider might use or require.
+                      type: object
+                    controlPlane:
+                      description: ControlPlane determines if this failure domain
+                        is suitable for use by control plane machines.
+                      type: boolean
+                  type: object
+                description: FailureDomains is a slice of failure domain objects copied
+                  from the spec
+                type: object
               ready:
                 description: Ready denotes that the scvmm cluster (infrastructure)
                   is ready.
