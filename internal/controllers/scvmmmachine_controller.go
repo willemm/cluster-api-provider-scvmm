@@ -207,6 +207,18 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	// Get cloud and hostgroup from failureDomains if needed
+	if scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
+		if machine.Spec.FailureDomain == nil {
+			return ctrl.Result{}, fmt.Errorf("missing failureDomain")
+		}
+		fd, ok := cluster.Status.FailureDomains[*machine.Spec.FailureDomain]
+		if !ok {
+			return ctrl.Result{}, fmt.Errorf("unknown failureDomain %s", *machine.Spec.FailureDomain)
+		}
+		scvmmMachine.Spec.Cloud = fd.Attributes["cloud"]
+		scvmmMachine.Spec.HostGroup = fd.Attributes["hostGroup"]
+	}
 	if vm.Id == "" {
 		return r.createVM(ctx, patchHelper, scvmmMachine)
 	}
