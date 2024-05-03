@@ -38,9 +38,12 @@ try {
       }
     }
     if ($disk.vhDisk) {
-      $vhdargs['VirtualHardDisk'] = Get-SCVirtualHardDisk -name $disk.vhDisk
+      $vhdargs['VirtualHardDisk'] = (Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1)
       if (-not $vhdargs['VirtualHardDisk']) {
         throw "VHD $($disk.vhDisk) not found"
+      }
+      if (-not $VirtualHardDisk) {
+        $VirtualHardDisk = $vhdargs['VirtualHardDisk']
       }
     } else {
       if ($disk.dynamic) {
@@ -124,6 +127,12 @@ try {
 
   return VMToJson $vm "Creating"
 } catch {
+  if ($VMTemplateObj) {
+    try {
+      Remove-SCVMTemplate $VMTemplateObj | out-null
+    } catch {
+    }
+  }
   ErrorToJson 'Create VM' $_
 }
 
