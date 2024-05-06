@@ -255,9 +255,9 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
 		}
 
-		isoPath := provider.ScvmmLibraryISOs + "\\" + scvmmMachine.Spec.VMName + "-cloud-init.iso"
-		if vmNeedsISO(isoPath, scvmmMachine, vm) {
-			return r.addISOToVM(ctx, patchHelper, cluster, machine, provider, scvmmMachine, vm, isoPath)
+		ciPath := provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + provider.CloudInit.FileSystem
+		if vmNeedsCloudInit(ciPath, scvmmMachine, vm) {
+			return r.addCloudInitToVM(ctx, patchHelper, cluster, machine, provider, scvmmMachine, vm, ciPath)
 		}
 		if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 			return r.setVMProperties(ctx, patchHelper, scvmmMachine)
@@ -406,7 +406,7 @@ func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, patchHelpe
 	return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Setting properties")
 }
 
-func vmNeedsISO(isoPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
+func vmNeedsCloudInit(ciPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 	// If there is an empty cloudinit section, don't add an iso
 	if scvmmMachine.Spec.CloudInit != nil {
 		if scvmmMachine.Spec.CloudInit.UserData == "" &&
@@ -415,8 +415,14 @@ func vmNeedsISO(isoPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult)
 			return false
 		}
 	}
+	ciBase := baseName(ciPath)
 	for _, iso := range vm.ISOs {
-		if baseName(iso.SharePath) == baseName(isoPath) {
+		if baseName(iso.SharePath) == ciBase {
+			return false
+		}
+	}
+	for _, vhd := range vm.VirtualDisks {
+		if baseName(vhd.SharePath) == ciBase {
 			return false
 		}
 	}
@@ -470,7 +476,7 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, patchHelper *p
 	return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 10, nil, VmCreated, VmUpdatingReason, "Updating Disks")
 }
 
-func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, isoPath string) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, ciPath string) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	var bootstrapData, metaData, networkConfig []byte
 	var err error
@@ -504,7 +510,7 @@ func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, patchHelper *pa
 		return ctrl.Result{}, fmt.Errorf("No machine and no cloudinit data, CANTHAPPEN")
 	}
 	log.V(1).Info("Create cloudinit")
-	if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, isoPath, bootstrapData, metaData, networkConfig); err != nil {
+	if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, ciPath, bootstrapData, metaData, networkConfig); err != nil {
 		log.Error(err, "failed to create cloud init")
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 	}
@@ -513,9 +519,10 @@ func (r *ScvmmMachineReconciler) addISOToVM(ctx context.Context, patchHelper *pa
 		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
 	}
-	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "AddIsoToVM -ID '%s' -ISOPath '%s'",
+	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "AddCloudInitToVM -ID '%s' -CIPath '%s' -DeviceType '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id),
-		escapeSingleQuotes(isoPath))
+		escapeSingleQuotes(ciPath),
+		escapeSingleQuotes(provider.CloudInit.DeviceType))
 	if err != nil {
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to add iso to vm")
 	}

@@ -38,10 +38,9 @@ type ScvmmProviderSpec struct {
 	// How long to keep winrm connections to scvmm alive
 	// Default 20 seconds
 	KeepAliveSeconds int `json:"keepAliveSeconds,omitempty"`
-	// Library share where ISOs can be placed for cloud-init
-	// Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
+	// Settings that define how to pass cloud-init data
 	// +optional
-	ScvmmLibraryISOs string `json:"scvmmLibraryISOs,omitempty"`
+	CloudInit ScvmmCloudInitSpec `json:"cloudInit,omitempty"`
 	// Active Directory server
 	// +optional
 	ADServer string `json:"adServer,omitempty"`
@@ -65,6 +64,25 @@ type ScvmmProviderSpec struct {
 
 	// Sensitive env variables
 	SensitiveEnv map[string]string `json:"-"`
+}
+
+type ScvmmCloudInitSpec struct {
+	// Library share where ISOs can be placed for cloud-init
+	// Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
+	// +optional
+	LibraryShare string `json:"libraryShare,omitempty"`
+	// Filesystem to use for cloud-init
+	// vfat or iso
+	// Defaults to vfat
+	// +optional
+	// +kubebuilder:validation:Enum=vfat;iso
+	FileSystem string `json:"fileSystem,omitempty"`
+	// Device type to use for cloud-init
+	// dvd floppy scsi ide
+	// Defaults to dvd
+	// +optional
+	// +kubebuilder:validation:Enum=dvd;floppy;scsi;ide
+	DeviceType string `json:"deviceType,omitempty"`
 }
 
 // ScvmmProviderStatus defines the observed state of ScvmmProvider
