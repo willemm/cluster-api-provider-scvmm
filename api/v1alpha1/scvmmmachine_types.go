@@ -51,6 +51,9 @@ type ScvmmMachineSpec struct {
 	// Extra disks (after the VHDisk) to connect to the VM
 	// +optional
 	Disks []VmDisk `json:"disks,omitEmpty"`
+	// Virtual Fibrechannel device
+	// +optional
+	FibreChannel []FibreChannel `json:"fibreChannel,omitEmpty"`
 	// Number of CPU's
 	CPUCount int `json:"cpuCount"`
 	// Allocated memory
@@ -161,6 +164,15 @@ type Networking struct {
 	// Host domain
 	// +optional
 	Domain string `json:"domain,omitempty"`
+}
+
+type FibreChannel struct {
+	// Storage Fabric Classification
+	// +optional
+	StorageFabricClassification string `json:"storageFabricClassification,omitEmpty"`
+	// Virtual SAN
+	// +optional
+	VirtualSAN string `json:"virtualSAN,omitEmpty"`
 }
 
 type ActiveDirectory struct {

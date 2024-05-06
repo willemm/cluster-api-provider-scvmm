@@ -1,4 +1,4 @@
-param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $networkdevices, $hardwareprofile, $operatingsystem, $availabilityset, $vmoptions)
+param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $networkdevices, $fibrechannel, $hardwareprofile, $operatingsystem, $availabilityset, $vmoptions)
 try {
   $generation = 1
   if ($vmtemplate) {
@@ -76,15 +76,35 @@ try {
 
   $networkslot = 0
   foreach ($networkdevice in ($networkdevices | ConvertFrom-Json)) {
-      $VMNetwork = Get-SCVMNetwork -Name $networkdevice.VMNetwork
-      $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
+    $VMNetwork = Get-SCVMNetwork -Name $networkdevice.VMNetwork
+    $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
-      if ($networkslot -eq 0) {
-          Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID $networkslot -VMNetwork $VMNetwork -VMSubnet $VMSubnet
-      } else {
-          New-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID $networkslot -VMNetwork $VMNetwork -VMSubnet $VMSubnet
+    if ($networkslot -eq 0) {
+      Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID $networkslot -VMNetwork $VMNetwork -VMSubnet $VMSubnet
+    } else {
+      New-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID $networkslot -VMNetwork $VMNetwork -VMSubnet $VMSubnet
+    }
+    $networkslot = $networkslot + 1
+  }
+  foreach ($fc in ($fibrechannel | ConvertFrom-Json)) {
+    $fcargs = @{
+      VMTemplate = $VMTemplateObj
+    }
+    if ($fc.StorageFabricClassification) {
+      $fcsc = Get-SCStorageFabricClassification -Name $fc.StorageFabricClassification
+      if (-not $fcsc) {
+        throw "Storage Fabric Classification $($fc.StorageFabricClassification) not found"
       }
-      $networkslot = $networkslot + 1
+      $fcargs['StorageFabricClassification'] = $fcsc
+    }
+    if ($fc.VirtualSAN) {
+      $fcvsan = Get-SCVMHostFibreChannelVirtualSAN -Name $fc.VirtualSAN
+      if (-not $fcvsan) {
+        throw "Virtual SAN $($fc.VirtualSAN) not found"
+      }
+      $fcargs['VirtualFibreChannelSAN'] = $fcvsan
+    }
+    New-SCVirtualFibreChannelAdapter -JobGroup $JobGroupID @fcargs
   }
 
   $vmargs = @{

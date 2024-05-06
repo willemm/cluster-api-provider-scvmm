@@ -167,6 +167,18 @@ spec:
                         - maximum
                         - minimum
                         type: object
+                      fibreChannel:
+                        description: Virtual Fibrechannel device
+                        items:
+                          properties:
+                            storageFabricClassification:
+                              description: Storage Fabric Classification
+                              type: string
+                            virtualSAN:
+                              description: Virtual SAN
+                              type: string
+                          type: object
+                        type: array
                       hardwareProfile:
                         description: Hardware profile
                         type: string
