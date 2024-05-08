@@ -255,7 +255,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
 		}
 
-		ciPath := provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + provider.CloudInit.FileSystem
+		ciPath, err := cloudInitPath(provider, scvmmMachine)
+		if err != nil {
+			log.Error(err, "Failed to get provider")
+			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
+		}
 		if vmNeedsCloudInit(ciPath, scvmmMachine, vm) {
 			return r.addCloudInitToVM(ctx, patchHelper, cluster, machine, provider, scvmmMachine, vm, ciPath)
 		}

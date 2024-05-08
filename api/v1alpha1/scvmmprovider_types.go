@@ -72,10 +72,10 @@ type ScvmmCloudInitSpec struct {
 	// +optional
 	LibraryShare string `json:"libraryShare,omitempty"`
 	// Filesystem to use for cloud-init
-	// vfat or iso
+	// vfat or iso9660
 	// Defaults to vfat
 	// +optional
-	// +kubebuilder:validation:Enum=vfat;iso
+	// +kubebuilder:validation:Enum=vfat;iso9660
 	FileSystem string `json:"fileSystem,omitempty"`
 	// Device type to use for cloud-init
 	// dvd floppy scsi ide

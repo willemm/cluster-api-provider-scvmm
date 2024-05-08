@@ -34,6 +34,21 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
+type CloudInitFilesystemHandler struct {
+	FileExtension string
+	Writer        func(*smb2.File, []CloudInitFile) error
+}
+
+var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
+
+func cloudInitPath(provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	handler, ok := FilesystemHandlers[provider.CloudInit.FileSystem]
+	if !ok {
+		return "", fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
+	}
+	return provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + handler.FileExtension, nil
+}
+
 func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
@@ -144,9 +159,13 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 			networkConfig,
 		}
 	}
-	log.V(1).Info("smb2 Writing ISO", "path", path)
-	if err := writeISO9660(fh, files); err != nil {
-		log.Error(err, "Writing ISO file", "host", host, "share", share, "path", path)
+	log.V(1).Info("smb2 Writing cloud-init", "path", path)
+	handler, ok := FilesystemHandlers[provider.CloudInit.FileSystem]
+	if !ok {
+		return fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
+	}
+	if err := handler.Writer(fh, files); err != nil {
+		log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
 		fh.Close()
 		fs.Remove(path)
 		return err
