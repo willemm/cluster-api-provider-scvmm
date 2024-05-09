@@ -36,7 +36,7 @@ type CloudInitFile struct {
 
 type CloudInitFilesystemHandler struct {
 	FileExtension string
-	Writer        func(*smb2.File, []CloudInitFile) error
+	Writer        func(*smb2.File, []CloudInitFile) (int, error)
 }
 
 var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
@@ -164,11 +164,21 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	if !ok {
 		return fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
 	}
-	if err := handler.Writer(fh, files); err != nil {
+	size, err := handler.Writer(fh, files)
+	if err != nil {
 		log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
 		fh.Close()
 		fs.Remove(path)
 		return err
+	}
+	if provider.CloudInit.DeviceType == "scsi" || provider.CloudInit.DeviceType == "ide" {
+		log.V(1).Info("smb2 add vhd footer")
+		if err := writeVHDFooter(fh, size); err != nil {
+			log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
+			fh.Close()
+			fs.Remove(path)
+			return err
+		}
 	}
 	log.V(1).Info("smb2 Closing file")
 	fh.Close()

@@ -76,8 +76,9 @@ func (sector isoSector) putDirent(offset int, dirent *isoDirent) int {
 	return offset + totlen
 }
 
-func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
-	sector := make(isoSector, 2048)
+func writeISO9660(fh *smb2.File, files []CloudInitFile) (int, error) {
+	const sectorSize = 2048
+	sector := make(isoSector, sectorSize)
 	now := time.Now()
 
 	// Calculate the total size
@@ -86,41 +87,41 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
 	lastSector := 19
 	for cif := range files {
 		// Round up to sector size
-		fsz := ((len(files[cif].Contents) - 1) / 2048) + 1
+		fsz := ((len(files[cif].Contents) - 1) / sectorSize) + 1
 		lastSector = lastSector + fsz
 	}
 
 	// Start with 32K of zeroes
 	for i := 0; i < 16; i++ {
 		if _, err := fh.Write(sector); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	// Write Primary Volume Descriptor (sector 16)
 	sector[0] = 1
 	sector.putString(1, 5, "CD001")
 	sector[7] = 1
-	sector.putString(8, 32, "LINUX")                                       // System identifier
-	sector.putString(40, 32, "cidata")                                     // Volume identifier
-	sector.putU32(80, uint32(lastSector))                                  // Volume Space Size
-	sector.putU16(120, 1)                                                  // Volume Set Size
-	sector.putU16(124, 1)                                                  // Sequence Number
-	sector.putU16(128, 2048)                                               // Logical Block Size
-	sector.putDirent(156, &isoDirent{18, 2048, now, 2, string([]byte{0})}) // Root directory entry
-	sector.putString(190, 128, "")                                         // Volume Set
-	sector.putString(318, 128, "")                                         // Publisher
-	sector.putString(446, 128, "")                                         // Data Preparer
-	sector.putString(574, 128, "cluster-api-provider-scvmm")               // Application
-	sector.putString(702, 38, "")                                          // Copyright File
-	sector.putString(740, 36, "")                                          // Abstract File
-	sector.putString(776, 37, "")                                          // Bibliographic File
-	sector.putDate(813, now)                                               // Volume Creation
-	sector.putDate(830, now)                                               // Volume Modification
-	sector.putDate(847, time.Time{})                                       // Volume Expiration
-	sector.putDate(864, now)                                               // Volume Effective
-	sector[881] = 1                                                        // File Structure Version
+	sector.putString(8, 32, "LINUX")                                             // System identifier
+	sector.putString(40, 32, "cidata")                                           // Volume identifier
+	sector.putU32(80, uint32(lastSector))                                        // Volume Space Size
+	sector.putU16(120, 1)                                                        // Volume Set Size
+	sector.putU16(124, 1)                                                        // Sequence Number
+	sector.putU16(128, sectorSize)                                               // Logical Block Size
+	sector.putDirent(156, &isoDirent{18, sectorSize, now, 2, string([]byte{0})}) // Root directory entry
+	sector.putString(190, 128, "")                                               // Volume Set
+	sector.putString(318, 128, "")                                               // Publisher
+	sector.putString(446, 128, "")                                               // Data Preparer
+	sector.putString(574, 128, "cluster-api-provider-scvmm")                     // Application
+	sector.putString(702, 38, "")                                                // Copyright File
+	sector.putString(740, 36, "")                                                // Abstract File
+	sector.putString(776, 37, "")                                                // Bibliographic File
+	sector.putDate(813, now)                                                     // Volume Creation
+	sector.putDate(830, now)                                                     // Volume Modification
+	sector.putDate(847, time.Time{})                                             // Volume Expiration
+	sector.putDate(864, now)                                                     // Volume Effective
+	sector[881] = 1                                                              // File Structure Version
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 
 	for i := range sector {
@@ -131,7 +132,7 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
 	copy(sector[1:6], []byte("CD001")) // Identifier
 	sector[6] = 1                      // Version
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 	for i := range sector {
 		sector[i] = 0
@@ -139,34 +140,34 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) error {
 
 	// Write directory (sector 18)
 	curOff := 0
-	curOff = sector.putDirent(curOff, &isoDirent{18, 2048, now, 2, string([]byte{0})}) // Own directory entry
-	curOff = sector.putDirent(curOff, &isoDirent{18, 2048, now, 2, string([]byte{1})}) // Parent directory entry
+	curOff = sector.putDirent(curOff, &isoDirent{18, sectorSize, now, 2, string([]byte{0})}) // Own directory entry
+	curOff = sector.putDirent(curOff, &isoDirent{18, sectorSize, now, 2, string([]byte{1})}) // Parent directory entry
 
 	// Write directory entries
 	fileSector := 19
 	for cif := range files {
 		flen := len(files[cif].Contents)
 		curOff = sector.putDirent(curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename + ";1"})
-		fileSector = fileSector + ((flen - 1) / 2048) + 1
+		fileSector = fileSector + ((flen - 1) / sectorSize) + 1
 	}
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 	for i := range sector {
 		sector[i] = 0
 	}
 	for cif := range files {
 		if _, err := fh.Write(files[cif].Contents); err != nil {
-			return err
+			return 0, err
 		}
-		padlen := (2048 - (len(files[cif].Contents) % 2048)) % 2048
+		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
 		if padlen > 0 {
 			if _, err := fh.Write(sector[:padlen]); err != nil {
-				return err
+				return 0, err
 			}
 		}
 	}
-	return nil
+	return sectorSize * lastSector, nil
 }
 
 func init() {

@@ -19,15 +19,6 @@ func (sector vfatSector) putU32(offset int, value uint32) {
 	binary.LittleEndian.PutUint32(sector[offset:offset+4], value)
 }
 
-func (sector vfatSector) putDate(offset int, value time.Time) {
-	if value.IsZero() {
-		copy(sector[offset:offset+16], []byte("0000000000000000"))
-	} else {
-		copy(sector[offset:offset+16], []byte(value.UTC().Format("2006010215040500")))
-	}
-	sector[16] = 0
-}
-
 func (sector vfatSector) putString(offset, length int, text string) {
 	const padString = "                                                                                                                                "
 	copy(sector[offset:offset+length], []byte(text+padString))
@@ -137,7 +128,7 @@ func (sector vfatSector) putDateTime(offset int, datetime time.Time) {
 			(datetime.Day()&0x1F)))
 }
 
-func writeVFAT(fh *smb2.File, files []CloudInitFile) error {
+func writeVFAT(fh *smb2.File, files []CloudInitFile) (int, error) {
 	const sectorSize = 256
 	sector := make(vfatSector, sectorSize)
 	now := time.Now()
@@ -195,7 +186,7 @@ func writeVFAT(fh *smb2.File, files []CloudInitFile) error {
 	sector.putString(54, 8, fmt.Sprintf("FAT%d", fatSize)) // File system type
 
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Create FAT
@@ -212,7 +203,7 @@ func writeVFAT(fh *smb2.File, files []CloudInitFile) error {
 	}
 
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 
 	sector = make(vfatSector, dirents)
@@ -225,23 +216,23 @@ func writeVFAT(fh *smb2.File, files []CloudInitFile) error {
 	}
 
 	if _, err := fh.Write(sector); err != nil {
-		return err
+		return 0, err
 	}
 
 	sector = make(vfatSector, sectorSize)
 	for cif := range files {
 		if _, err := fh.Write(files[cif].Contents); err != nil {
-			return err
+			return 0, err
 		}
 		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
 		if padlen > 0 {
 			if _, err := fh.Write(sector[:padlen]); err != nil {
-				return err
+				return 0, err
 			}
 		}
 	}
 
-	return nil
+	return int(sectorSize * lastSector), nil
 }
 
 func init() {
