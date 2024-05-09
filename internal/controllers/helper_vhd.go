@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hirochachacha/go-smb2"
 )
 
@@ -26,8 +27,8 @@ func (sector vhdSector) putString(offset, length int, text string) {
 	copy(sector[offset:offset+length], []byte(text+padString))
 }
 
-func (sector vhdSector) putBytes(offset int, bytes ...byte) {
-	copy(sector[offset:offset+len(bytes)], bytes)
+func (sector vhdSector) putUUID(offset int, uuid uuid.UUID) {
+	copy(sector[offset:offset+16], uuid[:])
 }
 
 func (sector vhdSector) putDateTime(offset int, datetime time.Time) {
@@ -64,8 +65,8 @@ func writeVHDFooter(fh *smb2.File, size int) error {
 	sector[58] = 1                             // Disk Geometry Heads
 	sector[59] = 1                             // Disk Geometry Sectors/track
 	sector.putU32(60, 2)                       // Disk Type (Fixed)
-	sector.putBytes(68, 0)                     // Unique Id
-	sector[76] = 0                             // Saved state
+	sector.putUUID(68, uuid.New())             // Unique Id
+	sector[84] = 0                             // Saved state
 
 	sector.putU32(64, sector.checksum())
 
