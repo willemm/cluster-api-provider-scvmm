@@ -72,6 +72,14 @@ const (
 	VmFailedReason   = "VmFailed"
 
 	MachineFinalizer = "scvmmmachine.finalizers.cluster.x-k8s.io"
+
+	cloudInitDeviceTypeFunctions = map[string]string{
+		"":       "AddISOToVM",
+		"dvd":    "AddISOToVM",
+		"floppy": "AddFloppyToVM",
+		"scsi":   "AddVHDToVM",
+		"ide":    "AddVHDToVM",
+	}
 )
 
 // Are global variables bad? Dunno, this one seems fine because it caches an env var
@@ -484,6 +492,11 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 	log := ctrl.LoggerFrom(ctx)
 	var bootstrapData, metaData, networkConfig []byte
 	var err error
+	deviceFunction, ok = cloudInitDeviceTypeFunctions[provider.CloudInit.DeviceType]
+	if !ok {
+		log.Error(err, "Unknown devicetype "+provider.CloudInit.DeviceType)
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Unknown devicetype "+provider.CloudInit.DeviceType)
+	}
 	if machine != nil {
 		if machine.Spec.Bootstrap.DataSecretName == nil {
 			if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
@@ -523,7 +536,9 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
 	}
-	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "AddCloudInitToVM -ID '%s' -CIPath '%s' -DeviceType '%s'",
+
+	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "%s -ID '%s' -CIPath '%s' -DeviceType '%s'",
+		deviceFunction,
 		escapeSingleQuotes(scvmmMachine.Spec.Id),
 		escapeSingleQuotes(ciPath),
 		escapeSingleQuotes(provider.CloudInit.DeviceType))
