@@ -14,7 +14,11 @@ try {
   if (-not $vm) {
     throw "Virtual Machine with ID $id not found"
   }
-  $HardDrive = New-SCVirtualHardDrive -VM $vm -VirtualHardDisk $vhd -SCSI -BUS 0 -LUN 62
+  if ($devicetype -eq "ide") {
+      New-SCVirtualDiskDrive -VM $vm -VirtualHardDisk $vhd -IDE -BUS 1 -LUN 0 | Out-Null
+  } else {
+      New-SCVirtualDiskDrive -VM $vm -VirtualHardDisk $vhd -SCSI -BUS 0 -LUN 62 | Out-Null
+  }
 
   Remove-SCVirtualHardDisk -FloppyDisk $vhd -RunAsynchronously | out-null
   return VMToJson $vm "AddingVHD"
