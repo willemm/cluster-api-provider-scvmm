@@ -104,7 +104,7 @@ try {
       }
       $fcargs['VirtualFibreChannelSAN'] = $fcvsan
     }
-    New-SCVirtualFibreChannelAdapter -JobGroup $JobGroupID @fcargs
+    New-SCVirtualFibreChannelAdapter @fcargs | Out-Null
   }
 
   $vmargs = @{
