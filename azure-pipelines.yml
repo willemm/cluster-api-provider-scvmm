@@ -1,0 +1,19 @@
+trigger:
+- master
+- refs/tags/*
+
+resources:
+  repositories:
+  - repository: templatesRepo
+    type: git
+    name: Stater/devops-pipelines
+    ref: refs/heads/no_python
+
+stages:
+- template: pipelines/build/docker-build-deploy.yml@templatesRepo
+  parameters:
+    argocdName: capi-infrastructure-scvmm-test
+    argocdClusters: [ capitest ]
+    gitopsBranch: so
+    fullVersion: true
+    buildArgs: '--build-arg GOPROXY=http://pr-art.europe.stater.corp/artifactory/proxy.golang.org'
