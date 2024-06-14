@@ -33,7 +33,7 @@ func (sector vhdSector) putUUID(offset int, uuid uuid.UUID) {
 
 func (sector vhdSector) putDateTime(offset int, datetime time.Time) {
 	// vhd time format: Seconds since Jan 1, 2000
-	y2k := time.Date(2000, time.January, 1, 0, 0, 0, 0, nil)
+	y2k := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 	sector.putU32(offset, uint32(datetime.Sub(y2k).Seconds()))
 }
 
