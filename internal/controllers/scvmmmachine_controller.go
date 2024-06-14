@@ -537,8 +537,7 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 		return ctrl.Result{}, err
 	}
 
-	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "%s -ID '%s' -CIPath '%s' -DeviceType '%s'",
-		deviceFunction,
+	vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, deviceFunction+" -ID '%s' -CIPath '%s' -DeviceType '%s'",
 		escapeSingleQuotes(scvmmMachine.Spec.Id),
 		escapeSingleQuotes(ciPath),
 		escapeSingleQuotes(provider.CloudInit.DeviceType))
