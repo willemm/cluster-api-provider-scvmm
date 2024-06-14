@@ -8,7 +8,7 @@ try {
   Read-SCLibraryShare -LibraryShare $shr -Path $pdir | out-null
   $vhd = Get-SCVirtualHardDisk | Where-Object { $_.SharePath -eq $cipath } | select -first 1
   if (-not $vhd) {
-    throw "Firtualfloppydisk $cipath not found"
+    throw "VirtualHardDisk $cipath not found"
   }
   $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
@@ -20,7 +20,7 @@ try {
       New-SCVirtualDiskDrive -VM $vm -VirtualHardDisk $vhd -SCSI -BUS 0 -LUN 62 | Out-Null
   }
 
-  Remove-SCVirtualHardDisk -FloppyDisk $vhd -RunAsynchronously | out-null
+  Remove-SCVirtualHardDisk -VirtualHardDisk $vhd -RunAsynchronously | out-null
   return VMToJson $vm "AddingVHD"
 } catch {
   ErrorToJson 'Add VHD to VM' $_
