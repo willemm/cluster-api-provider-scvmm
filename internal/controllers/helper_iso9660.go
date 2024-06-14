@@ -172,8 +172,7 @@ func writeISO9660(fh *smb2.File, files []CloudInitFile) (int, error) {
 
 func init() {
 	FilesystemHandlers["iso9660"] = CloudInitFilesystemHandler{
-		FileExtension: "iso",
-		Writer:        writeISO9660,
+		Writer: writeISO9660,
 	}
 	// Set default fs handler
 	FilesystemHandlers[""] = FilesystemHandlers["iso9660"]

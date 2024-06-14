@@ -237,7 +237,6 @@ func writeVFAT(fh *smb2.File, files []CloudInitFile) (int, error) {
 
 func init() {
 	FilesystemHandlers["vfat"] = CloudInitFilesystemHandler{
-		FileExtension: "vfat",
-		Writer:        writeVFAT,
+		Writer: writeVFAT,
 	}
 }

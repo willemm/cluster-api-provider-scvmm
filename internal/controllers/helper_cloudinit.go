@@ -35,18 +35,25 @@ type CloudInitFile struct {
 }
 
 type CloudInitFilesystemHandler struct {
-	FileExtension string
-	Writer        func(*smb2.File, []CloudInitFile) (int, error)
+	Writer func(*smb2.File, []CloudInitFile) (int, error)
+}
+
+var cloudInitDeviceTypeExtensions = map[string]string{
+	"":       "iso",
+	"dvd":    "iso",
+	"floppy": "vfd",
+	"scsi":   "vhd",
+	"ide":    "vhd",
 }
 
 var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
 
 func cloudInitPath(provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
-	handler, ok := FilesystemHandlers[provider.CloudInit.FileSystem]
+	extension, ok := cloudInitDeviceTypeExtensions[provider.CloudInit.DeviceType]
 	if !ok {
-		return "", fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
+		return "", fmt.Errorf("Unknown devicetype " + provider.CloudInit.DeviceType)
 	}
-	return provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + handler.FileExtension, nil
+	return provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
 }
 
 func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
