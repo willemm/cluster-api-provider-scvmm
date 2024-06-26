@@ -1,14 +1,14 @@
-param($id, $isopath)
+param($id, $cipath, $devicetype)
 try {
-  $shr = Get-SCLibraryShare | ?{ $isopath.StartsWith($_.Path) } | select -first 1
+  $shr = Get-SCLibraryShare | ?{ $cipath.StartsWith($_.Path) } | select -first 1
   if (-not $shr) {
-    throw "Library share containing $isopath not found"
+    throw "Library share containing $cipath not found"
   }
-  $pdir = split-path ($isopath.Remove(0,$shr.Path.length+1))
+  $pdir = split-path ($cipath.Remove(0,$shr.Path.length+1))
   Read-SCLibraryShare -LibraryShare $shr -Path $pdir | out-null
-  $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $isopath } | select -first 1
+  $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $cipath } | select -first 1
   if (-not $ISO) {
-    throw "Isofile $isopath not found"
+    throw "Isofile $cipath not found"
   }
   $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {

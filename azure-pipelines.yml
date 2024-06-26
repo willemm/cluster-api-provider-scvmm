@@ -1,5 +1,6 @@
 trigger:
 - master
+- feat/cloud-init-device
 - refs/tags/*
 
 resources:
@@ -29,5 +30,4 @@ stages:
 
         displayName: Tweak Dockerfile for on-prem
     dockerFilePath: "Dockerfile-azure"
-    fullVersion: true
     buildArgs: '--build-arg GOPROXY=http://pr-art.europe.stater.corp/artifactory/proxy.golang.org'

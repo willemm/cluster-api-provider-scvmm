@@ -46,6 +46,7 @@ type VMResult struct {
 	VirtualDisks   []struct {
 		Size        int64
 		MaximumSize int64
+		SharePath   string
 	}
 	ISOs []struct {
 		Size      int64

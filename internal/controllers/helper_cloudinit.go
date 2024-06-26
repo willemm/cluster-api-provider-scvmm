@@ -34,6 +34,28 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
+type CloudInitFilesystemHandler struct {
+	Writer func(*smb2.File, []CloudInitFile) (int, error)
+}
+
+var cloudInitDeviceTypeExtensions = map[string]string{
+	"":       "iso",
+	"dvd":    "iso",
+	"floppy": "vfd",
+	"scsi":   "vhd",
+	"ide":    "vhd",
+}
+
+var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
+
+func cloudInitPath(provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	extension, ok := cloudInitDeviceTypeExtensions[provider.CloudInit.DeviceType]
+	if !ok {
+		return "", fmt.Errorf("Unknown devicetype " + provider.CloudInit.DeviceType)
+	}
+	return provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
+}
+
 func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
@@ -144,12 +166,26 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 			networkConfig,
 		}
 	}
-	log.V(1).Info("smb2 Writing ISO", "path", path)
-	if err := writeISO9660(fh, files); err != nil {
-		log.Error(err, "Writing ISO file", "host", host, "share", share, "path", path)
+	log.V(1).Info("smb2 Writing cloud-init", "path", path)
+	handler, ok := FilesystemHandlers[provider.CloudInit.FileSystem]
+	if !ok {
+		return fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
+	}
+	size, err := handler.Writer(fh, files)
+	if err != nil {
+		log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
 		fh.Close()
 		fs.Remove(path)
 		return err
+	}
+	if provider.CloudInit.DeviceType == "scsi" || provider.CloudInit.DeviceType == "ide" {
+		log.V(1).Info("smb2 add vhd footer")
+		if err := writeVHDFooter(fh, size); err != nil {
+			log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
+			fh.Close()
+			fs.Remove(path)
+			return err
+		}
 	}
 	log.V(1).Info("smb2 Closing file")
 	fh.Close()
