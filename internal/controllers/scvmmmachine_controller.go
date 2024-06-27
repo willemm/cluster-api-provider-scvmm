@@ -134,9 +134,9 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	var cluster *clusterv1.Cluster
 	var machine *clusterv1.Machine
-	// If the user provides a cloudInit section in the machine, assume it's a standalone machine
+	// If the user provides a bootstrap section in the scvmmmachine, assume it's a standalone machine
 	// Otherwise get the owning machine, cluster, etc.
-	if scvmmMachine.Spec.CloudInit == nil {
+	if scvmmMachine.Spec.Bootstrap == nil {
 		log.V(1).Info("Fetching machine")
 		// Fetch the Machine.
 		machine, err = util.GetOwnerMachine(ctx, r.Client, scvmmMachine.ObjectMeta)
@@ -419,11 +419,9 @@ func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, patchHelpe
 }
 
 func vmNeedsCloudInit(ciPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
-	// If there is an empty cloudinit section, don't add an iso
-	if scvmmMachine.Spec.CloudInit != nil {
-		if scvmmMachine.Spec.CloudInit.UserData == "" &&
-			scvmmMachine.Spec.CloudInit.MetaData == "" &&
-			scvmmMachine.Spec.CloudInit.NetworkConfig == "" {
+	// If there is an empty bootstrap section, don't add an iso
+	if scvmmMachine.Spec.Bootstrap != nil {
+		if scvmmMachine.Spec.Bootstrap.DataSecretName == nil {
 			return false
 		}
 	}
@@ -497,7 +495,16 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 		log.Error(err, "Unknown devicetype "+provider.CloudInit.DeviceType)
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Unknown devicetype "+provider.CloudInit.DeviceType)
 	}
-	if machine != nil {
+	dataSecretName := ""
+	dataSecretNamespace := ""
+	if scvmmMachine.Spec.Bootstrap != nil {
+		if scvmmMachine.Spec.Bootstrap.DataSecretName == nil {
+			// Sanity check
+			return ctrl.Result{}, fmt.Errorf("No bootstrap secret, CANTHAPPEN")
+		}
+		dataSecretName = *scvmmMachine.Spec.Bootstrap.DataSecretName
+		dataSecretNamespace = scvmmMachine.Namespace
+	} else if machine != nil {
 		if machine.Spec.Bootstrap.DataSecretName == nil {
 			if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
 				log.Info("Waiting for the control plane to be initialized")
@@ -506,25 +513,18 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 			log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, WaitingForBootstrapDataReason, "")
 		}
-		log.V(1).Info("Get bootstrap data")
-		bootstrapData, err = r.getBootstrapData(ctx, machine)
-		if err != nil {
-			log.Error(err, "failed to get bootstrap data")
-			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
-		}
-	} else if scvmmMachine.Spec.CloudInit != nil {
-		if scvmmMachine.Spec.CloudInit.UserData != "" {
-			bootstrapData = []byte(scvmmMachine.Spec.CloudInit.UserData)
-		}
-		if scvmmMachine.Spec.CloudInit.MetaData != "" {
-			metaData = []byte(scvmmMachine.Spec.CloudInit.MetaData)
-		}
-		if scvmmMachine.Spec.CloudInit.NetworkConfig != "" {
-			networkConfig = []byte(scvmmMachine.Spec.CloudInit.NetworkConfig)
-		}
+		dataSecretName = *machine.Spec.Bootstrap.DataSecretName
+		dataSecretNamespace = machine.Namespace
 	} else {
 		// Sanity check
-		return ctrl.Result{}, fmt.Errorf("No machine and no cloudinit data, CANTHAPPEN")
+		return ctrl.Result{}, fmt.Errorf("No machine and no bootstrap data, CANTHAPPEN")
+	}
+
+	log.V(1).Info("Get bootstrap data")
+	bootstrapData, err = r.getBootstrapData(ctx, dataSecretName, dataSecretNamespace)
+	if err != nil {
+		log.Error(err, "failed to get bootstrap data")
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to get bootstrap data")
 	}
 	log.V(1).Info("Create cloudinit")
 	if err := writeCloudInit(log, scvmmMachine, provider, vm.VMId, ciPath, bootstrapData, metaData, networkConfig); err != nil {
@@ -918,15 +918,11 @@ func patchScvmmMachine(ctx context.Context, patchHelper *patch.Helper, scvmmMach
 	)
 }
 
-func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) ([]byte, error) {
-	if machine.Spec.Bootstrap.DataSecretName == nil {
-		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
-	}
-
+func (r *ScvmmMachineReconciler) getBootstrapData(ctx context.Context, name, namespace string) ([]byte, error) {
 	s := &corev1.Secret{}
-	key := client.ObjectKey{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
+	key := client.ObjectKey{Namespace: namespace, Name: name}
 	if err := r.Client.Get(ctx, key, s); err != nil {
-		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", machine.GetNamespace(), machine.GetName())
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for ScvmmMachine %s/%s", namespace, name)
 	}
 
 	value, ok := s.Data["value"]

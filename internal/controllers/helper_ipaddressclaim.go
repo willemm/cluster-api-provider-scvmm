@@ -194,10 +194,13 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 
 		controllerutil.AddFinalizer(claim, IPAddressClaimFinalizer)
 
-		if claim.Labels == nil {
-			claim.Labels = make(map[string]string)
+		if scvmmMachine.Labels[clusterv1.ClusterNameLabel] != "" {
+			// Blank label breaks ipam provider
+			if claim.Labels == nil {
+				claim.Labels = make(map[string]string)
+			}
+			claim.Labels[clusterv1.ClusterNameLabel] = scvmmMachine.Labels[clusterv1.ClusterNameLabel]
 		}
-		claim.Labels[clusterv1.ClusterNameLabel] = scvmmMachine.Labels[clusterv1.ClusterNameLabel]
 
 		if claim.Annotations == nil {
 			claim.Annotations = make(map[string]string)

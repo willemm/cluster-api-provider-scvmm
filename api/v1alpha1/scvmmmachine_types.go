@@ -79,11 +79,6 @@ type ScvmmMachineSpec struct {
 	// Options for New-SCVirtualMachine
 	// +optional
 	VMOptions *VmOptions `json:"vmOptions,omitempty"`
-	// Cloud-Init data
-	// This triggers the controller to create the machine without a (cluster-api) cluster
-	// For testing purposes, or just for creating VMs
-	// +optional
-	CloudInit *CloudInit `json:"cloudInit,omitempty"`
 	// Custom VirtualMachine Properties
 	// Named CustomProperty because that's what it's named in SCVMM virtual machines
 	// +optional
@@ -92,9 +87,14 @@ type ScvmmMachineSpec struct {
 	// +optional
 	Tag string `json:"tag,omitempty"`
 	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
-	// Will be copied from scvmmcluster if not using cloudinit
+	// Will be copied from scvmmcluster if not using local bootstrap
 	// +optional
 	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
+	// Custom bootstrap secret ref
+	// This triggers the controller to create the machine without a (cluster-api) cluster
+	// For testing purposes, or just for creating VMs
+	// +optional
+	Bootstrap *clusterv1.Bootstrap `json:"bootstrap,omitempty"`
 }
 
 type VmOptions struct {
@@ -197,20 +197,6 @@ type DynamicMemory struct {
 	// BufferPercentage
 	// +optional
 	BufferPercentage *int `json:"bufferPercentage,omitempty"`
-}
-
-// NoCloud cloud-init data (user-data and meta-data file contents)
-// This triggers the machine to be created without a cluster
-type CloudInit struct {
-	// Meta-data file contents
-	// +optional
-	MetaData string `json:"metaData,omitempty"`
-	// User-data file contents
-	// +optional
-	UserData string `json:"userData,omitempty"`
-	// Network-config file contents
-	// +optional
-	NetworkConfig string `json:"networkConfig,omitempty"`
 }
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
@@ -317,10 +303,6 @@ func (in *ScvmmMachineSpec) CopyNonZeroTo(out *ScvmmMachineSpec) bool {
 	if in.Networking != nil && !reflect.DeepEqual(in.Networking, out.Networking) {
 		changed = true
 		out.Networking = in.Networking
-	}
-	if in.CloudInit != nil && !reflect.DeepEqual(in.CloudInit, out.CloudInit) {
-		changed = true
-		out.CloudInit = in.CloudInit
 	}
 	if in.AvailabilitySet != "" && in.AvailabilitySet != out.AvailabilitySet {
 		changed = true

@@ -1,6 +1,6 @@
 trigger:
 - master
-- feat/cloud-init-device
+- feat/*
 - refs/tags/*
 
 resources:
