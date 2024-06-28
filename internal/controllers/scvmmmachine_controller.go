@@ -263,7 +263,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")
 		}
 
-		ciPath, err := cloudInitPath(provider, scvmmMachine)
+		ciPath, err := cloudInitPath(ctx, provider, scvmmMachine)
 		if err != nil {
 			log.Error(err, "Failed to get provider")
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, ProviderNotAvailableReason, "")

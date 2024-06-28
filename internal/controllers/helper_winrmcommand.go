@@ -63,6 +63,7 @@ type VMResult struct {
 	Message              string
 	CreationTime         metav1.Time
 	ModifiedTime         metav1.Time
+	Result               string
 }
 
 type VMSpecResult struct {

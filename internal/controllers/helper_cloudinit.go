@@ -18,10 +18,12 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/go-logr/logr"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"net"
 	"strings"
@@ -48,12 +50,23 @@ var cloudInitDeviceTypeExtensions = map[string]string{
 
 var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
 
-func cloudInitPath(provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	extension, ok := cloudInitDeviceTypeExtensions[provider.CloudInit.DeviceType]
 	if !ok {
 		return "", fmt.Errorf("Unknown devicetype " + provider.CloudInit.DeviceType)
 	}
-	return provider.CloudInit.LibraryShare + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
+	share := provider.CloudInit.LibraryShare
+	if !strings.HasPrefix(share, "\\\\") {
+		res, err := sendWinrmCommand(ctrl.LoggerFrom(ctx), scvmmMachine.Spec.ProviderRef, "GetLibraryShare")
+		if err != nil {
+			return "", err
+		}
+		if res.Result == "" {
+			return "", fmt.Errorf("GetLibraryShare returned nothing")
+		}
+		share = res.Result + "\\" + share
+	}
+	return share + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
 }
 
 func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {

@@ -99,7 +99,7 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 	if p.CloudInit.LibraryShare == "" {
 		p.CloudInit.LibraryShare = os.Getenv("SCVMM_LIBRARY")
 		if p.CloudInit.LibraryShare == "" {
-			p.CloudInit.LibraryShare = `\\` + p.ScvmmHost + `\MSSCVMMLibrary\ISOs\cloud-init`
+			p.CloudInit.LibraryShare = `ISOs\cloud-init`
 		}
 	}
 	if p.ADServer == "" {

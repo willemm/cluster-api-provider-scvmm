@@ -68,7 +68,7 @@ type ScvmmProviderSpec struct {
 
 type ScvmmCloudInitSpec struct {
 	// Library share where ISOs can be placed for cloud-init
-	// Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
+	// Defaults to \\<Get-SCLibraryShare.Path>\ISOs\cloud-init
 	// +optional
 	LibraryShare string `json:"libraryShare,omitempty"`
 	// Filesystem to use for cloud-init
