@@ -73,6 +73,9 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
+	if len(shareParts) < 5 || shareParts[0] != "" || shareParts[1] != "" {
+		return fmt.Errorf("malformed library share path " + sharePath)
+	}
 	host := shareParts[2]
 	share := shareParts[3]
 	path := strings.Join(shareParts[4:], "/")
