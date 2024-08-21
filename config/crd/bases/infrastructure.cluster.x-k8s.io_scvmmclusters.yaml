@@ -129,8 +129,14 @@ spec:
                               vmNetwork:
                                 description: Virtual Network identifier
                                 type: string
+                            required:
+                            - deviceName
+                            - vmNetwork
                             type: object
                           type: array
+                          x-kubernetes-list-map-keys:
+                          - deviceName
+                          x-kubernetes-list-type: map
                         domain:
                           description: Host domain
                           type: string

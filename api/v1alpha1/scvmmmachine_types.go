@@ -133,11 +133,10 @@ type VmDisk struct {
 }
 
 type NetworkDevice struct {
-	// Virtual Network identifier
-	VMNetwork string `json:"vmNetwork,omitempty"`
 	// Network device name
-	// +optional
-	DeviceName string `json:"deviceName,omitempty"`
+	DeviceName string `json:"deviceName"`
+	// Virtual Network identifier
+	VMNetwork string `json:"vmNetwork"`
 	// IP Address
 	// +optional
 	IPAddresses []string `json:"ipAddresses,omitempty"`
@@ -160,6 +159,8 @@ type NetworkDevice struct {
 type Networking struct {
 	// Network devices
 	// +optional
+	// +listType=map
+	// +listMapKey=deviceName
 	Devices []NetworkDevice `json:"devices,omitempty"`
 	// Host domain
 	// +optional

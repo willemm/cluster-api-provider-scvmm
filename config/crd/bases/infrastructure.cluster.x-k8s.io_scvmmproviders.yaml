@@ -82,7 +82,7 @@ spec:
                   libraryShare:
                     description: |-
                       Library share where ISOs can be placed for cloud-init
-                      Defaults to \\scvmmhost\MSSCVMMLibrary\ISOs\cloud-init
+                      Defaults to \\<Get-SCLibraryShare.Path>\ISOs\cloud-init
                     type: string
                 type: object
               env:
