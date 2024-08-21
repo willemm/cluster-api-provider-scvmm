@@ -277,6 +277,7 @@ spec:
                                     x-kubernetes-map-type: atomic
                                   type: array
                                 deviceName:
+                                  default: eth0
                                   description: Network device name
                                   type: string
                                 gateway:
@@ -302,7 +303,6 @@ spec:
                                   description: Virtual Network identifier
                                   type: string
                               required:
-                              - deviceName
                               - vmNetwork
                               type: object
                             type: array

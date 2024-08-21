@@ -134,7 +134,8 @@ type VmDisk struct {
 
 type NetworkDevice struct {
 	// Network device name
-	DeviceName string `json:"deviceName"`
+	// +kubebuilder:default:=eth0
+	DeviceName string `json:"deviceName,omitempty"`
 	// Virtual Network identifier
 	VMNetwork string `json:"vmNetwork"`
 	// IP Address
