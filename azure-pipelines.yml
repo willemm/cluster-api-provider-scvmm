@@ -16,18 +16,4 @@ stages:
     argocdName: capi-infrastructure-scvmm-test
     argocdClusters: [ capitest ]
     gitopsBranch: so
-    preStep:
-      - pwsh: |
-          $toinsert = @(
-            "RUN wget http://pr-art.europe.stater.corp/artifactory/auto-local/certs/pr-root.cer -O - | sed -e 's/\r//g' > /usr/local/share/ca-certificates/pr-root.crt && update-ca-certificates")
-          Get-Content "Dockerfile" | Foreach-Object {
-            if ($_ -match '^WORKDIR') {
-              $toinsert
-              $toinsert = @()
-            }
-            $_
-          } | Out-File -Encoding UTF8 "Dockerfile-azure"
-
-        displayName: Tweak Dockerfile for on-prem
-    dockerFilePath: "Dockerfile-azure"
     buildArgs: '--build-arg GOPROXY=http://pr-art.europe.stater.corp/artifactory/proxy.golang.org'
