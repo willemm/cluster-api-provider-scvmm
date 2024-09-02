@@ -355,7 +355,12 @@ spec:
                           checkpointType:
                             default: Standard
                             description: CheckpointType
-                            type: boolean
+                            enum:
+                            - Disabled
+                            - Production
+                            - ProductionOnly
+                            - Standard
+                            type: string
                           cpuLimitForMigration:
                             description: CPULimitForMigration
                             type: boolean

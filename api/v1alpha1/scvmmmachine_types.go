@@ -120,7 +120,8 @@ type VmOptions struct {
 	EnableNestedVirtualization *bool `json:"enableNestedVirtualization,omitempty"`
 	// CheckpointType
 	// +kubebuilder:default:=Standard
-	CheckpointType *bool `json:"checkpointType,omitempty"`
+	// +kubebuilder:validation:Enum=Disabled;Production;ProductionOnly;Standard
+	CheckpointType string `json:"checkpointType,omitempty"`
 }
 
 type VmDisk struct {
