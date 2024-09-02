@@ -115,9 +115,12 @@ type VmOptions struct {
 	// CPULimitFunctionality
 	// +optional
 	CPULimitFunctionality *bool `json:"cpuLimitFunctionality,omitempty"`
-	// CPULimitFunctionality
+	// EnableNestedVirtualization
 	// +optional
 	EnableNestedVirtualization *bool `json:"enableNestedVirtualization,omitempty"`
+	// CheckpointType
+	// +kubebuilder:default:=Standard
+	CheckpointType *bool `json:"checkpointType,omitempty"`
 }
 
 type VmDisk struct {

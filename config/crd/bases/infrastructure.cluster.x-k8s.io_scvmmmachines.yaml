@@ -341,6 +341,10 @@ spec:
               vmOptions:
                 description: Options for New-SCVirtualMachine
                 properties:
+                  checkpointType:
+                    default: Standard
+                    description: CheckpointType
+                    type: boolean
                   cpuLimitForMigration:
                     description: CPULimitForMigration
                     type: boolean
@@ -351,7 +355,7 @@ spec:
                     description: Description
                     type: string
                   enableNestedVirtualization:
-                    description: CPULimitFunctionality
+                    description: EnableNestedVirtualization
                     type: boolean
                   startAction:
                     description: Start Action
