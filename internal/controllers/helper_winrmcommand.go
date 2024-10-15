@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -194,7 +193,12 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		winrmReturn(inp.output, nil, nil, err)
 		return WinrmCommand{}
 	}
-	defer cmd.Close()
+	defer func(cmd *winrm.DirectCommand) {
+		err := cmd.Close()
+		if err != nil {
+			log.Error(err, "error when closing winrm cmd in defer")
+		}
+	}(cmd)
 	for {
 		if ExtraDebug {
 			log.V(1).Info("Send Input", "input", string(inp.input))
@@ -280,7 +284,7 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 	}
 	for _, file := range scriptfiles {
 		name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-		content, err := ioutil.ReadFile(file)
+		content, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("error reading script file %s: %v", file, err)
 		}
@@ -319,11 +323,17 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		return &winrm.DirectCommand{}, err
 	}
 	if err := sendWinrmFunctions(log, cmd, functionScript); err != nil {
-		cmd.Close()
+		closeErr := cmd.Close()
+		if closeErr != nil {
+			log.Error(closeErr, "error when closing winrm cmd after sendWinrmFunctions error")
+		}
 		return &winrm.DirectCommand{}, err
 	}
 	if err := sendWinrmConnect(log, cmd, provider.ScvmmHost); err != nil {
-		cmd.Close()
+		closeErr := cmd.Close()
+		if closeErr != nil {
+			log.Error(closeErr, "error when closing winrm cmd after sendWinrmConnect error")
+		}
 		return &winrm.DirectCommand{}, err
 	}
 	return cmd, nil
