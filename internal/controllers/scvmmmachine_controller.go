@@ -341,7 +341,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM")
 			}
 			if len(vmIdsByName) > 0 {
-				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "VMName already exists in SCVMM, cannot use it")
+				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, fmt.Sprintf("VMName already exists in SCVMM, cannot use it; VMName: '%s', VMIDs: '%s'", vmName, strings.Join(vmIdsByName, ", ")))
 			}
 			scvmmMachine.Spec.VMName = vmName
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
