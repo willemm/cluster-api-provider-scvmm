@@ -63,6 +63,7 @@ type VMResult struct {
 	CreationTime         metav1.Time
 	ModifiedTime         metav1.Time
 	Result               string
+	VMIDs                []string // for getVMIDsByName()'s benefit
 }
 
 type VMSpecResult struct {

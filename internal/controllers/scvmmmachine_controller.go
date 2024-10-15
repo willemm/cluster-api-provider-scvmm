@@ -316,6 +316,15 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 	return vm, nil
 }
 
+func (r *ScvmmMachineReconciler) getVMIDsByName(ctx context.Context, providerRef *infrav1.ScvmmProviderReference, VMName string) ([]string, error) {
+	log := ctrl.LoggerFrom(ctx)
+	result, err := sendWinrmCommand(log, providerRef, "GetVMIDsByName -VMName '%s'", escapeSingleQuotes(VMName))
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get VMIDs by name %s", VMName)
+	}
+	return result.VMIDs, nil
+}
+
 func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	spec := scvmmMachine.Spec
