@@ -701,9 +701,18 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachin
 		candidate := nameRange.Start
 		for {
 			if vmName == "" && owners[candidate] == "" {
-				vmName = candidate
-				owners[candidate] = scvmmMachine.Name
-				log.V(1).Info("Registering vmname in pool status", "vmnameOwners", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool, "name", vmName, "owner", scvmmMachine.Name)
+				// Found an unused name in the pool; make sure SCVMM doesn't already have a VM with that name.
+				vmIdsByName, err := r.getVMIDsByName(ctx, scvmmMachine.Spec.ProviderRef, candidate)
+				if err != nil {
+					return "", err
+				}
+				if len(vmIdsByName) != 0 {
+					log.V(1).Info("VMName already exists in SCVMM, skipping", "name", candidate, "ids", vmIdsByName)
+				} else {
+					vmName = candidate
+					owners[candidate] = scvmmMachine.Name
+					log.V(1).Info("Registering vmname in pool status", "vmnameOwners", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool, "name", vmName, "owner", scvmmMachine.Name)
+				}
 			}
 			counts.Total++
 			if owners[candidate] == "" {
