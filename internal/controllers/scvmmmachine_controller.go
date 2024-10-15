@@ -335,6 +335,14 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 			if err != nil {
 				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
 			}
+			// Sanity check. Under no circumstances should we should use a VMName that already exists. generateVMName should have avoided it, but make sure.
+			vmIdsByName, err := r.getVMIDsByName(ctx, spec.ProviderRef, vmName)
+			if err != nil {
+				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM")
+			}
+			if len(vmIdsByName) > 0 {
+				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "VMName already exists in SCVMM, cannot use it")
+			}
 			scvmmMachine.Spec.VMName = vmName
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
 		} else {
