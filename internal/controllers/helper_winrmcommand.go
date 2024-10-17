@@ -454,7 +454,8 @@ func sendWinrmConnect(log logr.Logger, cmd *winrm.DirectCommand, scvmmHost strin
 	return nil
 }
 
-func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (VMResult, error) {
+func sendWinrmCommandWithErrorResult[T any](log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (T, error) {
+	var res T
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM command", "command", command, "args", args,
 			"cmdline", fmt.Sprintf(command+"\n", args...))
@@ -475,29 +476,33 @@ func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReferen
 	result, ok := <-output
 	if !ok {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(result.err, "Failed to get function output "+funcName)
+		return res, errors.Wrap(result.err, "Failed to get function output "+funcName)
 	}
 	if result.err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(result.err, "Failed to call function "+funcName)
+		return res, errors.Wrap(result.err, "Failed to call function "+funcName)
 	}
 	if ExtraDebug {
 		log.V(1).Info("Got WinRM Result", "stdout", string(result.stdout), "stderr", string(result.stderr))
 	}
-	var res VMResult
 	if err := json.Unmarshal(result.stdout, &res); err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(err, "Decode result error: "+string(result.stdout)+
-			"  (stderr="+string(result.stderr)+")")
+		return res, errors.Wrap(err, "Decode result error: "+string(result.stdout)+"  (stderr="+string(result.stderr)+")")
 	}
-	if res.Error != "" {
-		err := &ScriptError{function: funcName, message: res.Message}
-		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", res.Error)
+	// check if T has a GetError() member and invoke it to get the Error coming from the Powershell script. Does nothing if type doesn't have a GetError member.
+	// @TODO(rpardini): implement a common interface (with GetError method) instead of using "any"
+	if resWithError, ok := any(res).(interface{ GetError() string }); ok && resWithError.GetError() != "" {
+		err := &ScriptError{function: funcName, message: resWithError.GetError()}
+		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", resWithError.GetError())
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, err
+		return res, err
 	}
 	log.V(1).Info(funcName+" Result", "vm", res)
 	return res, nil
+}
+
+func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (VMResult, error) {
+	return sendWinrmCommandWithErrorResult[VMResult](log, providerRef, command, args...)
 }
 
 func winrmTimer(funcName string) func() {
