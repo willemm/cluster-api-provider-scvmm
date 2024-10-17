@@ -67,7 +67,6 @@ type VMResult struct {
 	CreationTime         metav1.Time
 	ModifiedTime         metav1.Time
 	Result               string
-	VMIDs                []string // for getVMIDsByName()'s benefit
 }
 
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult
@@ -80,6 +79,15 @@ type VMSpecResult struct {
 	Error        string
 	ScriptErrors string
 	Message      string
+}
+
+type VMIDsResult struct {
+	Error string
+	VMIDs []string
+}
+
+func (V VMIDsResult) GetError() string {
+	return V.Error
 }
 
 type ScriptError struct {
