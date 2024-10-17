@@ -32,7 +32,11 @@ type WinrmResult struct {
 	err    error
 }
 
-// The result (passed as json) of a call to Scvmm scripts
+type WinrmErrorResult interface {
+	GetError() string
+}
+
+// VMResult The result (passed as json) of a call to Scvmm scripts
 type VMResult struct {
 	Cloud          string
 	Name           string
@@ -64,6 +68,11 @@ type VMResult struct {
 	ModifiedTime         metav1.Time
 	Result               string
 	VMIDs                []string // for getVMIDsByName()'s benefit
+}
+
+// GetError Implement GetError() for VMResult so it implements WinrmErrorResult
+func (V VMResult) GetError() string {
+	return V.Error
 }
 
 type VMSpecResult struct {
@@ -454,7 +463,7 @@ func sendWinrmConnect(log logr.Logger, cmd *winrm.DirectCommand, scvmmHost strin
 	return nil
 }
 
-func sendWinrmCommandWithErrorResult[T any](log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (T, error) {
+func sendWinrmCommandWithErrorResult[T WinrmErrorResult](log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (T, error) {
 	var res T
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM command", "command", command, "args", args,
@@ -489,11 +498,9 @@ func sendWinrmCommandWithErrorResult[T any](log logr.Logger, providerRef *infrav
 		winrmErrors.WithLabelValues(funcName).Inc()
 		return res, errors.Wrap(err, "Decode result error: "+string(result.stdout)+"  (stderr="+string(result.stderr)+")")
 	}
-	// check if T has a GetError() member and invoke it to get the Error coming from the Powershell script. Does nothing if type doesn't have a GetError member.
-	// @TODO(rpardini): implement a common interface (with GetError method) instead of using "any"
-	if resWithError, ok := any(res).(interface{ GetError() string }); ok && resWithError.GetError() != "" {
-		err := &ScriptError{function: funcName, message: resWithError.GetError()}
-		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", resWithError.GetError())
+	if res.GetError() != "" {
+		err := &ScriptError{function: funcName, message: res.GetError()}
+		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", res.GetError())
 		winrmErrors.WithLabelValues(funcName).Inc()
 		return res, err
 	}
