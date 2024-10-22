@@ -566,6 +566,15 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 
 func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch.Helper, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
+	// Before adding to AD and starting the VM, make sure there's only one VM with this name.
+	// This was already checked in namepool and before createVM, but since one might have multiple controllers, check again.
+	vmIdsByName, errDupCheck := r.getVMIDsByName(ctx, scvmmMachine.Spec.ProviderRef, scvmmMachine.Spec.VMName)
+	if errDupCheck != nil {
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errDupCheck, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM before AD+start")
+	}
+	if len(vmIdsByName) > 1 {
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, fmt.Sprintf("VMName already exists in SCVMM before AD+start, cannot use it; VMName: '%s', VMIDs: '%s', expected ID: '%s'", scvmmMachine.Spec.VMName, strings.Join(vmIdsByName, ", "), scvmmMachine.Spec.Id))
+	}
 	// Add adcomputer here, because we now know the vmname will not change
 	// (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
 	var err error
