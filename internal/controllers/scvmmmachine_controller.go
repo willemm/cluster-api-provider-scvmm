@@ -274,7 +274,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
 			return r.setVMProperties(ctx, patchHelper, scvmmMachine)
 		}
-		return r.startVM(ctx, patchHelper, cluster, machine, provider, scvmmMachine)
+		return r.startVM(ctx, patchHelper, provider, scvmmMachine)
 	}
 	// Support changing properties or tags
 	if (scvmmMachine.Spec.Tag != "" && vm.Tag != scvmmMachine.Spec.Tag) || !equalStringMap(scvmmMachine.Spec.CustomProperty, vm.CustomProperty) {
@@ -316,6 +316,15 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 	return vm, nil
 }
 
+func (r *ScvmmMachineReconciler) getVMIDsByName(ctx context.Context, providerRef *infrav1.ScvmmProviderReference, VMName string) ([]string, error) {
+	log := ctrl.LoggerFrom(ctx)
+	result, err := sendWinrmCommandWithErrorResult[VMIDsResult](log, providerRef, "GetVMIDsByName -VMName '%s'", escapeSingleQuotes(VMName))
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get VMIDs by name %s", VMName)
+	}
+	return result.VMIDs, nil
+}
+
 func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patch.Helper, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	spec := scvmmMachine.Spec
@@ -325,6 +334,14 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, patchHelper *patc
 			vmName, err := r.generateVMName(ctx, scvmmMachine)
 			if err != nil {
 				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed generate vmname")
+			}
+			// Sanity check. Under no circumstances should we should use a VMName that already exists. generateVMName should have avoided it, but make sure.
+			vmIdsByName, err := r.getVMIDsByName(ctx, spec.ProviderRef, vmName)
+			if err != nil {
+				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM")
+			}
+			if len(vmIdsByName) > 0 {
+				return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, fmt.Sprintf("VMName already exists in SCVMM, cannot use it; VMName: '%s', VMIDs: '%s'", vmName, strings.Join(vmIdsByName, ", ")))
 			}
 			scvmmMachine.Spec.VMName = vmName
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
@@ -547,8 +564,17 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 	return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Adding ISO to VM %s", vm.Name)
 }
 
-func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch.Helper, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch.Helper, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
+	// Before adding to AD and starting the VM, make sure there's only one VM with this name.
+	// This was already checked in namepool and before createVM, but since one might have multiple controllers, check again.
+	vmIdsByName, errDupCheck := r.getVMIDsByName(ctx, scvmmMachine.Spec.ProviderRef, scvmmMachine.Spec.VMName)
+	if errDupCheck != nil {
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, errDupCheck, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM before AD+start")
+	}
+	if len(vmIdsByName) > 1 {
+		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, nil, VmCreated, VmFailedReason, fmt.Sprintf("VMName already exists in SCVMM before AD+start, cannot use it; VMName: '%s', VMIDs: '%s', expected ID: '%s'", scvmmMachine.Spec.VMName, strings.Join(vmIdsByName, ", "), scvmmMachine.Spec.Id))
+	}
 	// Add adcomputer here, because we now know the vmname will not change
 	// (a VM with the cloud-init iso connected is prio 1 in vmname clash resolution)
 	var err error
@@ -692,9 +718,18 @@ func (r *ScvmmMachineReconciler) generateVMName(ctx context.Context, scvmmMachin
 		candidate := nameRange.Start
 		for {
 			if vmName == "" && owners[candidate] == "" {
-				vmName = candidate
-				owners[candidate] = scvmmMachine.Name
-				log.V(1).Info("Registering vmname in pool status", "vmnameOwners", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool, "name", vmName, "owner", scvmmMachine.Name)
+				// Found an unused name in the pool; make sure SCVMM doesn't already have a VM with that name.
+				vmIdsByName, err := r.getVMIDsByName(ctx, scvmmMachine.Spec.ProviderRef, candidate)
+				if err != nil {
+					return "", err
+				}
+				if len(vmIdsByName) != 0 {
+					log.V(1).Info("VMName already exists in SCVMM, skipping", "name", candidate, "ids", vmIdsByName)
+				} else {
+					vmName = candidate
+					owners[candidate] = scvmmMachine.Name
+					log.V(1).Info("Registering vmname in pool status", "vmnameOwners", scvmmNamePool.Status.VMNameOwners, "namepool", scvmmNamePool, "name", vmName, "owner", scvmmMachine.Name)
+				}
 			}
 			counts.Total++
 			if owners[candidate] == "" {

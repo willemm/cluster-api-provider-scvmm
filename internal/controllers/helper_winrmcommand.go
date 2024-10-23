@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,11 @@ type WinrmResult struct {
 	err    error
 }
 
-// The result (passed as json) of a call to Scvmm scripts
+type WinrmErrorResult interface {
+	GetError() string
+}
+
+// VMResult The result (passed as json) of a call to Scvmm scripts
 type VMResult struct {
 	Cloud          string
 	Name           string
@@ -66,11 +69,25 @@ type VMResult struct {
 	Result               string
 }
 
+// GetError Implement GetError() for VMResult so it implements WinrmErrorResult
+func (V VMResult) GetError() string {
+	return V.Error
+}
+
 type VMSpecResult struct {
 	infrav1.ScvmmMachineSpec
 	Error        string
 	ScriptErrors string
 	Message      string
+}
+
+type VMIDsResult struct {
+	Error string
+	VMIDs []string
+}
+
+func (V VMIDsResult) GetError() string {
+	return V.Error
 }
 
 type ScriptError struct {
@@ -194,7 +211,12 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		winrmReturn(inp.output, nil, nil, err)
 		return WinrmCommand{}
 	}
-	defer cmd.Close()
+	defer func(cmd *winrm.DirectCommand) {
+		err := cmd.Close()
+		if err != nil {
+			log.Error(err, "error when closing winrm cmd in defer")
+		}
+	}(cmd)
 	for {
 		if ExtraDebug {
 			log.V(1).Info("Send Input", "input", string(inp.input))
@@ -280,7 +302,7 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 	}
 	for _, file := range scriptfiles {
 		name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-		content, err := ioutil.ReadFile(file)
+		content, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("error reading script file %s: %v", file, err)
 		}
@@ -319,11 +341,17 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 		return &winrm.DirectCommand{}, err
 	}
 	if err := sendWinrmFunctions(log, cmd, functionScript); err != nil {
-		cmd.Close()
+		closeErr := cmd.Close()
+		if closeErr != nil {
+			log.Error(closeErr, "error when closing winrm cmd after sendWinrmFunctions error")
+		}
 		return &winrm.DirectCommand{}, err
 	}
 	if err := sendWinrmConnect(log, cmd, provider.ScvmmHost); err != nil {
-		cmd.Close()
+		closeErr := cmd.Close()
+		if closeErr != nil {
+			log.Error(closeErr, "error when closing winrm cmd after sendWinrmConnect error")
+		}
 		return &winrm.DirectCommand{}, err
 	}
 	return cmd, nil
@@ -443,7 +471,8 @@ func sendWinrmConnect(log logr.Logger, cmd *winrm.DirectCommand, scvmmHost strin
 	return nil
 }
 
-func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (VMResult, error) {
+func sendWinrmCommandWithErrorResult[T WinrmErrorResult](log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (T, error) {
+	var res T
 	if ExtraDebug {
 		log.V(1).Info("Sending WinRM command", "command", command, "args", args,
 			"cmdline", fmt.Sprintf(command+"\n", args...))
@@ -464,29 +493,31 @@ func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReferen
 	result, ok := <-output
 	if !ok {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(result.err, "Failed to get function output "+funcName)
+		return res, errors.Wrap(result.err, "Failed to get function output "+funcName)
 	}
 	if result.err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(result.err, "Failed to call function "+funcName)
+		return res, errors.Wrap(result.err, "Failed to call function "+funcName)
 	}
 	if ExtraDebug {
 		log.V(1).Info("Got WinRM Result", "stdout", string(result.stdout), "stderr", string(result.stderr))
 	}
-	var res VMResult
 	if err := json.Unmarshal(result.stdout, &res); err != nil {
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, errors.Wrap(err, "Decode result error: "+string(result.stdout)+
-			"  (stderr="+string(result.stderr)+")")
+		return res, errors.Wrap(err, "Decode result error: "+string(result.stdout)+"  (stderr="+string(result.stderr)+")")
 	}
-	if res.Error != "" {
-		err := &ScriptError{function: funcName, message: res.Message}
-		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", res.Error)
+	if res.GetError() != "" {
+		err := &ScriptError{function: funcName, message: res.GetError()}
+		log.V(1).Error(err, "Script error", "function", funcName, "stacktrace", res.GetError())
 		winrmErrors.WithLabelValues(funcName).Inc()
-		return VMResult{}, err
+		return res, err
 	}
 	log.V(1).Info(funcName+" Result", "vm", res)
 	return res, nil
+}
+
+func sendWinrmCommand(log logr.Logger, providerRef *infrav1.ScvmmProviderReference, command string, args ...interface{}) (VMResult, error) {
+	return sendWinrmCommandWithErrorResult[VMResult](log, providerRef, command, args...)
 }
 
 func winrmTimer(funcName string) func() {
