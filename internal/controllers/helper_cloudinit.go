@@ -47,9 +47,9 @@ type CloudInitNetworkData struct {
 }
 
 type CloudInitEthernet struct {
-	Addresses   []string              `json:"addresses,omitempty"`
-	Gateway4    string                `json:"gateway4,omitempty"`
-	Nameservers []CloudInitNameserver `json:"nameservers,omitempty"`
+	Addresses   []string            `json:"addresses,omitempty"`
+	Gateway4    string              `json:"gateway4,omitempty"`
+	Nameservers CloudInitNameserver `json:"nameservers,omitempty"`
 }
 
 type CloudInitNameserver struct {
@@ -171,10 +171,10 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 				networkdata.Ethernets[devicename] = CloudInitEthernet{
 					Addresses: nwd.IPAddresses,
 					Gateway4:  nwd.Gateway,
-					Nameservers: []CloudInitNameserver{{
+					Nameservers: CloudInitNameserver{
 						Addresses: nwd.Nameservers,
 						Search:    nwd.SearchDomains,
-					}},
+					},
 				}
 			}
 
