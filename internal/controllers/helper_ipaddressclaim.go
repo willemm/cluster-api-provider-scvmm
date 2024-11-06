@@ -183,6 +183,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		},
 	}
 	mutateFn := func() (err error) {
+		controller := true
 		claim.SetOwnerReferences(util.EnsureOwnerRef(
 			claim.OwnerReferences,
 			metav1.OwnerReference{
@@ -190,6 +191,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 				Kind:       "ScvmmMachine",
 				Name:       scvmmMachine.Name,
 				UID:        scvmmMachine.UID,
+				Controller: &controller,
 			}))
 
 		controllerutil.AddFinalizer(claim, IPAddressClaimFinalizer)
