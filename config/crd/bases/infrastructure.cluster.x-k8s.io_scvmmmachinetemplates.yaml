@@ -239,6 +239,12 @@ spec:
                         description: Allocated memory
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
+                      metadata:
+                        additionalProperties:
+                          type: string
+                        description: Extra metadata to add to cloud-init meta-data
+                          file
+                        type: object
                       networking:
                         description: Network settings
                         properties:

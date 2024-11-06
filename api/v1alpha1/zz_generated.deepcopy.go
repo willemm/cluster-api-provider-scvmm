@@ -537,6 +537,13 @@ func (in *ScvmmMachineSpec) DeepCopyInto(out *ScvmmMachineSpec) {
 		*out = new(ScvmmProviderReference)
 		**out = **in
 	}
+	if in.Metadata != nil {
+		in, out := &in.Metadata, &out.Metadata
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.Bootstrap != nil {
 		in, out := &in.Bootstrap, &out.Bootstrap
 		*out = new(v1beta1.Bootstrap)

@@ -17,9 +17,10 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/go-logr/logr"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
@@ -38,6 +39,22 @@ type CloudInitFile struct {
 
 type CloudInitFilesystemHandler struct {
 	Writer func(*smb2.File, []CloudInitFile) (int, error)
+}
+
+type CloudInitNetworkData struct {
+	Version   int                          `json:"version"`
+	Ethernets map[string]CloudInitEthernet `json:"ethernets"`
+}
+
+type CloudInitEthernet struct {
+	Addresses   []string              `json:"addresses,omitempty"`
+	Gateway4    string                `json:"gateway4,omitempty"`
+	Nameservers []CloudInitNameserver `json:"nameservers,omitempty"`
+}
+
+type CloudInitNameserver struct {
+	Addresses []string `json:"addresses"`
+	Search    []string `json:"search,omitempty"`
 }
 
 var cloudInitDeviceTypeExtensions = map[string]string{
@@ -119,48 +136,52 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	networking := scvmmMachine.Spec.Networking
 	if metaData == nil {
 		hostname := scvmmMachine.Spec.VMName
-		domainname := ""
 		if networking != nil {
 			if networking.Domain == "" {
 				return fmt.Errorf("missing required parameter networking.Domain")
 			}
-			domainname = "." + networking.Domain
+			hostname = hostname + "." + networking.Domain
 		}
-		data := "instance-id: " + machineid + "\n" +
-			"hostname: " + hostname + domainname + "\n" +
-			"local-hostname: " + hostname + domainname + "\n"
-		metaData = []byte(data)
+
+		metadataobj := map[string]string{}
+		metadataobj["instance-id"] = machineid
+		metadataobj["hostname"] = hostname
+		metadataobj["local-hostname"] = hostname
+		for k, v := range scvmmMachine.Spec.Metadata {
+			metadataobj[k] = v
+		}
+
+		metaData, err = yaml.Marshal(metadataobj)
+		if err != nil {
+			return err
+		}
 	}
 	if networkConfig == nil {
 		if networking != nil && networking.Devices != nil {
-			var data bytes.Buffer
-			data.WriteString("version: 2\n" +
-				"ethernets:\n")
+			networkdata := CloudInitNetworkData{
+				Version:   2,
+				Ethernets: map[string]CloudInitEthernet{},
+			}
+
 			for slot, nwd := range networking.Devices {
 				devicename := nwd.DeviceName
 				if devicename == "" {
 					devicename = fmt.Sprintf("eth%d", slot)
 				}
-				data.WriteString("  " + devicename + ":\n")
-				if len(nwd.IPAddresses) > 0 {
-					data.WriteString("    addresses:\n" +
-						"    - " + strings.Join(nwd.IPAddresses, "\n    - ") + "\n")
-				}
-				if nwd.Gateway != "" {
-					data.WriteString("    gateway4: " + nwd.Gateway + "\n")
-				}
-				if len(nwd.Nameservers) > 0 {
-					data.WriteString("    nameservers:\n" +
-						"      addresses:\n" +
-						"      - " + strings.Join(nwd.Nameservers, "\n      - ") + "\n")
-					if len(nwd.SearchDomains) > 0 {
-						data.WriteString("      search:\n" +
-							"      - " + strings.Join(nwd.SearchDomains, "\n      -") + "\n")
-					}
+				networkdata.Ethernets[devicename] = CloudInitEthernet{
+					Addresses: nwd.IPAddresses,
+					Gateway4:  nwd.Gateway,
+					Nameservers: []CloudInitNameserver{{
+						Addresses: nwd.Nameservers,
+						Search:    nwd.SearchDomains,
+					}},
 				}
 			}
 
-			networkConfig = data.Bytes()
+			networkConfig, err = yaml.Marshal(networkdata)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	numFiles := 2

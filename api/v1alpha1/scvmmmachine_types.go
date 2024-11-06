@@ -90,6 +90,9 @@ type ScvmmMachineSpec struct {
 	// Will be copied from scvmmcluster if not using local bootstrap
 	// +optional
 	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
+	// Extra metadata to add to cloud-init meta-data file
+	// +optional
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// Custom bootstrap secret ref
 	// This triggers the controller to create the machine without a (cluster-api) cluster
 	// For testing purposes, or just for creating VMs
