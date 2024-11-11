@@ -3,10 +3,9 @@ package controllers
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strings"
 	"time"
-
-	"github.com/hirochachacha/go-smb2"
 )
 
 type vfatSector []byte
@@ -128,7 +127,7 @@ func (sector vfatSector) putDateTime(offset int, datetime time.Time) {
 			(datetime.Day()&0x1F)))
 }
 
-func writeVFAT(fh *smb2.File, files []CloudInitFile) (int, error) {
+func writeVFAT(fh io.Writer, files []CloudInitFile) (int, error) {
 	const sectorSize = 256
 	sector := make(vfatSector, sectorSize)
 	now := time.Now()

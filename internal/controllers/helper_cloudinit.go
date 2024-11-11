@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"gopkg.in/yaml.v2"
 
@@ -38,7 +39,7 @@ type CloudInitFile struct {
 }
 
 type CloudInitFilesystemHandler struct {
-	Writer func(*smb2.File, []CloudInitFile) (int, error)
+	Writer func(io.Writer, []CloudInitFile) (int, error)
 }
 
 type CloudInitNetworkData struct {
@@ -217,7 +218,7 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	}
 	if provider.CloudInit.DeviceType == "scsi" || provider.CloudInit.DeviceType == "ide" {
 		log.V(1).Info("smb2 add vhd footer")
-		if err := writeVHDFooter(fh, size); err != nil {
+		if err := WriteVHDFooter(fh, size); err != nil {
 			log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
 			fh.Close()
 			fs.Remove(path)

@@ -2,9 +2,8 @@ package controllers
 
 import (
 	"encoding/binary"
+	"io"
 	"time"
-
-	"github.com/hirochachacha/go-smb2"
 )
 
 type isoSector []byte
@@ -76,7 +75,7 @@ func (sector isoSector) putDirent(offset int, dirent *isoDirent) int {
 	return offset + totlen
 }
 
-func writeISO9660(fh *smb2.File, files []CloudInitFile) (int, error) {
+func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
 	const sectorSize = 2048
 	sector := make(isoSector, sectorSize)
 	now := time.Now()

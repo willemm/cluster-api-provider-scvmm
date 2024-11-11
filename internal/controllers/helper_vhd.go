@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"encoding/binary"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hirochachacha/go-smb2"
 )
 
 type vhdSector []byte
@@ -39,13 +39,13 @@ func (sector vhdSector) putDateTime(offset int, datetime time.Time) {
 
 func (sector vhdSector) checksum() uint32 {
 	chk := uint32(0)
-	for b := range sector[0:77] {
+	for _, b := range sector[0:84] {
 		chk = chk + uint32(b)
 	}
 	return ^chk
 }
 
-func writeVHDFooter(fh *smb2.File, size int) error {
+func WriteVHDFooter(fh io.Writer, size int) error {
 	const sectorSize = 512
 	now := time.Now()
 	sector := make(vhdSector, sectorSize)
@@ -53,7 +53,7 @@ func writeVHDFooter(fh *smb2.File, size int) error {
 	sector.putString(0, 8, "conectix")         // Cookie
 	sector.putU32(8, 0x02)                     // Features
 	sector.putU32(12, 0x00010000)              // File Format Version
-	sector.putU64(16, 0xFFFFFFFF)              // Data Offset
+	sector.putU64(16, 0xFFFFFFFFFFFFFFFF)      // Data Offset
 	sector.putDateTime(24, now)                // Time Stamp
 	sector.putString(28, 4, "capi")            // Creator Application
 	sector.putU16(32, 0)                       // Creator Version Major
