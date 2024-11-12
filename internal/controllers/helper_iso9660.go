@@ -75,7 +75,7 @@ func (sector isoSector) putDirent(offset int, dirent *isoDirent) int {
 	return offset + totlen
 }
 
-func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
+func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	const sectorSize = 2048
 	sector := make(isoSector, sectorSize)
 	now := time.Now()
@@ -91,11 +91,7 @@ func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
 	}
 
 	// Start with 32K of zeroes
-	for i := 0; i < 16; i++ {
-		if _, err := fh.Write(sector); err != nil {
-			return 0, err
-		}
-	}
+	offset += 16 * sectorSize
 	// Write Primary Volume Descriptor (sector 16)
 	sector[0] = 1
 	sector.putString(1, 5, "CD001")
@@ -119,9 +115,11 @@ func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
 	sector.putDate(847, time.Time{})                                             // Volume Expiration
 	sector.putDate(864, now)                                                     // Volume Effective
 	sector[881] = 1                                                              // File Structure Version
-	if _, err := fh.Write(sector); err != nil {
+	n, err := fh.WriteAt(sector, int64(offset))
+	if err != nil {
 		return 0, err
 	}
+	offset += n
 
 	for i := range sector {
 		sector[i] = 0
@@ -130,9 +128,11 @@ func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
 	sector[0] = 255                    // Type
 	copy(sector[1:6], []byte("CD001")) // Identifier
 	sector[6] = 1                      // Version
-	if _, err := fh.Write(sector); err != nil {
+	n, err = fh.WriteAt(sector, int64(offset))
+	if err != nil {
 		return 0, err
 	}
+	offset += n
 	for i := range sector {
 		sector[i] = 0
 	}
@@ -149,30 +149,25 @@ func writeISO9660(fh io.Writer, files []CloudInitFile) (int, error) {
 		curOff = sector.putDirent(curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename + ";1"})
 		fileSector = fileSector + ((flen - 1) / sectorSize) + 1
 	}
-	if _, err := fh.Write(sector); err != nil {
+	if n, err = fh.WriteAt(sector, int64(offset)); err != nil {
 		return 0, err
 	}
-	for i := range sector {
-		sector[i] = 0
-	}
+	offset += n
+
 	for cif := range files {
-		if _, err := fh.Write(files[cif].Contents); err != nil {
+		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
+		contents := append(files[cif].Contents, make([]byte, padlen)...)
+		n, err = fh.WriteAt(contents, int64(offset))
+		if err != nil {
 			return 0, err
 		}
-		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
-		if padlen > 0 {
-			if _, err := fh.Write(sector[:padlen]); err != nil {
-				return 0, err
-			}
-		}
+		offset += n
 	}
 	return sectorSize * lastSector, nil
 }
 
 func init() {
-	FilesystemHandlers["iso9660"] = CloudInitFilesystemHandler{
-		Writer: writeISO9660,
-	}
+	FilesystemHandlers["iso9660"] = writeISO9660
 	// Set default fs handler
 	FilesystemHandlers[""] = FilesystemHandlers["iso9660"]
 }

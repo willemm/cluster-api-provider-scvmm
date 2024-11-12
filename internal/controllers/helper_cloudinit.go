@@ -38,9 +38,11 @@ type CloudInitFile struct {
 	Contents []byte
 }
 
-type CloudInitFilesystemHandler struct {
-	Writer func(io.Writer, []CloudInitFile) (int, error)
-}
+// Params: filehandle interface, file list, offset
+// Returns: size of created filesystem, error
+type CloudInitFilesystemHandler func(io.WriterAt, []CloudInitFile, int) (int, error)
+
+type CloudInitDeviceHandler func(io.WriterAt, CloudInitFilesystemHandler, []CloudInitFile) error
 
 type CloudInitNetworkData struct {
 	Version   int                          `json:"version"`
@@ -62,11 +64,12 @@ var cloudInitDeviceTypeExtensions = map[string]string{
 	"":       "iso",
 	"dvd":    "iso",
 	"floppy": "vfd",
-	"scsi":   "vhd",
-	"ide":    "vhd",
+	"scsi":   "vhdx",
+	"ide":    "vhdx",
 }
 
 var FilesystemHandlers = make(map[string]CloudInitFilesystemHandler)
+var DeviceHandlers = make(map[string]CloudInitDeviceHandler)
 
 func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	extension, ok := cloudInitDeviceTypeExtensions[provider.CloudInit.DeviceType]
@@ -87,7 +90,7 @@ func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scv
 	return share + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
 }
 
-func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) error {
+func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) (reterr error) {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
@@ -134,6 +137,12 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	if err != nil {
 		return err
 	}
+	defer func() {
+		fh.Close()
+		if reterr != nil {
+			fs.Remove(path)
+		}
+	}()
 	networking := scvmmMachine.Spec.Networking
 	if metaData == nil {
 		hostname := scvmmMachine.Spec.VMName
@@ -209,23 +218,14 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	if !ok {
 		return fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
 	}
-	size, err := handler.Writer(fh, files)
-	if err != nil {
+	devHandler, ok := DeviceHandlers[provider.CloudInit.DeviceType]
+	if !ok {
+		return fmt.Errorf("Unknown device type " + provider.CloudInit.DeviceType)
+	}
+	if err := devHandler(fh, handler, files); err != nil {
 		log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
-		fh.Close()
-		fs.Remove(path)
 		return err
 	}
-	if provider.CloudInit.DeviceType == "scsi" || provider.CloudInit.DeviceType == "ide" {
-		log.V(1).Info("smb2 add vhd footer")
-		if err := WriteVHDFooter(fh, size); err != nil {
-			log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)
-			fh.Close()
-			fs.Remove(path)
-			return err
-		}
-	}
-	log.V(1).Info("smb2 Closing file")
-	fh.Close()
+	log.V(1).Info("smb2 Done")
 	return nil
 }

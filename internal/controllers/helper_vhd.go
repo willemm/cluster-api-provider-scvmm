@@ -45,7 +45,11 @@ func (sector vhdSector) checksum() uint32 {
 	return ^chk
 }
 
-func WriteVHDFooter(fh io.Writer, size int) error {
+func writeVHD(fh io.WriterAt, handler CloudInitFilesystemHandler, files []CloudInitFile) error {
+	size, err := handler(fh, files, 0)
+	if err != nil {
+		return err
+	}
 	const sectorSize = 512
 	now := time.Now()
 	sector := make(vhdSector, sectorSize)
@@ -70,8 +74,14 @@ func WriteVHDFooter(fh io.Writer, size int) error {
 
 	sector.putU32(64, sector.checksum())
 
-	if _, err := fh.Write(sector); err != nil {
+	offset := (((size - 1) / sectorSize) + 1) * sectorSize
+
+	if _, err := fh.WriteAt(sector, int64(offset)); err != nil {
 		return err
 	}
 	return nil
+}
+
+func init() {
+	DeviceHandlers["vhd"] = writeVHD
 }

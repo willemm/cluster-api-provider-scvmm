@@ -127,7 +127,7 @@ func (sector vfatSector) putDateTime(offset int, datetime time.Time) {
 			(datetime.Day()&0x1F)))
 }
 
-func writeVFAT(fh io.Writer, files []CloudInitFile) (int, error) {
+func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	const sectorSize = 256
 	sector := make(vfatSector, sectorSize)
 	now := time.Now()
@@ -184,9 +184,11 @@ func writeVFAT(fh io.Writer, files []CloudInitFile) (int, error) {
 	sector.putString(43, 11, "cidata")                     // Volume identifier
 	sector.putString(54, 8, fmt.Sprintf("FAT%d", fatSize)) // File system type
 
-	if _, err := fh.Write(sector); err != nil {
+	n, err := fh.WriteAt(sector, int64(offset))
+	if err != nil {
 		return 0, err
 	}
+	offset += n
 
 	// Create FAT
 	fileStarts := make([]uint32, len(files))
@@ -201,9 +203,11 @@ func writeVFAT(fh io.Writer, files []CloudInitFile) (int, error) {
 		fatOff = sector.putFATChain(fatOff, sectorSize, uint32(len(files[cif].Contents)), fatSize)
 	}
 
-	if _, err := fh.Write(sector); err != nil {
+	n, err = fh.WriteAt(sector, int64(offset))
+	if err != nil {
 		return 0, err
 	}
+	offset += n
 
 	sector = make(vfatSector, dirents)
 	curOff := 0
@@ -214,28 +218,27 @@ func writeVFAT(fh io.Writer, files []CloudInitFile) (int, error) {
 		curOff = sector.putVfatDirent(curOff, files[cif].Filename, fileStarts[cif], flen, now)
 	}
 
-	if _, err := fh.Write(sector); err != nil {
+	n, err = fh.WriteAt(sector, int64(offset))
+	if err != nil {
 		return 0, err
 	}
+	offset += n
 
 	sector = make(vfatSector, sectorSize)
 	for cif := range files {
-		if _, err := fh.Write(files[cif].Contents); err != nil {
+		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
+		contents := append(files[cif].Contents, make([]byte, padlen)...)
+		n, err = fh.WriteAt(contents, int64(offset))
+		if err != nil {
 			return 0, err
 		}
-		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
-		if padlen > 0 {
-			if _, err := fh.Write(sector[:padlen]); err != nil {
-				return 0, err
-			}
-		}
+		// Align offset to sector size by rounding up
+		offset += n
 	}
 
 	return int(sectorSize * lastSector), nil
 }
 
 func init() {
-	FilesystemHandlers["vfat"] = CloudInitFilesystemHandler{
-		Writer: writeVFAT,
-	}
+	FilesystemHandlers["vfat"] = writeVFAT
 }
