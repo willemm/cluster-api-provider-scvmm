@@ -129,7 +129,6 @@ func (sector vfatSector) putDateTime(offset int, datetime time.Time) {
 
 func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	const sectorSize = 256
-	sector := make(vfatSector, sectorSize)
 	now := time.Now()
 
 	// Calculate number of sectors
@@ -165,6 +164,12 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 		// Size in sectors, rounding up
 		extraSectors = (fatSectorSize-1)/sectorSize + 1
 	}
+	// Allow for querying the size
+	if fh == nil {
+		return int(sectorSize * lastSector), nil
+	}
+
+	sector := make(vfatSector, sectorSize)
 
 	sector.putBytes(0, 0xeb, 0x3c, 0x90)                   // Jump instruction
 	sector.putString(3, 8, "MSWIN4.1")                     // OEM Name

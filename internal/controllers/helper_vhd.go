@@ -51,26 +51,27 @@ func writeVHD(fh io.WriterAt, handler CloudInitFilesystemHandler, files []CloudI
 		return err
 	}
 	const sectorSize = 512
+	numsectors := ((size - 1) / sectorSize) + 1
 	now := time.Now()
 	sector := make(vhdSector, sectorSize)
 
-	sector.putString(0, 8, "conectix")         // Cookie
-	sector.putU32(8, 0x02)                     // Features
-	sector.putU32(12, 0x00010000)              // File Format Version
-	sector.putU64(16, 0xFFFFFFFFFFFFFFFF)      // Data Offset
-	sector.putDateTime(24, now)                // Time Stamp
-	sector.putString(28, 4, "capi")            // Creator Application
-	sector.putU16(32, 0)                       // Creator Version Major
-	sector.putU16(34, 3)                       // Creator Version Minor
-	sector.putString(36, 4, "lnux")            // Creator Host OS
-	sector.putU64(40, uint64(size))            // Original Size
-	sector.putU64(48, uint64(size))            // Current Size
-	sector.putU16(56, uint16(size/sectorSize)) // Disk Geometry Cylinder
-	sector[58] = 1                             // Disk Geometry Heads
-	sector[59] = 1                             // Disk Geometry Sectors/track
-	sector.putU32(60, 2)                       // Disk Type (Fixed)
-	sector.putUUID(68, uuid.New())             // Unique Id
-	sector[84] = 0                             // Saved state
+	sector.putString(0, 8, "conectix")    // Cookie
+	sector.putU32(8, 0x02)                // Features
+	sector.putU32(12, 0x00010000)         // File Format Version
+	sector.putU64(16, 0xFFFFFFFFFFFFFFFF) // Data Offset
+	sector.putDateTime(24, now)           // Time Stamp
+	sector.putString(28, 4, "capi")       // Creator Application
+	sector.putU16(32, 0)                  // Creator Version Major
+	sector.putU16(34, 3)                  // Creator Version Minor
+	sector.putString(36, 4, "lnux")       // Creator Host OS
+	sector.putU64(40, uint64(size))       // Original Size
+	sector.putU64(48, uint64(size))       // Current Size
+	sector.putU16(56, uint16(numsectors)) // Disk Geometry Cylinder
+	sector[58] = 1                        // Disk Geometry Heads
+	sector[59] = 1                        // Disk Geometry Sectors/track
+	sector.putU32(60, 2)                  // Disk Type (Fixed)
+	sector.putUUID(68, uuid.New())        // Unique Id
+	sector[84] = 0                        // Saved state
 
 	sector.putU32(64, sector.checksum())
 

@@ -77,7 +77,6 @@ func (sector isoSector) putDirent(offset int, dirent *isoDirent) int {
 
 func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	const sectorSize = 2048
-	sector := make(isoSector, sectorSize)
 	now := time.Now()
 
 	// Calculate the total size
@@ -89,9 +88,16 @@ func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error
 		fsz := ((len(files[cif].Contents) - 1) / sectorSize) + 1
 		lastSector = lastSector + fsz
 	}
+	// Allow for querying the size
+	if fh == nil {
+		return sectorSize * lastSector, nil
+	}
 
 	// Start with 32K of zeroes
 	offset += 16 * sectorSize
+
+	sector := make(isoSector, sectorSize)
+
 	// Write Primary Volume Descriptor (sector 16)
 	sector[0] = 1
 	sector.putString(1, 5, "CD001")
