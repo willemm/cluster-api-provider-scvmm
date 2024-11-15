@@ -157,13 +157,15 @@ func writeVHDXMetadata(fh io.WriterAt, offset int64, size int) error {
 func writeVHDXBAT(fh io.WriterAt, offset int64, size int) error {
 	blockSize := 1 * 1024 * 1024
 	numblocks := ((size - 1) / blockSize) + 1
-	sector := make(vhdxSector, 8*numblocks)
+	sector := make(vhdxSector, 8*(numblocks+1))
 
 	for b := 0; b < numblocks; b++ {
 		// Blocks start at 4Mb
 		batEntry := uint64(6) | (uint64((b + filesystemStartMB)) << 20)
 		sector.putU64(b*8, batEntry)
 	}
+	// Zero block at the end
+	sector.putU64(numblocks*8, uint64(2))
 	_, err := fh.WriteAt(sector, offset)
 	return err
 }
