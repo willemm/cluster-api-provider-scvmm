@@ -83,9 +83,9 @@ func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error
 	// NB: Assumes all files are in the root and the dirent will not exceed one sector
 	// 16,17 = volume identifiers, 18 = directory
 	lastSector := 19
-	for cif := range files {
+	for _, cif := range files {
 		// Round up to sector size
-		fsz := ((len(files[cif].Contents) - 1) / sectorSize) + 1
+		fsz := ((len(cif.Contents) - 1) / sectorSize) + 1
 		lastSector = lastSector + fsz
 	}
 	// Allow for querying the size
@@ -150,9 +150,9 @@ func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error
 
 	// Write directory entries
 	fileSector := 19
-	for cif := range files {
-		flen := len(files[cif].Contents)
-		curOff = sector.putDirent(curOff, &isoDirent{fileSector, flen, now, 0, files[cif].Filename + ";1"})
+	for _, cif := range files {
+		flen := len(cif.Contents)
+		curOff = sector.putDirent(curOff, &isoDirent{fileSector, flen, now, 0, cif.Filename + ";1"})
 		fileSector = fileSector + ((flen - 1) / sectorSize) + 1
 	}
 	if n, err = fh.WriteAt(sector, int64(offset)); err != nil {
@@ -160,14 +160,16 @@ func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error
 	}
 	offset += n
 
-	for cif := range files {
-		contents := files[cif].Contents
+	for _, cif := range files {
+		clen := len(cif.Contents)
+		paddedLen := (((clen - 1) / sectorSize) + 1) * sectorSize
+		contents := append(cif.Contents, make([]byte, paddedLen-clen)...)
 		_, err = fh.WriteAt(contents, int64(offset))
 		if err != nil {
 			return 0, err
 		}
 		// Align offset to sector size by rounding up
-		offset += (((len(contents) - 1) / sectorSize) + 1) * sectorSize
+		offset += paddedLen
 	}
 	return sectorSize * lastSector, nil
 }

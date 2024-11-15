@@ -134,12 +134,12 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	// Calculate number of sectors
 	dirents := 1            // Volume identifier is first entry
 	lastSector := uint32(1) // Boot sector
-	for cif := range files {
+	for _, cif := range files {
 		// Round up to sector size
-		fsz := ((len(files[cif].Contents) - 1) / sectorSize) + 1
+		fsz := ((len(cif.Contents) - 1) / sectorSize) + 1
 		lastSector = lastSector + uint32(fsz)
 		// One dirent needed for every 13 characters in the filename
-		nsz := ((len(files[cif].Filename) - 1) / 13) + 1 + 1
+		nsz := ((len(cif.Filename) - 1) / 13) + 1 + 1
 		dirents = dirents + nsz
 	}
 	// Round up to multiple of the sector size (times 32)
@@ -203,9 +203,9 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	fatOff := uint32(0)
 	fatOff = sector.putFATEnt(fatOff, 0xFFFFFFF8, fatSize) // FAT ID
 	fatOff = sector.putFATEnt(fatOff, 0xFFFFFFFF, fatSize) // end of chain marker
-	for cif := range files {
-		fileStarts[cif] = fatOff
-		fatOff = sector.putFATChain(fatOff, sectorSize, uint32(len(files[cif].Contents)), fatSize)
+	for idx, cif := range files {
+		fileStarts[idx] = fatOff
+		fatOff = sector.putFATChain(fatOff, sectorSize, uint32(len(cif.Contents)), fatSize)
 	}
 
 	n, err = fh.WriteAt(sector, int64(offset))
@@ -218,9 +218,9 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	curOff := 0
 	curOff = sector.putDirent(curOff, "CIDATA", 0x08, now)
 
-	for cif := range files {
-		flen := uint32(len(files[cif].Contents))
-		curOff = sector.putVfatDirent(curOff, files[cif].Filename, fileStarts[cif], flen, now)
+	for idx, cif := range files {
+		flen := uint32(len(cif.Contents))
+		curOff = sector.putVfatDirent(curOff, cif.Filename, fileStarts[idx], flen, now)
 	}
 
 	n, err = fh.WriteAt(sector, int64(offset))
@@ -229,15 +229,16 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 	}
 	offset += n
 
-	sector = make(vfatSector, sectorSize)
-	for cif := range files {
-		contents := files[cif].Contents
+	for _, cif := range files {
+		clen := len(cif.Contents)
+		paddedLen := (((clen - 1) / sectorSize) + 1) * sectorSize
+		contents := append(cif.Contents, make([]byte, paddedLen-clen)...)
 		_, err = fh.WriteAt(contents, int64(offset))
 		if err != nil {
 			return 0, err
 		}
 		// Align offset to sector size by rounding up
-		offset += (((len(contents) - 1) / sectorSize) + 1) * sectorSize
+		offset += paddedLen
 	}
 
 	return int(sectorSize * lastSector), nil
