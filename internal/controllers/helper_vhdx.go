@@ -23,6 +23,7 @@ var (
 const sectorSize = 512
 const filesystemStartMB = 4
 const filesystemStart = filesystemStartMB * 1024 * 1024
+const blockSize = 1024 * 1024
 
 type vhdxSector []byte
 
@@ -38,9 +39,8 @@ func (sector vhdxSector) putU64(offset int, value uint64) {
 	binary.LittleEndian.PutUint64(sector[offset:offset+8], value)
 }
 
-func (sector vhdxSector) putString(offset, length int, text string) {
-	const padString = "                                                                                                                                "
-	copy(sector[offset:offset+length], []byte(text+padString))
+func (sector vhdxSector) putString(offset int, text string) {
+	copy(sector[offset:offset+len(text)], []byte(text))
 }
 
 func (sector vhdxSector) putBytes(offset int, bytes ...byte) {
@@ -57,14 +57,6 @@ func (sector vhdxSector) putDateTime(offset int, datetime time.Time) {
 	sector.putU32(offset, uint32(datetime.Sub(y2k).Seconds()))
 }
 
-func (sector vhdxSector) checksum() uint32 {
-	chk := uint32(0)
-	for _, b := range sector[0:84] {
-		chk = chk + uint32(b)
-	}
-	return ^chk
-}
-
 func encUTF16(text string) []byte {
 	enc := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder()
 	bytes, _ := enc.Bytes([]byte(text))
@@ -73,7 +65,7 @@ func encUTF16(text string) []byte {
 
 func writeVHDXIdentifier(fh io.WriterAt, offset int64) error {
 	sector := make(vhdxSector, 256)
-	sector.putString(0, 8, "vhdxfile")
+	sector.putString(0, "vhdxfile")
 	sector.putBytes(8, encUTF16("cluster-api-provider-scvmm")...)
 	_, err := fh.WriteAt(sector, offset)
 	return err
@@ -81,7 +73,7 @@ func writeVHDXIdentifier(fh io.WriterAt, offset int64) error {
 
 func writeVHDXHeader(fh io.WriterAt, offset int64, seq uint64) error {
 	sector := make(vhdxSector, 4096) // Need 4k bytes for the crc calculation
-	sector.putString(0, 4, "head")   // Signature
+	sector.putString(0, "head")      // Signature
 	sector.putU64(8, seq)            // Sequence number (offset / 64Kb)
 	sector.putUUID(16, uuid.New())   // FileWriteGuid
 	sector.putUUID(32, uuid.New())   // DataWriteGuid
@@ -106,15 +98,15 @@ func (sector vhdxSector) putRegionEntry(offset int, guid uuid.UUID, offMB uint64
 func writeVHDXRegion(fh io.WriterAt, offset int64) error {
 	sector := make(vhdxSector, 64*1024) // Need 64k bytes for the crc calculation
 	// Region table header
-	sector.putString(0, 4, "regi") // Signature
-	sector.putU32(8, 2)            // EntryCount (BAT + metadata)
+	sector.putString(0, "regi") // Signature
+	sector.putU32(8, 2)         // EntryCount (BAT + metadata)
 	// Entry for BAT
 	sector.putRegionEntry(16, GuidBAT, 2, 1)
 	sector.putRegionEntry(48, GuidMetadata, 3, 1)
 
 	checksum := crc32.Checksum(sector, crc32.MakeTable(crc32.Castagnoli))
 	sector.putU32(4, checksum) // CRC32C checksum
-	_, err := fh.WriteAt(sector, offset)
+	_, err := fh.WriteAt(sector[:256], offset)
 	return err
 }
 
@@ -130,8 +122,8 @@ func writeVHDXMetadata(fh io.WriterAt, offset int64, size int) error {
 
 	mdoff := 64 * 1024 // Metadata entries start at 64kb
 
-	sector.putString(0, 8, "metadata") // Signature
-	sector.putU16(10, 5)               // EntryCount
+	sector.putString(0, "metadata") // Signature
+	sector.putU16(10, 5)            // EntryCount
 
 	sector.putMetadata(32*1, GuidFileParameters, mdoff, 8, 4)
 	sector.putMetadata(32*2, GuidDiskSize, mdoff+8, 8, 6)
@@ -143,7 +135,7 @@ func writeVHDXMetadata(fh io.WriterAt, offset int64, size int) error {
 		return err
 	}
 	sector = make(vhdxSector, 256)
-	sector.putU32(0, 1*1024*1024)  // FileParameters (BlockSize)
+	sector.putU32(0, blockSize)    // FileParameters (BlockSize)
 	sector.putU32(4, 1)            // FileParameters (LeaveBlockAllocated|HasParent)
 	sector.putU64(8, uint64(size)) // DiskSize
 	sector.putUUID(16, uuid.New()) // Virtual Disk ID
@@ -155,7 +147,6 @@ func writeVHDXMetadata(fh io.WriterAt, offset int64, size int) error {
 
 // Will most likely contain exactly just one block
 func writeVHDXBAT(fh io.WriterAt, offset int64, size int) error {
-	blockSize := 1 * 1024 * 1024
 	numblocks := ((size - 1) / blockSize) + 1
 	sector := make(vhdxSector, 8*(numblocks+1))
 
@@ -204,9 +195,14 @@ func writeVHDX(fh io.WriterAt, handler CloudInitFilesystemHandler, files []Cloud
 	if err != nil {
 		return err
 	}
-	if size > hsize {
-		pad := make([]byte, (size - hsize))
-		_, err = fh.WriteAt(pad, int64(filesystemStart+hsize))
+	padSize := (((hsize - 1) / blockSize) + 1) * blockSize
+	if padSize > 256 {
+		padSize = 256
+	}
+	padOff := blockSize - padSize
+	if padOff > 0 {
+		pad := make([]byte, padSize)
+		_, err = fh.WriteAt(pad, int64(filesystemStart+padOff))
 		if err != nil {
 			return err
 		}

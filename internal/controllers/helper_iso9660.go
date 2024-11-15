@@ -161,13 +161,13 @@ func writeISO9660(fh io.WriterAt, files []CloudInitFile, offset int) (int, error
 	offset += n
 
 	for cif := range files {
-		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
-		contents := append(files[cif].Contents, make([]byte, padlen)...)
-		n, err = fh.WriteAt(contents, int64(offset))
+		contents := files[cif].Contents
+		_, err = fh.WriteAt(contents, int64(offset))
 		if err != nil {
 			return 0, err
 		}
-		offset += n
+		// Align offset to sector size by rounding up
+		offset += (((len(contents) - 1) / sectorSize) + 1) * sectorSize
 	}
 	return sectorSize * lastSector, nil
 }

@@ -231,14 +231,13 @@ func writeVFAT(fh io.WriterAt, files []CloudInitFile, offset int) (int, error) {
 
 	sector = make(vfatSector, sectorSize)
 	for cif := range files {
-		padlen := (sectorSize - (len(files[cif].Contents) % sectorSize)) % sectorSize
-		contents := append(files[cif].Contents, make([]byte, padlen)...)
-		n, err = fh.WriteAt(contents, int64(offset))
+		contents := files[cif].Contents
+		_, err = fh.WriteAt(contents, int64(offset))
 		if err != nil {
 			return 0, err
 		}
 		// Align offset to sector size by rounding up
-		offset += n
+		offset += (((len(contents) - 1) / sectorSize) + 1) * sectorSize
 	}
 
 	return int(sectorSize * lastSector), nil
