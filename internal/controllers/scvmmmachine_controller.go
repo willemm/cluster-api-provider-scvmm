@@ -561,7 +561,7 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, patchHelp
 	if err != nil {
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to add iso to vm")
 	}
-	return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Adding ISO to VM %s", vm.Name)
+	return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 10, nil, VmCreated, VmCreatingReason, "Adding cloud-init to VM %s", vm.Name)
 }
 
 func (r *ScvmmMachineReconciler) startVM(ctx context.Context, patchHelper *patch.Helper, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
