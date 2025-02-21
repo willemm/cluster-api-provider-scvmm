@@ -478,6 +478,9 @@ func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 		if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) {
 			return true
 		}
+		if d.IOPSMaximum.Value() != vm.VirtualDisks[i].IOPSMaximum {
+			return true
+		}
 	}
 	return false
 }
@@ -646,9 +649,12 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, patchHelper *pat
 }
 
 type VmDiskElem struct {
-	SizeMB  int64  `json:"sizeMB"`
-	VHDisk  string `json:"vhDisk,omitempty"`
-	Dynamic bool   `json:"dynamic"`
+	SizeMB           int64  `json:"sizeMB"`
+	VHDisk           string `json:"vhDisk,omitempty"`
+	Dynamic          bool   `json:"dynamic"`
+	VolumeType       string `json:"volumeType,omitempty"`
+	StorageQoSPolicy string `json:"storageQoSPolicy,omitempty"`
+	IOPSMaximum      int64  `json:"iopsMaximum"`
 }
 
 func equalStringMap(source, target map[string]string) bool {
@@ -674,6 +680,13 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 		}
 		diskarr[i].VHDisk = d.VHDisk
 		diskarr[i].Dynamic = d.Dynamic
+		diskarr[i].VolumeType = d.VolumeType
+		diskarr[i].StorageQoSPolicy = d.StorageQoSPolicy
+		if d.IOPSMaximum == nil {
+			diskarr[i].IOPSMaximum = 0
+		} else {
+			diskarr[i].IOPSMaximum = d.IOPSMaximum.Value()
+		}
 	}
 	return json.Marshal(diskarr)
 }

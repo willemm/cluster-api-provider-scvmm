@@ -10,6 +10,9 @@ try {
     if ((($disklist[$lun].sizeMB - 1) * 1024 * 1024) -gt $vhdisk.VirtualHardDisk.MaximumSize) {
       $vdd = Expand-SCVirtualDiskDrive -VirtualDiskDrive $vhdisk -VirtualHardDiskSizeGB ($disklist[$lun].sizeMB / 1024) -RunAsynchronously
     }
+    if ($disklist[$lun].iopsMaximum -ne $vhdisk.IOPSMaximum) {
+      $vdd = Set-SCVirtualDiskDrive -VirtualDiskDrive $vhdisk -IOPSMaximum $disklist[$lun].iopsMaximum -RunAsynchronously
+    }
   }
   return VMToJson $vm "Resizing"
 } catch {

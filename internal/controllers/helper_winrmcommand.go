@@ -50,6 +50,7 @@ type VMResult struct {
 		Size        int64
 		MaximumSize int64
 		SharePath   string
+		IOPSMaximum int64
 	}
 	ISOs []struct {
 		Size      int64

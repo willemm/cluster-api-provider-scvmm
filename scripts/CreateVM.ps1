@@ -37,6 +37,15 @@ try {
         $vhdargs['VolumeType'] = 'None'
       }
     }
+    if ($disk.volumeType) {
+      $vhdargs['VolumeType'] = $disk.volumeType
+    }
+    if ($disk.storageQoSPolicy) {
+      $vhdargs['StorageQoSPolicy'] = (Get-SCStorageQoSPolicy -Name $disk.storageQoSPolicy | Select-Object -First 1)
+      if (-not $vhdargs['StorageQoSPolicy']) {
+        throw "StorageQoSPolicy $($disk.storageQoSPolicy) not found"
+      }
+    }
     if ($disk.vhDisk) {
       $vhdargs['VirtualHardDisk'] = (Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1)
       if (-not $vhdargs['VirtualHardDisk']) {

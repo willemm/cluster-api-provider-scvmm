@@ -137,6 +137,16 @@ type VmDisk struct {
 	// Virtual Harddisk to couple
 	// +optional
 	VHDisk string `json:"vhDisk,omitempty"`
+	// Volume Type
+	// +kubebuilder:validation:Enum=Boot,System,BootAndSystem,None
+	// +optional
+	VolumeType string `json:"volumeType,omitempty"`
+	// Storage QoS Policy
+	// +optional
+	StorageQoSPolicy string `json:"storageQoSPolicy,omitempty"`
+	// Max I/O per second
+	// +optional
+	IOPSMaximum *resource.Quantity `json:"iopsMaximum,omitempty"`
 }
 
 type NetworkDevice struct {
