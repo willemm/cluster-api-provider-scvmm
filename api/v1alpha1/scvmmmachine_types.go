@@ -138,8 +138,8 @@ type VmDisk struct {
 	// +optional
 	VHDisk string `json:"vhDisk,omitempty"`
 	// Volume Type
-	// +kubebuilder:validation:Enum=Boot,System,BootAndSystem,None
 	// +optional
+	// +kubebuilder:validation:Enum=Boot;System;BootAndSystem;None
 	VolumeType string `json:"volumeType,omitempty"`
 	// Storage QoS Policy
 	// +optional

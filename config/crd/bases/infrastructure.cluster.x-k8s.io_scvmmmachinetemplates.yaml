@@ -175,6 +175,13 @@ spec:
                               description: 'Specify that the virtual disk can expand
                                 dynamically (default: true)'
                               type: boolean
+                            iopsMaximum:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Max I/O per second
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
                             size:
                               anyOf:
                               - type: integer
@@ -182,8 +189,19 @@ spec:
                               description: Size of the virtual disk
                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                               x-kubernetes-int-or-string: true
+                            storageQoSPolicy:
+                              description: Storage QoS Policy
+                              type: string
                             vhDisk:
                               description: Virtual Harddisk to couple
+                              type: string
+                            volumeType:
+                              description: Volume Type
+                              enum:
+                              - Boot
+                              - System
+                              - BootAndSystem
+                              - None
                               type: string
                           type: object
                         type: array
