@@ -478,7 +478,7 @@ func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 		if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) {
 			return true
 		}
-		if d.IOPSMaximum.Value() != vm.VirtualDisks[i].IOPSMaximum {
+		if d.IOPSMaximum != nil && d.IOPSMaximum.Value() != vm.VirtualDisks[i].IOPSMaximum {
 			return true
 		}
 	}
