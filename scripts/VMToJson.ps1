@@ -24,7 +24,6 @@ if ($vm.VirtualHardDisks -ne $null) {
       IOPSMaximum = $_.IOPSMaximum
     }
   }
-  @($vm.VirtualHardDisks | select Size, MaximumSize, SharePath)
 }
 if ($vm.VirtualDVDDrives -ne $null) {
   $vmjson.ISOs = @($vm.VirtualDVDDrives.ISO | select Size, SharePath)
