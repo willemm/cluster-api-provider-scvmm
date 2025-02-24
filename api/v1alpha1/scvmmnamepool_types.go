@@ -33,6 +33,9 @@ type VmNameRange struct {
 	// End of name range
 	// +optional
 	End string `json:"end,omitempty"`
+	// Postfix to add after name
+	// +optional
+	Postfix string `json:"postfix,omitempty"`
 }
 
 // ScvmmNamePoolStatus defines the observed state of ScvmmNamePool

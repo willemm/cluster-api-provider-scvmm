@@ -59,6 +59,9 @@ spec:
                     end:
                       description: End of name range
                       type: string
+                    postfix:
+                      description: Postfix to add after name
+                      type: string
                     start:
                       description: Start of name range
                       type: string
