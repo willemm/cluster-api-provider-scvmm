@@ -114,13 +114,6 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	hostname, err := renderHostname(scvmmMachine)
-	if err != nil {
-		panic(fmt.Errorf("DEBUG break, hostname error '%w'", err))
-	}
-	if hostname != "" {
-		panic(fmt.Errorf("DEBUG break, got hostname '%s'", hostname))
-	}
 	// Workaround bug in patchhelper
 	if scvmmMachine.Spec.Disks != nil {
 		for i, d := range scvmmMachine.Spec.Disks {
