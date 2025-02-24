@@ -183,6 +183,11 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		},
 	}
 	mutateFn := func() (err error) {
+		hostname, err := renderHostname(scvmmMachine)
+		if err != nil {
+			return err
+		}
+
 		controller := true
 		claim.SetOwnerReferences(util.EnsureOwnerRef(
 			claim.OwnerReferences,
@@ -207,7 +212,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		if claim.Annotations == nil {
 			claim.Annotations = make(map[string]string)
 		}
-		claim.Annotations[HostnameAnnotation] = fmt.Sprintf("%s.%s", scvmmMachine.Spec.VMName, scvmmMachine.Spec.Networking.Domain)
+		claim.Annotations[HostnameAnnotation] = hostname
 		claim.Annotations[DnsZoneAnnotation] = scvmmMachine.Spec.Networking.Domain
 
 		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup

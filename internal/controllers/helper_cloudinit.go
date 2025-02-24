@@ -17,9 +17,12 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"text/template"
 
 	"gopkg.in/yaml.v2"
 
@@ -90,6 +93,31 @@ func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scv
 	return share + "\\" + scvmmMachine.Spec.VMName + "_cloud-init." + extension, nil
 }
 
+func renderHostname(scvmmMachine *infrav1.ScvmmMachine) (string, error) {
+	tmplstring := scvmmMachine.Spec.Hostname
+	if tmplstring == "" {
+		tmplstring = "{{ .spec.vmName }}.{{ .spec.networking.domain }}"
+	}
+	hostnametmpl, err := template.New("hostname").Parse(tmplstring)
+	if err != nil {
+		return "", fmt.Errorf("Failed to parse hostname template: %w", err)
+	}
+	// Convert to json and back to get lowercase fields like in the yaml
+	svmjson, err := json.Marshal(scvmmMachine)
+	if err != nil {
+		return "", err
+	}
+	svmdata := map[string]interface{}{}
+	if err := json.Unmarshal(svmjson, &svmdata); err != nil {
+		return "", err
+	}
+	hostbytes := bytes.Buffer{}
+	if err := hostnametmpl.Execute(&hostbytes, svmdata); err != nil {
+		return "", fmt.Errorf("Failed to execute hostname template: %w", err)
+	}
+	return hostbytes.String(), nil
+}
+
 func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provider *infrav1.ScvmmProviderSpec, machineid string, sharePath string, bootstrapData, metaData, networkConfig []byte) (reterr error) {
 	log.V(1).Info("Writing cloud-init", "sharePath", sharePath)
 	// Parse share path into hostname, sharename, path
@@ -145,12 +173,9 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	}()
 	networking := scvmmMachine.Spec.Networking
 	if metaData == nil {
-		hostname := scvmmMachine.Spec.VMName
-		if networking != nil {
-			if networking.Domain == "" {
-				return fmt.Errorf("missing required parameter networking.Domain")
-			}
-			hostname = hostname + "." + networking.Domain
+		hostname, err := renderHostname(scvmmMachine)
+		if err != nil {
+			return err
 		}
 
 		metadataobj := map[string]string{}

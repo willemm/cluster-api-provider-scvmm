@@ -167,8 +167,7 @@ spec:
                           Named CustomProperty because that's what it's named in SCVMM virtual machines
                         type: object
                       disks:
-                        description: Extra disks (after the VHDisk) to connect to
-                          the VM
+                        description: Disks to connect to the VM
                         items:
                           properties:
                             dynamic:
@@ -246,6 +245,10 @@ spec:
                         type: string
                       hostGroup:
                         description: Host Group to run VM in
+                        type: string
+                      hostname:
+                        default: '{{ .spec.vmName }}.{{ .spec.networking.domain }}.xyz'
+                        description: Hostname template
                         type: string
                       id:
                         description: ID is scvmm object ID, will be filled in by controller

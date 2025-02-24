@@ -45,10 +45,13 @@ type ScvmmMachineSpec struct {
 	// Pool to get VM name from
 	// +optional
 	VMNameFromPool *corev1.LocalObjectReference `json:"vmNameFromPool,omitempty"`
+	// Hostname template
+	// +kubebuilder:default="{{ .spec.vmName }}.{{ .spec.networking.domain }}"
+	Hostname string `json:"hostname,omitempty"`
 	// VM template to use
 	// +optional
 	VMTemplate string `json:"vmTemplate,omitempty"`
-	// Extra disks (after the VHDisk) to connect to the VM
+	// Disks to connect to the VM
 	// +optional
 	Disks []VmDisk `json:"disks,omitEmpty"`
 	// Virtual Fibrechannel device
