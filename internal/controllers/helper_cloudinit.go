@@ -24,6 +24,8 @@ import (
 	"io"
 	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/go-logr/logr"
@@ -98,7 +100,8 @@ func renderHostname(scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	if tmplstring == "" {
 		tmplstring = "{{ .spec.vmName }}.{{ .spec.networking.domain }}"
 	}
-	hostnametmpl, err := template.New("hostname").Parse(tmplstring)
+	//   "github.com/Masterminds/sprig/v3"
+	hostnametmpl, err := template.New("hostname").Funcs(sprig.FuncMap()).Parse(tmplstring)
 	if err != nil {
 		return "", fmt.Errorf("Failed to parse hostname template: %w", err)
 	}
