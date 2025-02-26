@@ -46,7 +46,7 @@ type ScvmmMachineSpec struct {
 	// +optional
 	VMNameFromPool *corev1.LocalObjectReference `json:"vmNameFromPool,omitempty"`
 	// Hostname template
-	// +kubebuilder:default="{{ .spec.vmName }}.{{ .spec.networking.domain }}"
+	// +kubebuilder:default="{{ regexReplaceAll \"\\\\..*$\" .spec.vmName \"\" }}.{{ .spec.networking.domain }}"
 	Hostname string `json:"hostname,omitempty"`
 	// VM template to use
 	// +optional

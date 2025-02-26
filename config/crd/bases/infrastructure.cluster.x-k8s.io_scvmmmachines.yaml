@@ -239,7 +239,8 @@ spec:
                 description: Host Group to run VM in
                 type: string
               hostname:
-                default: '{{ .spec.vmName }}.{{ .spec.networking.domain }}'
+                default: '{{ regexReplaceAll "\\..*$" .spec.vmName "" }}.{{ .spec.networking.domain
+                  }}'
                 description: Hostname template
                 type: string
               id:

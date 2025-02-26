@@ -98,8 +98,9 @@ func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scv
 func renderHostname(scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	tmplstring := scvmmMachine.Spec.Hostname
 	if tmplstring == "" {
-		tmplstring = "{{ .spec.vmName }}.{{ .spec.networking.domain }}"
+		tmplstring = "{{ regexReplaceAll \"\\\\..*)$\" .spec.vmName \"\" }}.{{ .spec.networking.domain }}"
 	}
+
 	//   "github.com/Masterminds/sprig/v3"
 	hostnametmpl, err := template.New("hostname").Funcs(sprig.FuncMap()).Parse(tmplstring)
 	if err != nil {
