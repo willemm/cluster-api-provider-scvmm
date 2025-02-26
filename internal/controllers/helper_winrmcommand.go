@@ -59,15 +59,15 @@ type VMResult struct {
 	BiosGuid             string
 	Id                   string
 	VMId                 string
-	AvailabilitySetNames []string
-	Tag                  string
-	CustomProperty       map[string]string
-	Error                string
-	ScriptErrors         string
-	Message              string
-	CreationTime         metav1.Time
-	ModifiedTime         metav1.Time
-	Result               string
+	AvailabilitySetNames []string          `json:"AvailabilitySetNames,omitempty"`
+	Tag                  string            `json:"Tag,omitempty"`
+	CustomProperty       map[string]string `json:"CustomProperty,omitempty"`
+	Error                string            `json:"Error,omitempty"`
+	ScriptErrors         string            `json:"ScriptErrors,omitempty"`
+	Message              string            `json:"Message,omitempty"`
+	CreationTime         metav1.Time       `json:"CreationTime,omitempty"`
+	ModifiedTime         metav1.Time       `json:"ModifiedTime,omitempty"`
+	Result               string            `json:"Result,omitempty"`
 }
 
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult
