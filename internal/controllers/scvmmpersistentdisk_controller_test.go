@@ -70,7 +70,6 @@ var _ = Describe("ScvmmPersistentDisk Controller", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &ScvmmPersistentDiskReconciler{
 				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

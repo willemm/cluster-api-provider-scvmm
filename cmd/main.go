@@ -149,7 +149,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmProvider")
 		os.Exit(1)
 	}
-	if err = (&controller.ScvmmPersistentDiskReconciler{
+	if err = (&controllers.ScvmmPersistentDiskReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ScvmmPersistentDisk")
