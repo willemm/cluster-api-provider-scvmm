@@ -1,0 +1,23 @@
+# permissions for end users to view scvmmpersistentdisks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-scvmm
+    app.kubernetes.io/managed-by: kustomize
+  name: scvmmpersistentdisk-viewer-role
+rules:
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - scvmmpersistentdisks
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - scvmmpersistentdisks/status
+  verbs:
+  - get

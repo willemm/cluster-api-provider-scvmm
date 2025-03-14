@@ -161,6 +161,7 @@ spec:
               disks:
                 description: Disks to connect to the VM
                 items:
+                  description: 'TODO: Mutually exclusive required field sets'
                   properties:
                     dynamic:
                       description: 'Specify that the virtual disk can expand dynamically
@@ -173,6 +174,17 @@ spec:
                       description: Max I/O per second
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
+                    persistentDiskPool:
+                      description: Persistent disk pool to source disk from
+                      properties:
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            TODO: Add other useful fields. apiVersion, kind, uid?
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
                     size:
                       anyOf:
                       - type: integer

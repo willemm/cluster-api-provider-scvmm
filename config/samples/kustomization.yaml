@@ -6,4 +6,6 @@ resources:
 - infrastructure_v1alpha1_scvmmcluster.yaml
 - infrastructure_v1alpha1_scvmmnamepool.yaml
 - infrastructure_v1alpha1_scvmmclustertemplate.yaml
+- infrastructure_v1alpha1_scvmmpersistentdiskpool.yaml
+- infrastructure_v1alpha1_scvmmpersistentdisk.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

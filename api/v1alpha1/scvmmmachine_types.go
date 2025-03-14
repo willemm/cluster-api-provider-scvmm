@@ -130,6 +130,7 @@ type VmOptions struct {
 	CheckpointType string `json:"checkpointType,omitempty"`
 }
 
+// TODO: Mutually exclusive required field sets
 type VmDisk struct {
 	// Size of the virtual disk
 	// +optional
@@ -150,6 +151,9 @@ type VmDisk struct {
 	// Max I/O per second
 	// +optional
 	IOPSMaximum *resource.Quantity `json:"iopsMaximum,omitempty"`
+	// Persistent disk pool to source disk from
+	// +optional
+	PersistentDiskPool *corev1.LocalObjectReference `json:"persistentDiskPool,omitempty"`
 }
 
 type NetworkDevice struct {

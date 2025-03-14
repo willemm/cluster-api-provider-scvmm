@@ -1,0 +1,180 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: scvmmpersistentdiskpools.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    kind: ScvmmPersistentDiskPool
+    listKind: ScvmmPersistentDiskPoolList
+    plural: scvmmpersistentdiskpools
+    singular: scvmmpersistentdiskpool
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ScvmmPersistentDiskPool is the Schema for the scvmmpersistentdiskpools
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScvmmPersistentDiskPoolSpec defines the desired state of
+              ScvmmPersistentDiskPool
+            properties:
+              directory:
+                description: Location (directory) where disks are stored
+                type: string
+              maxDisks:
+                description: Maximum number of disk instances in pool (optional)
+                format: int64
+                type: integer
+              selector:
+                description: |-
+                  Label selector for disks. Existing ScvmmPersistentDisks that are
+                  selected by this will be the ones that are part of this pool.
+                  Must match labels in template
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+              template:
+                description: Template for persistent disk
+                properties:
+                  apiVersion:
+                    description: |-
+                      APIVersion defines the versioned schema of this representation of an object.
+                      Servers should convert recognized schemas to the latest internal value, and
+                      may reject unrecognized values.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                    type: string
+                  kind:
+                    description: |-
+                      Kind is a string value representing the REST resource this object represents.
+                      Servers may infer this from the endpoint the client submits requests to.
+                      Cannot be updated.
+                      In CamelCase.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                    type: string
+                  metadata:
+                    type: object
+                  spec:
+                    description: ScvmmPersistentDiskSpec defines the desired state
+                      of ScvmmPersistentDisk
+                    properties:
+                      dynamic:
+                        description: 'Specify that the virtual disk can expand dynamically
+                          (default: true)'
+                        type: boolean
+                      iopsMaximum:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Max I/O per second
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      location:
+                        description: Location (share path) where disk is stored
+                        type: string
+                      size:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Size of the virtual disk
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      storageQoSPolicy:
+                        description: Storage QoS Policy
+                        type: string
+                      volumeType:
+                        description: Volume Type
+                        enum:
+                        - Boot
+                        - System
+                        - BootAndSystem
+                        - None
+                        type: string
+                    required:
+                    - size
+                    type: object
+                  status:
+                    description: ScvmmPersistentDiskStatus defines the observed state
+                      of ScvmmPersistentDisk
+                    type: object
+                type: object
+            required:
+            - directory
+            - selector
+            - template
+            type: object
+          status:
+            description: ScvmmPersistentDiskPoolStatus defines the observed state
+              of ScvmmPersistentDiskPool
+            properties:
+              instances:
+                description: Current number of instances
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
