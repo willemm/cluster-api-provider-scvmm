@@ -21,6 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ScvmmPersistentDiskReference struct {
+	// Name of ScvmmPersistentDisk
+	Name string `json:"name"`
+}
+
 // ScvmmPersistentDiskSpec defines the desired state of ScvmmPersistentDisk
 type ScvmmPersistentDiskSpec struct {
 	// Location (share path) where disk is stored

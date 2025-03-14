@@ -46,13 +46,8 @@ type VMResult struct {
 	CpuCount       int
 	VirtualNetwork string
 	IPv4Addresses  []string
-	VirtualDisks   []struct {
-		Size        int64
-		MaximumSize int64
-		SharePath   string
-		IOPSMaximum int64
-	}
-	ISOs []struct {
+	VirtualDisks   []VMResultDisk
+	ISOs           []struct {
 		Size      int64
 		SharePath string
 	}
@@ -68,6 +63,15 @@ type VMResult struct {
 	CreationTime         metav1.Time       `json:"CreationTime,omitempty"`
 	ModifiedTime         metav1.Time       `json:"ModifiedTime,omitempty"`
 	Result               string            `json:"Result,omitempty"`
+}
+
+type VMResultDisk struct {
+	Size        int64
+	MaximumSize int64
+	BUS         int64
+	LUN         int64
+	SharePath   string
+	IOPSMaximum int64
 }
 
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult

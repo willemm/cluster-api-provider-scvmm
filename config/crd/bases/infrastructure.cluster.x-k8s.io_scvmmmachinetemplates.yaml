@@ -186,13 +186,11 @@ spec:
                               description: Persistent disk pool to source disk from
                               properties:
                                 name:
-                                  description: |-
-                                    Name of the referent.
-                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind, uid?
+                                  description: Name of ScvmmPersistentDiskPool
                                   type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
                             size:
                               anyOf:
                               - type: integer
@@ -382,13 +380,11 @@ spec:
                         description: Pool to get VM name from
                         properties:
                           name:
-                            description: |-
-                              Name of the referent.
-                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?
+                            description: Name of ScvmmNamePool, must be in same namespace
                             type: string
+                        required:
+                        - name
                         type: object
-                        x-kubernetes-map-type: atomic
                       vmOptions:
                         description: Options for New-SCVirtualMachine
                         properties:

@@ -239,12 +239,14 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, patchHelpe
 		return ctrl.Result{}, err
 	}
 
-	if vm.Status == "UnderCreation" {
+	if vm.Status == "UnderCreation" || vm.Status == "UnderUpdate" {
 		log.V(1).Info("Creating, Requeue in 15 seconds")
 		return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 15, nil, VmCreated, VmCreatingReason, "")
 	}
 	log.V(1).Info("Machine is there, fill in status")
 	conditions.MarkTrue(scvmmMachine, VmCreated)
+	if r.vmCanAddPersistentDisks(scvmmMachine, vm) {
+	}
 	if vm.Status == "PowerOff" {
 		if err := r.addVMSpec(ctx, patchHelper, scvmmMachine); err != nil {
 			return r.patchReasonCondition(ctx, patchHelper, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed calling add spec function")
@@ -472,7 +474,31 @@ func (r *ScvmmMachineReconciler) addVMSpec(ctx context.Context, patchHelper *pat
 	return nil
 }
 
-func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
+func vmDiskByLun(vm *VMResult, lun int) *VMResultDisk {
+	for d := range vm.VirtualDisks {
+		if d.LUN == lun {
+			return d
+		}
+	}
+	return nil
+}
+
+// Check if there is a persistent disk that hasn't been assigned yet
+// and assign if possible
+func (r *ScvmmMachineReconciler) vmCanAddPersistentDisks(scvmmMachine *infrav1.ScvmmMachine, vm *VMResult) (bool, error) {
+	for i, d := range scvmmMachine.Spec.Disks {
+		if d.PersistentDisk != nil {
+			vd := vmDiskByLun(vm, i)
+			if d.PersistentDisk.Disk == nil {
+				// If there are free slots, grab the first free slot and claim it,
+				// setting the reference in the disks array, and return true
+			}
+		}
+	}
+	return false
+}
+
+func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm *VMResult) bool {
 	for i, d := range scvmmMachine.Spec.Disks {
 		// For rounding errors
 		if d.Size != nil && vm.VirtualDisks[i].MaximumSize < (d.Size.Value()-1024*1024) {

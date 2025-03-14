@@ -20,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ScvmmPersistentDiskPoolReference struct {
+	// Name of ScvmmPersistentDiskPool
+	Name string `json:"name"`
+}
+
 // ScvmmPersistentDiskPoolSpec defines the desired state of ScvmmPersistentDiskPool
 type ScvmmPersistentDiskPoolSpec struct {
 	// Location (directory) where disks are stored

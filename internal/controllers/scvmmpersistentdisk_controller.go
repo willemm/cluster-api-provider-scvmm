@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
@@ -39,19 +38,49 @@ type ScvmmPersistentDiskReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ScvmmPersistentDisk object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.4/pkg/reconcile
 func (r *ScvmmPersistentDiskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
-	// TODO(user): your logic here
+	log.V(1).Info("Fetching scvmmpersistentdisk")
+	disk := &infrav1.ScvmmPersistentDisk{}
+	if err := r.Get(ctx, req.NamespacedName, disk); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	_ = disk
+
+	// Check for deletion
+	// - Remove disk from scvmm (todo: how are you supposed to do that??)
+	// - remove finalizer
+
+	// Add finalizer
+
+	// If not owned by machine, check for machines that want this diskpool
+
+	// Update status of owning diskpool
+
+	// If there are free slots (current < max), check for machines that want this diskpool
+	// (could be triggered by maxdisks being increased)
 
 	return ctrl.Result{}, nil
+
+	// ScvmmPersistentDisk is like a statefulset; the naming is sequentially numbered
+	// Which means that it is easy to concurrently check for free slots
+	// If the maxDisks setting is ever decreased, that means there can be
+	// persistentdisk resources that will never be used.
+	// (Maybe set error status if there are more persistentdisk resources than maxdisks)
+
+	////// Scvmmmachine flow:
+	// When creating disk that references diskpool, or triggered by unowned
+	//
+	// Get disk from diskpool that doesn't have machine owner and set owner to machine
+	//  (retry if setting owner fails)
+	//
+	// If no free disks, set disk number to largest existing plus one.
+	//  if that's greater than maxdisks, do nothing and break
+	//  else, create scvmmpersistent disk with that number (if that fails, redo from start)
+	//
+	// Use persistentdisk resource to add vdd to machine
+	//  (if location is blank, create new and set location in resource)
 }
 
 // SetupWithManager sets up the controller with the Manager.

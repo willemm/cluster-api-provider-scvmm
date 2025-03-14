@@ -44,7 +44,7 @@ type ScvmmMachineSpec struct {
 	VMName string `json:"vmName,omitempty"`
 	// Pool to get VM name from
 	// +optional
-	VMNameFromPool *corev1.LocalObjectReference `json:"vmNameFromPool,omitempty"`
+	VMNameFromPool *VmNamePoolReference `json:"vmNameFromPool,omitempty"`
 	// Hostname template
 	// +kubebuilder:default="{{ regexReplaceAll \"\\\\..*$\" .spec.vmName \"\" }}.{{ .spec.networking.domain }}"
 	Hostname string `json:"hostname,omitempty"`
@@ -103,6 +103,11 @@ type ScvmmMachineSpec struct {
 	Bootstrap *clusterv1.Bootstrap `json:"bootstrap,omitempty"`
 }
 
+type VmNamePoolReference struct {
+	// Name of ScvmmNamePool, must be in same namespace
+	Name string `json:"name"`
+}
+
 type VmOptions struct {
 	// Description
 	// +optional
@@ -153,7 +158,16 @@ type VmDisk struct {
 	IOPSMaximum *resource.Quantity `json:"iopsMaximum,omitempty"`
 	// Persistent disk pool to source disk from
 	// +optional
-	PersistentDiskPool *corev1.LocalObjectReference `json:"persistentDiskPool,omitempty"`
+	PersistentDisk *VmPersistentDiskReference `json:"persistentDisk,omitempty"`
+}
+
+type VmPersistentDiskReference struct {
+	// Name of ScvmmPersistentDiskPool
+	Pool PersistentDiskPoolReference `json:"pool"`
+	// Reference to ScvmmPersistentDisk
+	// Will be filled in by controller when creating the disk
+	// +optional
+	Disk *PersistentDiskReference `json:"disk,omitempty"`
 }
 
 type NetworkDevice struct {
