@@ -188,16 +188,10 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 			return err
 		}
 
-		controller := true
 		claim.SetOwnerReferences(util.EnsureOwnerRef(
 			claim.OwnerReferences,
-			metav1.OwnerReference{
-				APIVersion: infrav1.GroupVersion.String(),
-				Kind:       "ScvmmMachine",
-				Name:       scvmmMachine.Name,
-				UID:        scvmmMachine.UID,
-				Controller: &controller,
-			}))
+			scvmmMachineOwnerReference(scvmmMachine, true),
+		))
 
 		controllerutil.AddFinalizer(claim, IPAddressClaimFinalizer)
 

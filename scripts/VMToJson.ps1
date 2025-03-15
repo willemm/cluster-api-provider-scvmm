@@ -20,6 +20,8 @@ if ($vm.VirtualHardDisks -ne $null) {
     @{
       Size = $_.VirtualHardDisk.Size
       MaximumSize = $_.VirtualHardDisk.MaximumSize
+      BUS = $_.BUS
+      LUN = $_.LUN
       SharePath = $_.VirtualHardDisk.SharePath
       IOPSMaximum = $_.IOPSMaximum
     }

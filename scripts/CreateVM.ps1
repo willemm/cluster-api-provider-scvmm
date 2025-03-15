@@ -46,7 +46,15 @@ try {
         throw "StorageQoSPolicy $($disk.storageQoSPolicy) not found"
       }
     }
-    if ($disk.vhDisk) {
+    if ($disk.filename) {
+      $vhdargs.Filename = $disk.filename
+    }
+    if ($disk.Directory) {
+      $vhdargs.Path = $disk.Directory
+    }
+    if ($disk.existing) {
+      $vhdargs['UseLocalVirtualHardDisk'] = $true
+    } elseif ($disk.vhDisk) {
       $vhdargs['VirtualHardDisk'] = (Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1)
       if (-not $vhdargs['VirtualHardDisk']) {
         throw "VHD $($disk.vhDisk) not found"
@@ -62,7 +70,9 @@ try {
       }
       $vhdargs.VirtualHardDiskSizeMB = $disk.sizeMB
     }
-    New-SCVirtualDiskDrive @vhdargs
+    if ($vhdargs.VirtualHardDiskSizeMB -or $vhdargs.UseLocalVirtualHardDisk) {
+      New-SCVirtualDiskDrive @vhdargs
+    }
     $disknum = $disknum + 1
   }
 

@@ -158,16 +158,16 @@ type VmDisk struct {
 	IOPSMaximum *resource.Quantity `json:"iopsMaximum,omitempty"`
 	// Persistent disk pool to source disk from
 	// +optional
-	PersistentDisk *VmPersistentDiskReference `json:"persistentDisk,omitempty"`
+	PersistentDisk *VmPersistentDisk `json:"persistentDisk,omitempty"`
 }
 
-type VmPersistentDiskReference struct {
+type VmPersistentDisk struct {
 	// Name of ScvmmPersistentDiskPool
-	Pool PersistentDiskPoolReference `json:"pool"`
+	Pool ScvmmPersistentDiskPoolReference `json:"pool"`
 	// Reference to ScvmmPersistentDisk
 	// Will be filled in by controller when creating the disk
 	// +optional
-	Disk *PersistentDiskReference `json:"disk,omitempty"`
+	Disk *ScvmmPersistentDiskReference `json:"disk,omitempty"`
 }
 
 type NetworkDevice struct {

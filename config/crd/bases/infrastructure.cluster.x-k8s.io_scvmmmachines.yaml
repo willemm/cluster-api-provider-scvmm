@@ -174,14 +174,31 @@ spec:
                       description: Max I/O per second
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    persistentDiskPool:
+                    persistentDisk:
                       description: Persistent disk pool to source disk from
                       properties:
-                        name:
+                        disk:
+                          description: |-
+                            Reference to ScvmmPersistentDisk
+                            Will be filled in by controller when creating the disk
+                          properties:
+                            name:
+                              description: Name of ScvmmPersistentDisk
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        pool:
                           description: Name of ScvmmPersistentDiskPool
-                          type: string
+                          properties:
+                            name:
+                              description: Name of ScvmmPersistentDiskPool
+                              type: string
+                          required:
+                          - name
+                          type: object
                       required:
-                      - name
+                      - pool
                       type: object
                     size:
                       anyOf:
