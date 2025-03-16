@@ -44,14 +44,13 @@ spec:
                 description: 'Specify that the virtual disk can expand dynamically
                   (default: true)'
                 type: boolean
-              iopsMaximum:
-                anyOf:
-                - type: integer
-                - type: string
-                description: Max I/O per second
-                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                x-kubernetes-int-or-string: true
-              location:
+              existing:
+                description: Is the disk already created
+                type: boolean
+              filename:
+                description: Filename of stored disk
+                type: string
+              path:
                 description: Location (share path) where disk is stored
                 type: string
               size:
@@ -61,18 +60,10 @@ spec:
                 description: Size of the virtual disk
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
-              storageQoSPolicy:
-                description: Storage QoS Policy
-                type: string
-              volumeType:
-                description: Volume Type
-                enum:
-                - Boot
-                - System
-                - BootAndSystem
-                - None
-                type: string
             required:
+            - existing
+            - filename
+            - path
             - size
             type: object
           status:

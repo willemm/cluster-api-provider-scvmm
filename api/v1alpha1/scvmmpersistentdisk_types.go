@@ -24,28 +24,27 @@ import (
 type ScvmmPersistentDiskReference struct {
 	// Name of ScvmmPersistentDisk
 	Name string `json:"name"`
+
+	// Fields grabbed from ScvmmPersistentDisk to pass through
+	Path     string `json:"-"`
+	Filename string `json:"-"`
+	Existing bool   `json:"-"`
 }
 
 // ScvmmPersistentDiskSpec defines the desired state of ScvmmPersistentDisk
 type ScvmmPersistentDiskSpec struct {
 	// Location (share path) where disk is stored
-	// +optional
-	Location string `json:"location,omitEmpty"`
+	Path string `json:"path"`
+	// Filename of stored disk
+	Filename string `json:"filename"`
+	// Is the disk already created
+	Existing bool `json:"existing"`
+
 	// Size of the virtual disk
 	Size resource.Quantity `json:"size"`
 	// Specify that the virtual disk can expand dynamically (default: true)
 	// +optional
 	Dynamic bool `json:"dynamic,omitEmpty"`
-	// Volume Type
-	// +optional
-	// +kubebuilder:validation:Enum=Boot;System;BootAndSystem;None
-	VolumeType string `json:"volumeType,omitempty"`
-	// Storage QoS Policy
-	// +optional
-	StorageQoSPolicy string `json:"storageQoSPolicy,omitempty"`
-	// Max I/O per second
-	// +optional
-	IOPSMaximum *resource.Quantity `json:"iopsMaximum,omitempty"`
 }
 
 // ScvmmPersistentDiskStatus defines the observed state of ScvmmPersistentDisk

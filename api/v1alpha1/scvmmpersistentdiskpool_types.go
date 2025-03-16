@@ -39,7 +39,7 @@ type ScvmmPersistentDiskPoolSpec struct {
 	Selector metav1.LabelSelector `json:"selector"`
 
 	// Template for persistent disk
-	Template ScvmmPersistentDisk `json:"template"`
+	Template ScvmmPersistentDiskTemplateResource `json:"template"`
 }
 
 // ScvmmPersistentDiskPoolStatus defines the observed state of ScvmmPersistentDiskPool
@@ -73,4 +73,10 @@ type ScvmmPersistentDiskPoolList struct {
 func init() {
 	//SchemeBuilder.Register(&ScvmmPersistentDiskPool{}, &ScvmmPersistentDiskPoolList{})
 	objectTypes = append(objectTypes, &ScvmmPersistentDiskPool{}, &ScvmmPersistentDiskPoolList{})
+}
+
+// ScvmmPersistentDiskTemplateResource describes the data needed to create a ScvmmPersistentDisk from a template
+type ScvmmPersistentDiskTemplateResource struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              ScvmmPersistentDiskSpec `json:"spec"`
 }

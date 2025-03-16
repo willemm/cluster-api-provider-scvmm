@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,7 +73,8 @@ const (
 	VmRunningReason  = "VmRunning"
 	VmFailedReason   = "VmFailed"
 
-	MachineFinalizer = "scvmmmachine.finalizers.cluster.x-k8s.io"
+	MachineFinalizer        = "scvmmmachine.finalizers.cluster.x-k8s.io"
+	PersistentDiskFinalizer = "scvmmpersistentdisk.finalizers.cluster.x-k8s.io"
 )
 
 // Are global variables bad? Dunno, this one seems fine because it caches an env var
@@ -503,15 +505,44 @@ func (r *ScvmmMachineReconciler) vmClaimPersistentDisks(ctx context.Context, scv
 	}
 	// Check for persistentdisk references that are not filled
 	for _, d := range scvmmMachine.Spec.Disks {
-		if d.PersistentDisk != nil && d.PersistentDisk.Disk == nil {
-			pd, err := r.claimPersistentDisk(ctx, d.PersistentDisk, scvmmMachine, seen)
-			if err != nil {
-				return err
+		if d.PersistentDisk != nil {
+			var err error
+			pd := &infrav1.ScvmmPersistentDisk{}
+			if d.PersistentDisk.Disk == nil {
+				pd, err = r.claimPersistentDisk(ctx, d.PersistentDisk, scvmmMachine, seen)
+				if err != nil {
+					return err
+				}
+			} else {
+				pdName := client.ObjectKey{Namespace: scvmmMachine.Namespace, Name: d.PersistentDisk.Disk.Name}
+				if err := r.Get(ctx, pdName, pd); err != nil {
+					return err
+				}
 			}
-			d.PersistentDisk.Disk = &infrav1.ScvmmPersistentDiskReference{Name: pd.Name}
+			if pd != nil {
+				d.PersistentDisk.Disk = &infrav1.ScvmmPersistentDiskReference{
+					Name:     pd.Name,
+					Path:     pd.Spec.Path,
+					Filename: pd.Spec.Filename,
+					Existing: pd.Spec.Existing,
+				}
+				d.Size = &pd.Spec.Size
+				d.Dynamic = pd.Spec.Dynamic
+			}
 		}
 	}
 	return nil
+}
+
+func scvmmPersistentDiskPoolOwnerReference(pool *infrav1.ScvmmPersistentDiskPool) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: infrav1.GroupVersion.String(),
+		Kind:       "ScvmmPersistentDiskPool",
+		Name:       pool.Name,
+		UID:        pool.UID,
+		Controller: &controller,
+	}
 }
 
 func scvmmMachineOwnerReference(scvmmMachine *infrav1.ScvmmMachine, controller bool) metav1.OwnerReference {
@@ -541,8 +572,12 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 	if err := r.List(ctx, &diskList, client.MatchingLabelsSelector{Selector: selector}); err != nil {
 		return nil, err
 	}
+	sort.Slice(diskList.Items, func(a, b int) bool {
+		return diskList.Items[a].Name < diskList.Items[b].Name
+	})
 	owner := scvmmMachineOwnerReference(scvmmMachine, false)
 	var claim *infrav1.ScvmmPersistentDisk
+	lowestFree := int64(1)
 	for _, disk := range diskList.Items {
 		owned := false
 		for _, oref := range disk.OwnerReferences {
@@ -554,21 +589,41 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		}
 		if !owned {
 			claim = &disk
+			break
+		}
+		if disk.Name == fmt.Sprintf("%s-%d", pool.Name, lowestFree) {
+			lowestFree += 1
 		}
 	}
 	if claim == nil {
-		claim = &infrav1.ScvmmPersistentDisk{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pool.Name + "-1",
-				Namespace: scvmmMachine.Namespace,
-			},
+		if lowestFree >= pool.Spec.MaxDisks {
+			log.Info("no persistent disks available in pool, skipping", "pool", poolName)
+			return nil, nil
+		}
+		claim = &infrav1.ScvmmPersistentDisk{}
+		pool.Spec.Template.ObjectMeta.DeepCopyInto(&claim.ObjectMeta)
+		pool.Spec.Template.Spec.DeepCopyInto(&claim.Spec)
+		claim.Name = fmt.Sprintf("%s-%d", pool.Name, lowestFree)
+		if claim.Spec.Filename == "" {
+			claim.Spec.Filename = pool.Name + "-%d"
+		}
+		claim.Spec.Filename = fmt.Sprintf(claim.Spec.Filename, lowestFree)
+		claim.Spec.Existing = false
+		claim.OwnerReferences = []metav1.OwnerReference{
+			scvmmPersistentDiskPoolOwnerReference(pool),
+			owner,
+		}
+		controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+		if err := r.Create(ctx, claim); err != nil {
+			return nil, fmt.Errorf("Failed to create persistent disk %s: %w", claim.Name, err)
 		}
 	}
-	claim.SetOwnerReferences(util.EnsureOwnerRef(
-		claim.OwnerReferences,
-		owner,
-	))
-	return nil, nil
+	claim.SetOwnerReferences(util.EnsureOwnerRef(claim.OwnerReferences, owner))
+	controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+	if err := r.Update(ctx, claim); err != nil {
+		return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
+	}
+	return claim, nil
 }
 
 func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
@@ -757,7 +812,7 @@ type VmDiskElem struct {
 	VolumeType       string `json:"volumeType,omitempty"`
 	StorageQoSPolicy string `json:"storageQoSPolicy,omitempty"`
 	IOPSMaximum      int64  `json:"iopsMaximum"`
-	Directory        string `json:"directory,omitempty"`
+	Path             string `json:"path,omitempty"`
 	Filename         string `json:"filename,omitempty"`
 	Existing         bool   `json:"existing"`
 }
@@ -791,6 +846,11 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 			diskarr[i].IOPSMaximum = 0
 		} else {
 			diskarr[i].IOPSMaximum = d.IOPSMaximum.Value()
+		}
+		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
+			diskarr[i].Path = d.PersistentDisk.Disk.Path
+			diskarr[i].Filename = d.PersistentDisk.Disk.Filename
+			diskarr[i].Existing = d.PersistentDisk.Disk.Existing
 		}
 	}
 	return json.Marshal(diskarr)
