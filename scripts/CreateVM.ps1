@@ -10,70 +10,9 @@ try {
   }
 
   $JobGroupID = [GUID]::NewGuid().ToString()
-  $disknum = 0
-  foreach ($disk in ($disks | convertfrom-json)) {
-    if ($disknum -gt 16) {
-      throw "Too many virtual disks"
-    }
-    $vhdargs = @{
-      Bus = 0
-      LUN = $disknum
-      JobGroup = $JobGroupID
-      CreateDiffDisk = $false
-      Filename = "$($vmname)_disk_$($disknum + 1)"
-    }
-    if ($disknum -eq 0) {
-      $vhdargs['VolumeType'] = 'BootAndSystem'
-      if ($generation -ge 2) {
-        $vhdargs['SCSI'] = $true
-      } else {
-        $vhdargs['IDE'] = $true
-      }
-    } else {
-      $vhdargs['SCSI'] = $true
-      if ($generation -ge 2) {
-        $vhdargs['VolumeType'] = 'System'
-      } else {
-        $vhdargs['VolumeType'] = 'None'
-      }
-    }
-    if ($disk.volumeType) {
-      $vhdargs['VolumeType'] = $disk.volumeType
-    }
-    if ($disk.storageQoSPolicy) {
-      $vhdargs['StorageQoSPolicy'] = (Get-SCStorageQoSPolicy -Name $disk.storageQoSPolicy | Select-Object -First 1)
-      if (-not $vhdargs['StorageQoSPolicy']) {
-        throw "StorageQoSPolicy $($disk.storageQoSPolicy) not found"
-      }
-    }
-    if ($disk.filename) {
-      $vhdargs.Filename = $disk.filename
-    }
-    if ($disk.Directory) {
-      $vhdargs.Path = $disk.Directory
-    }
-    if ($disk.existing) {
-      $vhdargs['UseLocalVirtualHardDisk'] = $true
-    } elseif ($disk.vhDisk) {
-      $vhdargs['VirtualHardDisk'] = (Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1)
-      if (-not $vhdargs['VirtualHardDisk']) {
-        throw "VHD $($disk.vhDisk) not found"
-      }
-      if (-not $VirtualHardDisk) {
-        $VirtualHardDisk = $vhdargs['VirtualHardDisk']
-      }
-    } else {
-      if ($disk.dynamic) {
-        $vhdargs['Dynamic'] = $true
-      } else {
-        $vhdargs['Fixed'] = $true
-      }
-      $vhdargs.VirtualHardDiskSizeMB = $disk.sizeMB
-    }
-    if ($vhdargs.VirtualHardDiskSizeMB -or $vhdargs.UseLocalVirtualHardDisk) {
-      New-SCVirtualDiskDrive @vhdargs
-    }
-    $disknum = $disknum + 1
+  $disklist = $disks | ConvertFrom-Json
+  for ($lun = 0; $lun -lt $disklist.Length; $disklist++) {
+    CreateVHD -disk $disklist[$lun] -lun $lun -JobGroup $JobGroup 
   }
 
   if ($vmtemplate) {
