@@ -8,20 +8,20 @@ try {
   $seenluns = @{}
   foreach ($vhdisk in $vm.VirtualDiskDrives) {
     $lun = $vhdisk.LUN
-    $seenluns[$lun] = $true
+    $seenluns["$lun"] = $true
     if ((($disklist[$lun].sizeMB - 1) * 1024 * 1024) -gt $vhdisk.VirtualHardDisk.MaximumSize) {
       $vdd = Expand-SCVirtualDiskDrive -VirtualDiskDrive $vhdisk -VirtualHardDiskSizeGB ($disklist[$lun].sizeMB / 1024) -RunAsynchronously
-      return VMToJson $vm "Expanding"
+      return VMToJson $vm "Expanding $lun"
     }
     if ($disklist[$lun].iopsMaximum -ne $vhdisk.IOPSMaximum) {
       $vdd = Set-SCVirtualDiskDrive -VirtualDiskDrive $vhdisk -IOPSMaximum $disklist[$lun].iopsMaximum -RunAsynchronously
-      return VMToJson $vm "Setting IOPSMaximum"
+      return VMToJson $vm "Setting IOPSMaximum $lun"
     }
   }
   for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
-    if (-not $seenluns[$lun]) {
+    if (-not $seenluns["$lun"]) {
       $vdd = CreateVHD -disk $disklist[$lun] -lun $lun -vm $vm
-      return VMToJson $vm "Adding Disk"
+      return VMToJson $vm "Adding Disk $lun"
     }
   }
 
