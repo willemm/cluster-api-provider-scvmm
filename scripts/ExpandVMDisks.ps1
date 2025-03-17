@@ -18,7 +18,7 @@ try {
     }
   }
   for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
-    if (-not $seen[$lun]) {
+    if (-not $seenluns[$lun]) {
       $vdd = CreateVHD -disk $disklist[$lun] -lun $lun -vm $vm -JobGroup $JobGroupID
     }
   }

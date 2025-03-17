@@ -504,7 +504,7 @@ func (r *ScvmmMachineReconciler) vmClaimPersistentDisks(ctx context.Context, scv
 		}
 	}
 	// Check for persistentdisk references that are not filled
-	for _, d := range scvmmMachine.Spec.Disks {
+	for i, d := range scvmmMachine.Spec.Disks {
 		if d.PersistentDisk != nil {
 			var err error
 			pd := &infrav1.ScvmmPersistentDisk{}
@@ -520,14 +520,14 @@ func (r *ScvmmMachineReconciler) vmClaimPersistentDisks(ctx context.Context, scv
 				}
 			}
 			if pd != nil {
-				d.PersistentDisk.Disk = &infrav1.ScvmmPersistentDiskReference{
+				scvmmMachine.Spec.Disks[i].PersistentDisk.Disk = &infrav1.ScvmmPersistentDiskReference{
 					Name:     pd.Name,
 					Path:     pd.Spec.Path,
 					Filename: pd.Spec.Filename,
 					Existing: pd.Spec.Existing,
 				}
-				d.Size = &pd.Spec.Size
-				d.Dynamic = pd.Spec.Dynamic
+				scvmmMachine.Spec.Disks[i].Size = &pd.Spec.Size
+				scvmmMachine.Spec.Disks[i].Dynamic = pd.Spec.Dynamic
 			}
 		}
 	}
