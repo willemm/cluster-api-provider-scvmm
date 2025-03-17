@@ -34,6 +34,7 @@ type ScvmmPersistentDiskReference struct {
 // ScvmmPersistentDiskSpec defines the desired state of ScvmmPersistentDisk
 type ScvmmPersistentDiskSpec struct {
 	// Location (share path) where disk is stored
+	// +optional
 	Path string `json:"path"`
 	// Filename of stored disk
 	// +optional

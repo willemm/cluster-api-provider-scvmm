@@ -229,17 +229,22 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	log := ctrl.LoggerFrom(ctx).WithValues("scvmmmachine", scvmmMachine.Name)
 	ctx = ctrl.LoggerInto(ctx, log)
 
+	// Claim persistent disks first, so createvm can add them if possible
+	if err := r.vmClaimPersistentDisks(ctx, scvmmMachine); err != nil {
+		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed claiming persistent disk from pool")
+	}
+
 	log.Info("Doing reconciliation of ScvmmMachine")
 	vm, err := r.getVM(ctx, scvmmMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	// Claim persistent disks first, so createvm can add them if possible
-	if err := r.vmClaimPersistentDisks(ctx, scvmmMachine); err != nil {
-		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed claiming persistent disk from pool")
-	}
 	if vm.Id == "" {
 		return r.createVM(ctx, scvmmMachine)
+	}
+
+	if err := r.vmUpdatePersistentDisks(ctx, scvmmMachine, vm); err != nil {
+		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed updating persistent disk resources")
 	}
 
 	// Create IPAddressClaims after we create the VM because we need vm name
@@ -626,6 +631,44 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
 	}
 	return claim, nil
+}
+
+// Update scvmmpersistentdisk resources with path and such
+func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) error {
+	// Check for persistentdisk references that are not filled
+	for i, d := range scvmmMachine.Spec.Disks {
+		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
+			vd := vmDiskByLun(vm, i)
+			if vd != nil {
+				pd := &infrav1.ScvmmPersistentDisk{}
+				pdName := client.ObjectKey{
+					Namespace: scvmmMachine.Namespace,
+					Name:      d.PersistentDisk.Disk.Name,
+				}
+				if err := r.Get(ctx, pdName, pd); err != nil {
+					return err
+				}
+				path, filename := winPathSplit(vd.SharePath)
+				if path != "" {
+					pd.Spec.Existing = true
+					pd.Spec.Path = path
+					pd.Spec.Filename = filename
+					if err := r.Update(ctx, pd); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func winPathSplit(path string) (string, string) {
+	idx := strings.LastIndex(path, "\\")
+	if idx < 0 {
+		return "", path
+	}
+	return path[:idx], path[idx+1:]
 }
 
 func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
