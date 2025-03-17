@@ -11,7 +11,7 @@ try {
 
   $JobGroupID = [GUID]::NewGuid().ToString()
   $disklist = $disks | ConvertFrom-Json
-  for ($lun = 0; $lun -lt $disklist.Length; $disklist++) {
+  for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
     CreateVHD -disk $disklist[$lun] -lun $lun -JobGroup $JobGroup 
   }
 
