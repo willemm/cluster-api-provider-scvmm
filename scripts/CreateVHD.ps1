@@ -42,8 +42,8 @@ if ($disk.storageQoSPolicy) {
 if ($disk.filename) {
   $vhdargs.Filename = $disk.filename
 }
-if ($disk.Directory) {
-  $vhdargs.Path = $disk.Directory
+if ($disk.path) {
+  $vhdargs.Path = $disk.path
 }
 if ($disk.existing) {
   $vhdargs['UseLocalVirtualHardDisk'] = $true
