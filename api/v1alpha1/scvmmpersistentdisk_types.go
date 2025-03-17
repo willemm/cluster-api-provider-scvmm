@@ -44,7 +44,8 @@ type ScvmmPersistentDiskSpec struct {
 
 	// Size of the virtual disk
 	Size resource.Quantity `json:"size"`
-	// Specify that the virtual disk can expand dynamically (default: true)
+	// Specify that the virtual disk can expand dynamically
+	// +kubebuilder:default=true
 	// +optional
 	Dynamic bool `json:"dynamic,omitEmpty"`
 }

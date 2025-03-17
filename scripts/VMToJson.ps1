@@ -16,7 +16,7 @@ if ($vm.VirtualNetworkAdapters -ne $null) {
   }
 }
 if ($vm.VirtualHardDisks -ne $null) {
-  $vmjson.VirtualDisks = $vm.VirtualDiskDrives | Foreach-Object {
+  $vmjson.VirtualDisks = @( $vm.VirtualDiskDrives | Foreach-Object {
     @{
       Size = $_.VirtualHardDisk.Size
       MaximumSize = $_.VirtualHardDisk.MaximumSize
@@ -25,7 +25,7 @@ if ($vm.VirtualHardDisks -ne $null) {
       SharePath = $_.VirtualHardDisk.SharePath
       IOPSMaximum = $_.IOPSMaximum
     }
-  }
+  } )
 }
 if ($vm.VirtualDVDDrives -ne $null) {
   $vmjson.ISOs = @($vm.VirtualDVDDrives.ISO | select Size, SharePath)

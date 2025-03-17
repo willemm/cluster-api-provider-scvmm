@@ -615,7 +615,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			scvmmPersistentDiskPoolOwnerReference(pool),
 			owner,
 		}
-		controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+		//controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
 		if err := r.Create(ctx, claim); err != nil {
 			return nil, fmt.Errorf("Failed to create persistent disk %s: %w", claim.Name, err)
 		}
@@ -631,15 +631,18 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 	for i, d := range scvmmMachine.Spec.Disks {
 		vd := vmDiskByLun(vm, i)
-		// For rounding errors
-		if d.Size != nil && vd.MaximumSize < (d.Size.Value()-1024*1024) {
-			return true
-		}
-		if d.IOPSMaximum != nil && d.IOPSMaximum.Value() != vd.IOPSMaximum {
-			return true
-		}
-		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil && vd == nil {
-			return true
+		if vd != nil {
+			// For rounding errors
+			if d.Size != nil && vd.MaximumSize < (d.Size.Value()-1024*1024) {
+				return true
+			}
+			if d.IOPSMaximum != nil && d.IOPSMaximum.Value() != vd.IOPSMaximum {
+				return true
+			}
+		} else {
+			if d.PersistentDisk == nil || d.PersistentDisk.Disk != nil {
+				return true
+			}
 		}
 	}
 	return false
