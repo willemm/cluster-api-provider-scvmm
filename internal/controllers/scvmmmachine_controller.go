@@ -891,12 +891,17 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 						return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
 					}
 				}
+				// Only run job when running or powered off
+				if vm.Status != "Running" && vm.Status != "PowerOff" {
+					log.V(1).Info("Busy or failed, Requeue in 15 seconds")
+					return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
+				}
 				vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveDiskFromVM -ID '%s' -LUN '%d'",
 					scvmmMachine.Spec.Id, i)
 				if err != nil {
 					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to remove persistent disk %d", i))
 				}
-				log.V(1).Info("Requeue after 15 seconds")
+				log.V(1).Info("Removing disk, requeue after 15 seconds")
 				return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 			} else {
 				scvmmMachine.Status.VMStatus = vm.Status
@@ -910,7 +915,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 			}
 		}
 	}
-	log.V(1).Info("No disks to remove, requeue after 1 seconds")
+	log.V(1).Info("No disks to remove, update scvmmMachine and requeue after 1 second")
 	return r.patchReasonCondition(ctx, scvmmMachine, 1, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 }
 
