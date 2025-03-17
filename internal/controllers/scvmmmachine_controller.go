@@ -601,7 +601,8 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			return nil, nil
 		}
 		claim = &infrav1.ScvmmPersistentDisk{}
-		pool.Spec.Template.ObjectMeta.DeepCopyInto(&claim.ObjectMeta)
+		claim.Labels = pool.Spec.Template.ObjectMeta.Labels
+		claim.Annotations = pool.Spec.Template.ObjectMeta.Annotations
 		pool.Spec.Template.Spec.DeepCopyInto(&claim.Spec)
 		claim.Name = fmt.Sprintf("%s-%d", pool.Name, lowestFree)
 		if claim.Spec.Filename == "" {

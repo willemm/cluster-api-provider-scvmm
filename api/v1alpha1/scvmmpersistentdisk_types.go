@@ -36,8 +36,10 @@ type ScvmmPersistentDiskSpec struct {
 	// Location (share path) where disk is stored
 	Path string `json:"path"`
 	// Filename of stored disk
+	// +optional
 	Filename string `json:"filename"`
 	// Is the disk already created
+	// +optional
 	Existing bool `json:"existing"`
 
 	// Size of the virtual disk

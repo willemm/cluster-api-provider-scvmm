@@ -77,6 +77,6 @@ func init() {
 
 // ScvmmPersistentDiskTemplateResource describes the data needed to create a ScvmmPersistentDisk from a template
 type ScvmmPersistentDiskTemplateResource struct {
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              ScvmmPersistentDiskSpec `json:"spec"`
+	ObjectMeta `json:"metadata,omitempty"`
+	Spec       ScvmmPersistentDiskSpec `json:"spec"`
 }
