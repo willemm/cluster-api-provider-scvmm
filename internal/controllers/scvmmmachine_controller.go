@@ -871,42 +871,47 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 	}
 	for i, d := range scvmmMachine.Spec.Disks {
 		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
+			pd := &infrav1.ScvmmPersistentDisk{}
+			pdName := client.ObjectKey{
+				Namespace: scvmmMachine.Namespace,
+				Name:      d.PersistentDisk.Disk.Name,
+			}
+			if err := r.Get(ctx, pdName, pd); err != nil {
+				return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to get persistent disk %d", i))
+			}
 			vd := vmDiskByLun(vm, i)
 			if vd != nil {
-				pd := &infrav1.ScvmmPersistentDisk{}
-				pdName := client.ObjectKey{
-					Namespace: scvmmMachine.Namespace,
-					Name:      d.PersistentDisk.Disk.Name,
-				}
-				if err := r.Get(ctx, pdName, pd); err != nil {
-					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to get persistent disk %d", i))
-				}
-				// Grab path before updating
+				// Update path before removing
 				path, filename := winPathSplit(vd.SharePath)
-				vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveDisk -ID '%s' -LUN '%d'",
+				if path != "" && (pd.Spec.Existing != true || pd.Spec.Path != path || pd.Spec.Filename != filename) {
+					pd.Spec.Existing = true
+					pd.Spec.Path = path
+					pd.Spec.Filename = filename
+					if err := r.Update(ctx, pd); err != nil {
+						return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+					}
+				}
+				vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveDiskFromVM -ID '%s' -LUN '%d'",
 					scvmmMachine.Spec.Id, i)
 				if err != nil {
 					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to remove persistent disk %d", i))
 				}
+				log.V(1).Info("Requeue after 15 seconds")
+				return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
+			} else {
 				scvmmMachine.Status.VMStatus = vm.Status
 				scvmmMachine.Status.CreationTime = vm.CreationTime
 				scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
-				if path != "" {
-					pd.Spec.Existing = true
-					pd.Spec.Path = path
-					pd.Spec.Filename = filename
-				}
 				pd.SetOwnerReferences(util.RemoveOwnerRef(pd.OwnerReferences, scvmmMachineOwnerReference(scvmmMachine, false)))
 				if err := r.Update(ctx, pd); err != nil {
 					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
 				}
 				scvmmMachine.Spec.Disks[i].PersistentDisk.Disk = nil
-				log.V(1).Info("Requeue after 15 seconds")
-				return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 			}
 		}
 	}
-	return r.patchReasonCondition(ctx, scvmmMachine, 0, fmt.Errorf("No persistent disks to remove"), VmCreated, VmFailedReason, "failed to remove persistent disks")
+	log.V(1).Info("No disks to remove, requeue after 1 seconds")
+	return r.patchReasonCondition(ctx, scvmmMachine, 1, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 }
 
 type VmDiskElem struct {
