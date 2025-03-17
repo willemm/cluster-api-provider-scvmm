@@ -27,8 +27,6 @@ type ScvmmPersistentDiskPoolReference struct {
 
 // ScvmmPersistentDiskPoolSpec defines the desired state of ScvmmPersistentDiskPool
 type ScvmmPersistentDiskPoolSpec struct {
-	// Location (directory) where disks are stored
-	Directory string `json:"directory"`
 	// Maximum number of disk instances in pool (optional)
 	// +optional
 	MaxDisks int64 `json:"maxDisks,omitempty"`

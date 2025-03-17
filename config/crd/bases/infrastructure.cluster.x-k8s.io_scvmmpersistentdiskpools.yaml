@@ -41,9 +41,6 @@ spec:
             description: ScvmmPersistentDiskPoolSpec defines the desired state of
               ScvmmPersistentDiskPool
             properties:
-              directory:
-                description: Location (directory) where disks are stored
-                type: string
               maxDisks:
                 description: Maximum number of disk instances in pool (optional)
                 format: int64
@@ -153,7 +150,6 @@ spec:
                 - spec
                 type: object
             required:
-            - directory
             - selector
             - template
             type: object
