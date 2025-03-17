@@ -853,6 +853,62 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	return ctrl.Result{}, nil
 }
 
+// Check if there are persistent disks attached to the vm
+func vmHasPersistentDisks(scvmmMachine *infrav1.ScvmmMachine) bool {
+	for _, d := range scvmmMachine.Spec.Disks {
+		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	vm, err := r.getVM(ctx, scvmmMachine)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for i, d := range scvmmMachine.Spec.Disks {
+		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
+			vd := vmDiskByLun(vm, i)
+			if vd != nil {
+				pd := &infrav1.ScvmmPersistentDisk{}
+				pdName := client.ObjectKey{
+					Namespace: scvmmMachine.Namespace,
+					Name:      d.PersistentDisk.Disk.Name,
+				}
+				if err := r.Get(ctx, pdName, pd); err != nil {
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to get persistent disk %d", i))
+				}
+				// Grab path before updating
+				path, filename := winPathSplit(vd.SharePath)
+				vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveDisk -ID '%s' -LUN '%d'",
+					scvmmMachine.Spec.Id, i)
+				if err != nil {
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to remove persistent disk %d", i))
+				}
+				scvmmMachine.Status.VMStatus = vm.Status
+				scvmmMachine.Status.CreationTime = vm.CreationTime
+				scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+				if path != "" {
+					pd.Spec.Existing = true
+					pd.Spec.Path = path
+					pd.Spec.Filename = filename
+				}
+				pd.SetOwnerReferences(util.RemoveOwnerRef(pd.OwnerReferences, scvmmMachineOwnerReference(scvmmMachine, false)))
+				if err := r.Update(ctx, pd); err != nil {
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+				}
+				scvmmMachine.Spec.Disks[i].PersistentDisk.Disk = nil
+				log.V(1).Info("Requeue after 15 seconds")
+				return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
+			}
+		}
+	}
+	return r.patchReasonCondition(ctx, scvmmMachine, 0, fmt.Errorf("No persistent disks to remove"), VmCreated, VmFailedReason, "failed to remove persistent disks")
+}
+
 type VmDiskElem struct {
 	SizeMB           int64  `json:"sizeMB"`
 	VHDisk           string `json:"vhDisk,omitempty"`
@@ -1070,6 +1126,10 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, scvmmMachi
 	conditions.MarkFalse(scvmmMachine, VmCreated, VmDeletingReason, clusterv1.ConditionSeverityInfo, "")
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmMachine")
+	}
+
+	if vmHasPersistentDisks(scvmmMachine) {
+		return r.removePersistentDisks(ctx, scvmmMachine)
 	}
 
 	log.Info("Doing removal of ScvmmMachine")

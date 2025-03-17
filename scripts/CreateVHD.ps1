@@ -63,6 +63,6 @@ if ($disk.existing) {
   }
   $vhdargs.VirtualHardDiskSizeMB = $disk.sizeMB
 }
-if ($vhdargs.VirtualHardDiskSizeMB -or $vhdargs.UseLocalVirtualHardDisk) {
+if ($vhdargs.VirtualHardDiskSizeMB -or $vhdargs.UseLocalVirtualHardDisk -or $vhdargs.VirtualHardDisk) {
   New-SCVirtualDiskDrive @vhdargs
 }

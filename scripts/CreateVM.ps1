@@ -12,7 +12,9 @@ try {
   $JobGroupID = [GUID]::NewGuid().ToString()
   $disklist = $disks | ConvertFrom-Json
   for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
-    CreateVHD -disk $disklist[$lun] -lun $lun -JobGroup $JobGroupID
+    if (-not $disklist[$lun].existing) {
+      CreateVHD -disk $disklist[$lun] -lun $lun -JobGroup $JobGroupID
+    }
   }
 
   if ($vmtemplate) {
