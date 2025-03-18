@@ -53,10 +53,18 @@ type ScvmmPersistentDiskSpec struct {
 
 // ScvmmPersistentDiskStatus defines the observed state of ScvmmPersistentDisk
 type ScvmmPersistentDiskStatus struct {
+	// Current usage (size) of virtual disk
+	// +optional
+	Size *resource.Quantity `json:"size,omitEmpty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:JSONPath=".spec.path",type="string",name="PATH",description="Storage Path"
+// +kubebuilder:printcolumn:JSONPath=".spec.filename",type="string",name="FILENAME",description="vhdx Filename"
+// +kubebuilder:printcolumn:JSONPath=".spec.size",type="string",name="SIZE",description="Maximum Disk Size"
+// +kubebuilder:printcolumn:JSONPath=".status.size",type="string",name="USED",description="Current Disk Size"
+// +kubebuilder:printcolumn:JSONPath=".spec.metadata.ownerReferences[?(@.kind='ScvmmMachine')].name",type="string",name="OWNER",description="ScvmmMachine that owns disk"
 
 // ScvmmPersistentDisk is the Schema for the scvmmpersistentdisks API
 type ScvmmPersistentDisk struct {
@@ -65,6 +73,7 @@ type ScvmmPersistentDisk struct {
 
 	Spec   ScvmmPersistentDiskSpec   `json:"spec,omitempty"`
 	Status ScvmmPersistentDiskStatus `json:"status,omitempty"`
+	Index  int64                     `json:"-"`
 }
 
 // +kubebuilder:object:root=true

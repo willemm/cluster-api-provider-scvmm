@@ -14,7 +14,28 @@ spec:
     singular: scvmmpersistentdisk
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Storage Path
+      jsonPath: .spec.path
+      name: PATH
+      type: string
+    - description: vhdx Filename
+      jsonPath: .spec.filename
+      name: FILENAME
+      type: string
+    - description: Maximum Disk Size
+      jsonPath: .spec.size
+      name: SIZE
+      type: string
+    - description: Current Disk Size
+      jsonPath: .status.size
+      name: USED
+      type: string
+    - description: ScvmmMachine that owns disk
+      jsonPath: .spec.metadata.ownerReferences[?(@.kind='ScvmmMachine')].name
+      name: OWNER
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ScvmmPersistentDisk is the Schema for the scvmmpersistentdisks
@@ -65,6 +86,14 @@ spec:
             type: object
           status:
             description: ScvmmPersistentDiskStatus defines the observed state of ScvmmPersistentDisk
+            properties:
+              size:
+                anyOf:
+                - type: integer
+                - type: string
+                description: Current usage (size) of virtual disk
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
             type: object
         type: object
     served: true

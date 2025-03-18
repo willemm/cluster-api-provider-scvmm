@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -569,21 +570,40 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 	if err := r.Get(ctx, poolName, pool); err != nil {
 		return nil, err
 	}
-	diskList := infrav1.ScvmmPersistentDiskList{}
 	selector, err := metav1.LabelSelectorAsSelector(&pool.Spec.Selector)
 	if err != nil {
 		return nil, err
 	}
+	diskList := infrav1.ScvmmPersistentDiskList{}
 	if err := r.List(ctx, &diskList, client.MatchingLabelsSelector{Selector: selector}); err != nil {
 		return nil, err
 	}
+	// Calculate the index from the postfix
+	// Assume that the postfix is '-%d'
+	for i, disk := range diskList.Items {
+		pfIdx := strings.LastIndex(disk.Name, "-")
+		if pfIdx >= 0 {
+			idx, err := strconv.ParseInt(disk.Name[pfIdx+1:], 10, 64)
+			if err != nil {
+				diskList.Items[i].Index = idx
+			}
+		}
+	}
+	// Sort the items so it will find the lowest number first
 	sort.Slice(diskList.Items, func(a, b int) bool {
-		return diskList.Items[a].Name < diskList.Items[b].Name
+		return diskList.Items[a].Index < diskList.Items[b].Index
 	})
 	owner := scvmmMachineOwnerReference(scvmmMachine, false)
-	var claim *infrav1.ScvmmPersistentDisk
 	lowestFree := int64(1)
 	for _, disk := range diskList.Items {
+		// This works because the items are sorted by Index
+		if lowestFree == disk.Index {
+			lowestFree++
+		}
+		// Ignore disks that are out of range
+		if disk.Index > pool.Spec.MaxDisks {
+			continue
+		}
 		owned := false
 		for _, oref := range disk.OwnerReferences {
 			if oref.APIVersion == owner.APIVersion && oref.Kind == owner.Kind {
@@ -593,42 +613,38 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			}
 		}
 		if !owned {
-			claim = &disk
-			break
-		}
-		if disk.Name == fmt.Sprintf("%s-%d", pool.Name, lowestFree) {
-			lowestFree += 1
-		}
-	}
-	if claim == nil {
-		if lowestFree >= pool.Spec.MaxDisks {
-			log.Info("no persistent disks available in pool, skipping", "pool", poolName)
-			return nil, nil
-		}
-		claim = &infrav1.ScvmmPersistentDisk{}
-		claim.Name = fmt.Sprintf("%s-%d", pool.Name, lowestFree)
-		claim.Namespace = scvmmMachine.Namespace
-		claim.Labels = pool.Spec.Template.ObjectMeta.Labels
-		claim.Annotations = pool.Spec.Template.ObjectMeta.Annotations
-		pool.Spec.Template.Spec.DeepCopyInto(&claim.Spec)
-		if claim.Spec.Filename == "" {
-			claim.Spec.Filename = pool.Name + "-%d"
-		}
-		claim.Spec.Filename = fmt.Sprintf(claim.Spec.Filename, lowestFree)
-		claim.Spec.Existing = false
-		claim.OwnerReferences = []metav1.OwnerReference{
-			scvmmPersistentDiskPoolOwnerReference(pool),
-			owner,
-		}
-		//controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
-		if err := r.Create(ctx, claim); err != nil {
-			return nil, fmt.Errorf("Failed to create persistent disk %s: %w", claim.Name, err)
+			claim := &disk
+			claim.SetOwnerReferences(util.EnsureOwnerRef(claim.OwnerReferences, owner))
+			controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+			if err := r.Update(ctx, claim); err != nil {
+				return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
+			}
+			return claim, nil
 		}
 	}
-	claim.SetOwnerReferences(util.EnsureOwnerRef(claim.OwnerReferences, owner))
+	// Start count from 1, so if greater than maxdisks there are no slots available
+	if lowestFree > pool.Spec.MaxDisks {
+		log.Info("no persistent disks available in pool, skipping", "pool", poolName)
+		return nil, nil
+	}
+	claim := &infrav1.ScvmmPersistentDisk{}
+	claim.Name = fmt.Sprintf("%s-%d", pool.Name, lowestFree)
+	claim.Namespace = scvmmMachine.Namespace
+	claim.Labels = pool.Spec.Template.ObjectMeta.Labels
+	claim.Annotations = pool.Spec.Template.ObjectMeta.Annotations
+	pool.Spec.Template.Spec.DeepCopyInto(&claim.Spec)
+	if claim.Spec.Filename == "" {
+		claim.Spec.Filename = pool.Name + "-%d"
+	}
+	claim.Spec.Filename = fmt.Sprintf(claim.Spec.Filename, lowestFree)
+	claim.Spec.Existing = false
+	claim.OwnerReferences = []metav1.OwnerReference{
+		scvmmPersistentDiskPoolOwnerReference(pool),
+		owner,
+	}
 	controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
-	if err := r.Update(ctx, claim); err != nil {
-		return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
+	if err := r.Create(ctx, claim); err != nil {
+		return nil, fmt.Errorf("Failed to create persistent disk %s: %w", claim.Name, err)
 	}
 	return claim, nil
 }
@@ -653,6 +669,7 @@ func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, sc
 					pd.Spec.Existing = true
 					pd.Spec.Path = path
 					pd.Spec.Filename = filename
+					pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
 					if err := r.Update(ctx, pd); err != nil {
 						return err
 					}
