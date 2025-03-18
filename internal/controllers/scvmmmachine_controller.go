@@ -674,7 +674,7 @@ func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, sc
 							return err
 						}
 					}
-					if pd.Status.Size == nil || pd.Status.Size.Value() != vd.Size {
+					if vd.Size != 0 && (pd.Status.Size == nil || pd.Status.Size.Value() != vd.Size) {
 						pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
 						if err := r.Status().Update(ctx, pd); err != nil {
 							return err
