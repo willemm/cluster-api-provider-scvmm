@@ -38,7 +38,7 @@ spec:
       name: USED
       type: string
     - description: Creation Timestamp
-      jsonPath: .metadata.creationTime
+      jsonPath: .metadata.creationTimestamp
       name: AGE
       type: date
     name: v1alpha1
