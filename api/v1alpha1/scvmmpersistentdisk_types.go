@@ -65,6 +65,7 @@ type ScvmmPersistentDiskStatus struct {
 // +kubebuilder:printcolumn:JSONPath=".spec.filename",type="string",name="FILENAME",description="vhdx Filename",priority=1
 // +kubebuilder:printcolumn:JSONPath=".spec.size",type="string",name="SIZE",description="Maximum Disk Size"
 // +kubebuilder:printcolumn:JSONPath=".status.size",type="string",name="USED",description="Current Disk Size"
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTime",type="date",name="AGE",description="Creation Timestamp"
 
 // ScvmmPersistentDisk is the Schema for the scvmmpersistentdisks API
 type ScvmmPersistentDisk struct {

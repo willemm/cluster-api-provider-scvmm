@@ -37,6 +37,10 @@ spec:
       jsonPath: .status.size
       name: USED
       type: string
+    - description: Creation Timestamp
+      jsonPath: .metadata.creationTime
+      name: AGE
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:

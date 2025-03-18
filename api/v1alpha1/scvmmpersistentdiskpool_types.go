@@ -49,6 +49,9 @@ type ScvmmPersistentDiskPoolStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:JSONPath=".spec.maxDisks",type="string",name="MAX NUMBER",description="Maximum Number of Disks"
+// +kubebuilder:printcolumn:JSONPath=".spec.template.spec.size",type="string",name="SIZE",description="Maximum Disk Size",priority=1
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTime",type="date",name="AGE",description="Creation Timestamp"
 
 // ScvmmPersistentDiskPool is the Schema for the scvmmpersistentdiskpools API
 type ScvmmPersistentDiskPool struct {

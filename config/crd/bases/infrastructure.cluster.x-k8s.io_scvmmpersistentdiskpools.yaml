@@ -14,7 +14,21 @@ spec:
     singular: scvmmpersistentdiskpool
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Maximum Number of Disks
+      jsonPath: .spec.maxDisks
+      name: MAX NUMBER
+      type: string
+    - description: Maximum Disk Size
+      jsonPath: .spec.template.spec.size
+      name: SIZE
+      priority: 1
+      type: string
+    - description: Creation Timestamp
+      jsonPath: .metadata.creationTime
+      name: AGE
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ScvmmPersistentDiskPool is the Schema for the scvmmpersistentdiskpools

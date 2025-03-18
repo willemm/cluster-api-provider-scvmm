@@ -601,7 +601,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			lowestFree++
 		}
 		// Ignore disks that are out of range
-		if disk.Index > pool.Spec.MaxDisks {
+		if pool.Spec.MaxDisks > 0 && disk.Index > pool.Spec.MaxDisks {
 			continue
 		}
 		owned := false
@@ -623,7 +623,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		}
 	}
 	// Start count from 1, so if greater than maxdisks there are no slots available
-	if lowestFree > pool.Spec.MaxDisks {
+	if pool.Spec.MaxDisks > 0 && lowestFree > pool.Spec.MaxDisks {
 		log.Info("no persistent disks available in pool, skipping", "pool", poolName)
 		return nil, nil
 	}
