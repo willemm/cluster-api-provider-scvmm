@@ -60,11 +60,11 @@ type ScvmmPersistentDiskStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=".spec.path",type="string",name="PATH",description="Storage Path"
-// +kubebuilder:printcolumn:JSONPath=".spec.filename",type="string",name="FILENAME",description="vhdx Filename"
+// +kubebuilder:printcolumn:JSONPath=".metadata.ownerReferences[?(@.kind=='ScvmmMachine')].name",type="string",name="OWNER",description="ScvmmMachine that owns disk"
+// +kubebuilder:printcolumn:JSONPath=".spec.path",type="string",name="PATH",description="Storage Path",priority=1
+// +kubebuilder:printcolumn:JSONPath=".spec.filename",type="string",name="FILENAME",description="vhdx Filename",priority=1
 // +kubebuilder:printcolumn:JSONPath=".spec.size",type="string",name="SIZE",description="Maximum Disk Size"
 // +kubebuilder:printcolumn:JSONPath=".status.size",type="string",name="USED",description="Current Disk Size"
-// +kubebuilder:printcolumn:JSONPath=".spec.metadata.ownerReferences[?(@.kind='ScvmmMachine')].name",type="string",name="OWNER",description="ScvmmMachine that owns disk"
 
 // ScvmmPersistentDisk is the Schema for the scvmmpersistentdisks API
 type ScvmmPersistentDisk struct {

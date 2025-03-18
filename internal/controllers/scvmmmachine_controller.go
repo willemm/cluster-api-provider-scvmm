@@ -666,12 +666,19 @@ func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, sc
 				}
 				path, filename := winPathSplit(vd.SharePath)
 				if path != "" {
-					pd.Spec.Existing = true
-					pd.Spec.Path = path
-					pd.Spec.Filename = filename
-					pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
-					if err := r.Update(ctx, pd); err != nil {
-						return err
+					if pd.Spec.Existing != true || pd.Spec.Path != path || pd.Spec.Filename != filename {
+						pd.Spec.Existing = true
+						pd.Spec.Path = path
+						pd.Spec.Filename = filename
+						if err := r.Update(ctx, pd); err != nil {
+							return err
+						}
+					}
+					if pd.Status.Size == nil || pd.Status.Size.Value() != vd.Size {
+						pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
+						if err := r.Status().Update(ctx, pd); err != nil {
+							return err
+						}
 					}
 				}
 			}

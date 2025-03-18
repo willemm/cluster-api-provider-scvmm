@@ -15,13 +15,19 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: ScvmmMachine that owns disk
+      jsonPath: .metadata.ownerReferences[?(@.kind=='ScvmmMachine')].name
+      name: OWNER
+      type: string
     - description: Storage Path
       jsonPath: .spec.path
       name: PATH
+      priority: 1
       type: string
     - description: vhdx Filename
       jsonPath: .spec.filename
       name: FILENAME
+      priority: 1
       type: string
     - description: Maximum Disk Size
       jsonPath: .spec.size
@@ -30,10 +36,6 @@ spec:
     - description: Current Disk Size
       jsonPath: .status.size
       name: USED
-      type: string
-    - description: ScvmmMachine that owns disk
-      jsonPath: .spec.metadata.ownerReferences[?(@.kind='ScvmmMachine')].name
-      name: OWNER
       type: string
     name: v1alpha1
     schema:
