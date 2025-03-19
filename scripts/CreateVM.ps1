@@ -8,7 +8,7 @@ try {
     $generation = $VMTemplateObj.Generation
   } else {
     $HardwareProfile = Get-SCHardwareProfile | Where-Object Name -eq $hardwareprofile
-    if (-not $operatingsystem)
+    if (-not $operatingsystem) {
       foreach ($disk in $disklist) {
 	if ($disk.vhDisk) {
 	  $LinuxOS = Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1 -Expand OperatingSystem
