@@ -6,6 +6,12 @@ try {
   if ($vmtemplate) {
     $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
     $generation = $VMTemplateObj.Generation
+
+    for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
+      if (-not $disklist[$lun].vmHost) {
+        CreateVHD -disk $disklist[$lun] -lun $lun -generation $generation -JobGroup $JobGroupID
+      }
+    }
   } else {
     $HardwareProfile = Get-SCHardwareProfile | Where-Object Name -eq $hardwareprofile
     if (-not $operatingsystem) {
@@ -22,13 +28,13 @@ try {
     }
     $generation = $HardwareProfile.generation
 
-    $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template $JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
-  }
-
-  for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
-    if (-not $disklist[$lun].vmHost) {
-      CreateVHD -disk $disklist[$lun] -lun $lun -generation $generation -JobGroup $JobGroupID
+    for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
+      if (-not $disklist[$lun].vmHost) {
+        CreateVHD -disk $disklist[$lun] -lun $lun -generation $generation -JobGroup $JobGroupID
+      }
     }
+
+    $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template $JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
   }
 
   $networkslot = 0
