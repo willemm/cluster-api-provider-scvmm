@@ -460,12 +460,12 @@ func vmNeedsCloudInit(ciPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMRe
 	}
 	ciBase := baseName(ciPath)
 	for _, iso := range vm.ISOs {
-		if baseName(iso.SharePath) == ciBase {
+		if iso.Name == ciBase {
 			return false
 		}
 	}
 	for _, vhd := range vm.VirtualDisks {
-		if baseName(vhd.SharePath) == ciBase {
+		if vhd.Name == ciBase {
 			return false
 		}
 	}
@@ -530,7 +530,7 @@ func (r *ScvmmMachineReconciler) vmClaimPersistentDisks(ctx context.Context, scv
 					Name:     pd.Name,
 					Path:     pd.Spec.Path,
 					Filename: pd.Spec.Filename,
-					Existing: pd.Spec.Existing,
+					VMHost:   pd.Spec.VMHost,
 				}
 				scvmmMachine.Spec.Disks[i].Size = &pd.Spec.Size
 				scvmmMachine.Spec.Disks[i].Dynamic = pd.Spec.Dynamic
@@ -637,7 +637,6 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		claim.Spec.Filename = pool.Name + "-%d"
 	}
 	claim.Spec.Filename = fmt.Sprintf(claim.Spec.Filename, lowestFree)
-	claim.Spec.Existing = false
 	claim.OwnerReferences = []metav1.OwnerReference{
 		scvmmPersistentDiskPoolOwnerReference(pool),
 		owner,
@@ -664,21 +663,18 @@ func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, sc
 				if err := r.Get(ctx, pdName, pd); err != nil {
 					return err
 				}
-				path, filename := winPathSplit(vd.SharePath)
-				if path != "" {
-					if pd.Spec.Existing != true || pd.Spec.Path != path || pd.Spec.Filename != filename {
-						pd.Spec.Existing = true
-						pd.Spec.Path = path
-						pd.Spec.Filename = filename
-						if err := r.Update(ctx, pd); err != nil {
-							return err
-						}
+				if pd.Spec.VMHost != vd.VMHost || pd.Spec.Path != vd.Path || pd.Spec.Filename != vd.Name {
+					pd.Spec.VMHost = vd.VMHost
+					pd.Spec.Path = vd.Path
+					pd.Spec.Filename = vd.Name
+					if err := r.Update(ctx, pd); err != nil {
+						return err
 					}
-					if vd.Size != 0 && (pd.Status.Size == nil || pd.Status.Size.Value() != vd.Size) {
-						pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
-						if err := r.Status().Update(ctx, pd); err != nil {
-							return err
-						}
+				}
+				if vd.Size != 0 && (pd.Status.Size == nil || pd.Status.Size.Value() != vd.Size) {
+					pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
+					if err := r.Status().Update(ctx, pd); err != nil {
+						return err
 					}
 				}
 			}
@@ -905,13 +901,15 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 			}
 			vd := vmDiskByLun(vm, i)
 			if vd != nil {
-				// Update path before removing
-				path, filename := winPathSplit(vd.SharePath)
-				if path != "" && (pd.Spec.Existing != true || pd.Spec.Path != path || pd.Spec.Filename != filename) {
-					pd.Spec.Existing = true
-					pd.Spec.Path = path
-					pd.Spec.Filename = filename
-					if err := r.Update(ctx, pd); err != nil {
+				pd.Spec.VMHost = vd.VMHost
+				pd.Spec.Path = vd.Path
+				pd.Spec.Filename = vd.Name
+				if err := r.Update(ctx, pd); err != nil {
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+				}
+				if vd.Size != 0 {
+					pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
+					if err := r.Status().Update(ctx, pd); err != nil {
 						return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
 					}
 				}
@@ -943,6 +941,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 	return r.patchReasonCondition(ctx, scvmmMachine, 1, nil, VmCreated, VmDeletingReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
 }
 
+// Schema to send disk array to powershell scripts
 type VmDiskElem struct {
 	SizeMB           int64  `json:"sizeMB"`
 	VHDisk           string `json:"vhDisk,omitempty"`
@@ -952,7 +951,7 @@ type VmDiskElem struct {
 	IOPSMaximum      int64  `json:"iopsMaximum"`
 	Path             string `json:"path,omitempty"`
 	Filename         string `json:"filename,omitempty"`
-	Existing         bool   `json:"existing"`
+	VMHost           string `json:"vmHost"`
 }
 
 func equalStringMap(source, target map[string]string) bool {
@@ -988,7 +987,7 @@ func makeDisksJSON(disks []infrav1.VmDisk) ([]byte, error) {
 		if d.PersistentDisk != nil && d.PersistentDisk.Disk != nil {
 			diskarr[i].Path = d.PersistentDisk.Disk.Path
 			diskarr[i].Filename = d.PersistentDisk.Disk.Filename
-			diskarr[i].Existing = d.PersistentDisk.Disk.Existing
+			diskarr[i].VMHost = d.PersistentDisk.Disk.VMHost
 		}
 	}
 	return json.Marshal(diskarr)

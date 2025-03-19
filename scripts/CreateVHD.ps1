@@ -1,4 +1,4 @@
-param($vm, $disk, $lun, $JobGroup)
+param($vm, $disk, $lun, $generation, $JobGroup)
 
 if ($lun -gt 16) {
   throw "Too many virtual disks"
@@ -14,6 +14,7 @@ if ($JobGroup) {
 }
 if ($vm) {
   $vhdargs.VM = $vm
+  $generation = $vm.Generation
 }
 if ($lun -eq 0) {
   $vhdargs['VolumeType'] = 'BootAndSystem'
@@ -45,15 +46,12 @@ if ($disk.filename) {
 if ($disk.path) {
   $vhdargs.Path = $disk.path
 }
-if ($disk.existing) {
+if ($disk.vmHost) {
   $vhdargs['UseLocalVirtualHardDisk'] = $true
 } elseif ($disk.vhDisk) {
   $vhdargs['VirtualHardDisk'] = (Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1)
   if (-not $vhdargs['VirtualHardDisk']) {
     throw "VHD $($disk.vhDisk) not found"
-  }
-  if (-not $VirtualHardDisk) {
-    $VirtualHardDisk = $vhdargs['VirtualHardDisk']
   }
 } else {
   if ($disk.dynamic) {

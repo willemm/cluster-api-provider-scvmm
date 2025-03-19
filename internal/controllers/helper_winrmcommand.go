@@ -48,8 +48,8 @@ type VMResult struct {
 	IPv4Addresses  []string
 	VirtualDisks   []VMResultDisk
 	ISOs           []struct {
-		Size      int64
-		SharePath string
+		Size int64
+		Name string
 	}
 	BiosGuid             string
 	Id                   string
@@ -70,8 +70,10 @@ type VMResultDisk struct {
 	MaximumSize int64
 	BUS         int64
 	LUN         int64
-	SharePath   string
-	IOPSMaximum int64
+	VMHost      string
+	Path        string
+	Name        string
+	IOPSMaximum int64 `json:"IOPSMaximum,omitempty"`
 }
 
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult

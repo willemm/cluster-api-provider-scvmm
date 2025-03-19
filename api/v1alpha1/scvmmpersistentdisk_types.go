@@ -28,7 +28,7 @@ type ScvmmPersistentDiskReference struct {
 	// Fields grabbed from ScvmmPersistentDisk to pass through
 	Path     string `json:"-"`
 	Filename string `json:"-"`
-	Existing bool   `json:"-"`
+	VMHost   string `json:"-"`
 }
 
 // ScvmmPersistentDiskSpec defines the desired state of ScvmmPersistentDisk
@@ -39,9 +39,10 @@ type ScvmmPersistentDiskSpec struct {
 	// Filename of stored disk
 	// +optional
 	Filename string `json:"filename"`
-	// Is the disk already created
+	// VMHost where vhdx resides,
+	// Also indicates if the disk exists or not
 	// +optional
-	Existing bool `json:"existing"`
+	VMHost string `json:"vmHost"`
 
 	// Size of the virtual disk
 	Size resource.Quantity `json:"size"`

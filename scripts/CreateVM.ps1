@@ -1,37 +1,34 @@
 param($cloud, $hostgroup, $vmname, $vmtemplate, [int]$memory, [int]$memorymin, [int]$memorymax, [int]$memorybuffer, [int]$cpucount, $disks, $networkdevices, $fibrechannel, $hardwareprofile, $operatingsystem, $availabilityset, $vmoptions)
 try {
-  $generation = 1
+  $JobGroupID = [GUID]::NewGuid().ToString()
+  $disklist = $disks | ConvertFrom-Json
+
   if ($vmtemplate) {
     $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
     $generation = $VMTemplateObj.Generation
   } else {
-    $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq $hardwareprofile }
-    $generation = $HardwareProfile.generation
-  }
-
-  $JobGroupID = [GUID]::NewGuid().ToString()
-  $disklist = $disks | ConvertFrom-Json
-  for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
-    if (-not $disklist[$lun].existing) {
-      CreateVHD -disk $disklist[$lun] -lun $lun -JobGroup $JobGroupID
-    }
-  }
-
-  if ($vmtemplate) {
-    $VMTemplateObj = Get-SCVMTemplate -Name $vmtemplate
-  } else {
-    $HardwareProfile = Get-SCHardwareProfile | Where-Object {$_.Name -eq $hardwareprofile }
-    if (-not $operatingsystem -and $VirtualHardDisk -and $VirtualHardDisk.OperatingSystem) {
-      $LinuxOS = $VirtualHardDisk.OperatingSystem
-    } else {
-      if (-not $operatingsystem) {
-        $operatingsystem = 'Other Linux (64 bit)'
+    $HardwareProfile = Get-SCHardwareProfile | Where-Object Name -eq $hardwareprofile
+    if (-not $operatingsystem)
+      foreach ($disk in $disklist) {
+	if ($disk.vhDisk) {
+	  $LinuxOS = Get-SCVirtualHardDisk -name $disk.vhDisk | Select-Object -First 1 -Expand OperatingSystem
+	}
       }
-      $LinuxOS = Get-SCOperatingSystem | Where-Object {$_.name -eq $operatingsystem }
+      if (-not $LinuxOS) {
+	$LinuxOS = Get-SCOperatingSystem | Where-Object Name -eq 'Other Linux (64 bit)'
+      }
+    } else {
+      $LinuxOS = Get-SCOperatingSystem | Where-Object Name -eq $operatingsystem
     }
     $generation = $HardwareProfile.generation
 
     $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template $JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
+  }
+
+  for ($lun = 0; $lun -lt $disklist.Length; $lun++) {
+    if (-not $disklist[$lun].vmHost) {
+      CreateVHD -disk $disklist[$lun] -lun $lun -generation $generation -JobGroup $JobGroupID
+    }
   }
 
   $networkslot = 0
@@ -107,7 +104,7 @@ try {
 
   return VMToJson $vm "Creating"
 } catch {
-  if ($VMTemplateObj) {
+  if (-not $vmtemplate -and $VMTemplateObj) {
     try {
       Remove-SCVMTemplate $VMTemplateObj | out-null
     } catch {
