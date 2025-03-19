@@ -24,7 +24,7 @@ if ($vm.VirtualHardDisks -ne $null) {
       LUN = $_.LUN
       VMHost = $_.VirtualHardDisk.VMHost.Name
       Path = $_.VirtualHardDisk.Directory
-      Filename = $_.VirtualHardDisk.Name
+      Name = $_.VirtualHardDisk.Name
       IOPSMaximum = $_.IOPSMaximum
     }
   } )
