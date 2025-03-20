@@ -48,8 +48,8 @@ type VMResult struct {
 	IPv4Addresses  []string
 	VirtualDisks   []VMResultDisk
 	ISOs           []struct {
-		Size int64
-		Name string
+		Size     int64
+		Filename string
 	}
 	BiosGuid             string
 	Id                   string
@@ -72,7 +72,7 @@ type VMResultDisk struct {
 	LUN         int64
 	VMHost      string
 	Path        string
-	Name        string
+	Filename    string
 	IOPSMaximum int64 `json:"IOPSMaximum,omitempty"`
 }
 

@@ -24,13 +24,18 @@ if ($vm.VirtualHardDisks -ne $null) {
       LUN = $_.LUN
       VMHost = $_.VirtualHardDisk.VMHost.Name
       Path = $_.VirtualHardDisk.Directory
-      Name = $_.VirtualHardDisk.Name
+      Filename = [IO.Path]::GetFileName($_.VirtualHardDisk.SharePath)
       IOPSMaximum = $_.IOPSMaximum
     }
   } )
 }
 if ($vm.VirtualDVDDrives -ne $null) {
-  $vmjson.ISOs = @($vm.VirtualDVDDrives.ISO | select Size, Name)
+  $vmjson.ISOs = @( $vm.VirtualDVDDrives.ISO | Foreach-Object {
+    @{
+      Size = $_.Size
+      Filename = [IO.Path]::GetFileName($_.SharePath)
+    }
+  } )
 }
 if ($vm.BiosGuid -ne $null) { $vmjson.BiosGuid = "$($vm.BiosGuid)" }
 if ($vm.Id -ne $null) { $vmjson.Id = "$($vm.Id)" }

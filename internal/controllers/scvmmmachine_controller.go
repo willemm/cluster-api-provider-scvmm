@@ -460,12 +460,12 @@ func vmNeedsCloudInit(ciPath string, scvmmMachine *infrav1.ScvmmMachine, vm VMRe
 	}
 	ciBase := baseName(ciPath)
 	for _, iso := range vm.ISOs {
-		if iso.Name == ciBase {
+		if iso.Filename == ciBase {
 			return false
 		}
 	}
 	for _, vhd := range vm.VirtualDisks {
-		if vhd.Name == ciBase {
+		if vhd.Filename == ciBase {
 			return false
 		}
 	}
@@ -663,10 +663,10 @@ func (r *ScvmmMachineReconciler) vmUpdatePersistentDisks(ctx context.Context, sc
 				if err := r.Get(ctx, pdName, pd); err != nil {
 					return err
 				}
-				if pd.Spec.VMHost != vd.VMHost || pd.Spec.Path != vd.Path || pd.Spec.Filename != vd.Name {
+				if pd.Spec.VMHost != vd.VMHost || pd.Spec.Path != vd.Path || pd.Spec.Filename != vd.Filename {
 					pd.Spec.VMHost = vd.VMHost
 					pd.Spec.Path = vd.Path
-					pd.Spec.Filename = vd.Name
+					pd.Spec.Filename = vd.Filename
 					if err := r.Update(ctx, pd); err != nil {
 						return err
 					}
@@ -903,7 +903,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 			if vd != nil {
 				pd.Spec.VMHost = vd.VMHost
 				pd.Spec.Path = vd.Path
-				pd.Spec.Filename = vd.Name
+				pd.Spec.Filename = vd.Filename
 				if err := r.Update(ctx, pd); err != nil {
 					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
 				}
