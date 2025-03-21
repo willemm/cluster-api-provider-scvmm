@@ -18,21 +18,21 @@ if ($vm.VirtualNetworkAdapters -ne $null) {
 if ($vm.VirtualHardDisks -ne $null) {
   $vmjson.VirtualDisks = @( $vm.VirtualDiskDrives | Foreach-Object {
     @{
-      Size = $_.VirtualHardDisk.Size
-      MaximumSize = $_.VirtualHardDisk.MaximumSize
-      BUS = $_.BUS
-      LUN = $_.LUN
-      VMHost = $_.VirtualHardDisk.VMHost.Name
-      Path = $_.VirtualHardDisk.Directory
+      Size = 0+$_.VirtualHardDisk.Size
+      MaximumSize = 0+$_.VirtualHardDisk.MaximumSize
+      BUS = 0+$_.BUS
+      LUN = 0+$_.LUN
+      VMHost = "$($_.VirtualHardDisk.VMHost.Name)"
+      Path = "$($_.VirtualHardDisk.Directory)"
       Filename = [IO.Path]::GetFileName($_.VirtualHardDisk.SharePath)
-      IOPSMaximum = $_.IOPSMaximum
+      IOPSMaximum = 0+$_.IOPSMaximum
     }
   } )
 }
 if ($vm.VirtualDVDDrives -ne $null) {
   $vmjson.ISOs = @( $vm.VirtualDVDDrives.ISO | Foreach-Object {
     @{
-      Size = $_.Size
+      Size = 0+$_.Size
       Filename = [IO.Path]::GetFileName($_.SharePath)
     }
   } )
