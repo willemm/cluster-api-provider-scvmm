@@ -583,7 +583,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		pfIdx := strings.LastIndex(disk.Name, "-")
 		if pfIdx >= 0 {
 			idx, err := strconv.ParseInt(disk.Name[pfIdx+1:], 10, 64)
-			if err != nil {
+			if err == nil {
 				diskList.Items[i].Index = idx
 			}
 		}
@@ -622,6 +622,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			if scvmmMachine.Spec.ProviderRef != nil {
 				claim.Spec.ProviderRef = scvmmMachine.Spec.ProviderRef
 			}
+			log.V(1).Info("Claiming persistentdisk", "persistentDisk", claim)
 			if err := r.Update(ctx, claim); err != nil {
 				return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
 			}
@@ -651,6 +652,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		owner,
 	}
 	controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+	log.V(1).Info("Creating persistentDisk", "persistentDisk", claim)
 	if err := r.Create(ctx, claim); err != nil {
 		return nil, fmt.Errorf("Failed to create persistent disk %s: %w", claim.Name, err)
 	}
