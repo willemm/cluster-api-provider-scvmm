@@ -74,8 +74,7 @@ const (
 	VmRunningReason  = "VmRunning"
 	VmFailedReason   = "VmFailed"
 
-	MachineFinalizer        = "scvmmmachine.finalizers.cluster.x-k8s.io"
-	PersistentDiskFinalizer = "scvmmpersistentdisk.finalizers.cluster.x-k8s.io"
+	MachineFinalizer = "scvmmmachine.finalizers.cluster.x-k8s.io"
 )
 
 // Are global variables bad? Dunno, this one seems fine because it caches an env var
@@ -600,6 +599,10 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 		if lowestFree == disk.Index {
 			lowestFree++
 		}
+		// Ignore disks that are being deleted
+		if !disk.DeletionTimestamp.IsZero() {
+			continue
+		}
 		// Ignore disks that are out of range
 		if pool.Spec.MaxDisks > 0 && disk.Index > pool.Spec.MaxDisks {
 			continue
@@ -616,6 +619,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 			claim := &disk
 			claim.SetOwnerReferences(util.EnsureOwnerRef(claim.OwnerReferences, owner))
 			controllerutil.AddFinalizer(claim, PersistentDiskFinalizer)
+			claim.Spec.ProviderRef = scvmmMachine.Spec.ProviderRef
 			if err := r.Update(ctx, claim); err != nil {
 				return nil, fmt.Errorf("Failed to claim persistent disk %s: %w", claim.Name, err)
 			}
@@ -633,6 +637,7 @@ func (r *ScvmmMachineReconciler) claimPersistentDisk(ctx context.Context, pd *in
 	claim.Labels = pool.Spec.Template.ObjectMeta.Labels
 	claim.Annotations = pool.Spec.Template.ObjectMeta.Annotations
 	pool.Spec.Template.Spec.DeepCopyInto(&claim.Spec)
+	claim.Spec.ProviderRef = scvmmMachine.Spec.ProviderRef
 	if claim.Spec.Filename == "" {
 		claim.Spec.Filename = pool.Name + "-%d"
 	}

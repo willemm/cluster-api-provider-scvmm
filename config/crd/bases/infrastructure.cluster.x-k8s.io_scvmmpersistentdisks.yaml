@@ -77,6 +77,18 @@ spec:
               path:
                 description: Location (share path) where disk is stored
                 type: string
+              providerRef:
+                description: ProviderRef points to an ScvmmProvider instance that
+                  defines the provider settings for this cluster.
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
               size:
                 anyOf:
                 - type: integer

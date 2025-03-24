@@ -44,6 +44,10 @@ type ScvmmPersistentDiskSpec struct {
 	// +optional
 	VMHost string `json:"vmHost"`
 
+	// ProviderRef points to an ScvmmProvider instance that defines the provider settings for this cluster.
+	// +optional
+	ProviderRef *ScvmmProviderReference `json:"providerRef,omitEmpty"`
+
 	// Size of the virtual disk
 	Size resource.Quantity `json:"size"`
 	// Specify that the virtual disk can expand dynamically
