@@ -141,6 +141,10 @@ func getPersistentDiskFromShare(ctx context.Context, disk *infrav1.ScvmmPersiste
 		Share: strings.Replace(shareParts[0], ":", "$", -1),
 		Path:  strings.Join(shareParts[1:], "/"),
 	}
+	if disk.Spec.Path == "" {
+		diskShare.Exists = false
+		return diskShare, nil
+	}
 
 	log.V(1).Info("smb2 Connecting", "host", diskShare.Host, "port", 445)
 	conn, err := net.Dial("tcp", diskShare.Host+":445")
