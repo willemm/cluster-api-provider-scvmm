@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sort"
 	"strconv"
 	"strings"
@@ -215,6 +216,12 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 			return ctrl.Result{}, err
 		}
+	}
+
+	// Hard skip if cluster exists and is paused, or if the clusterless scvmmmachine has a paused annotation.
+	if (cluster != nil && annotations.IsPaused(cluster, machine)) || (annotations.HasPaused(scvmmMachine)) {
+		log.Info("Cluster is Paused or ScvmmMachine has paused Annotation, skipping reconciliation")
+		return ctrl.Result{}, nil
 	}
 
 	// Handle non-deleted machines
