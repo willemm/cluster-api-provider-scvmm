@@ -37,9 +37,28 @@ try {
     $VMTemplateObj = New-SCVMTemplate -Name "Temporary Template $JobGroupID" -Generation $generation -HardwareProfile $HardwareProfile -JobGroup $JobGroupID -OperatingSystem $LinuxOS -NoCustomization -ErrorAction Stop
   }
 
+  $hostclusters = @()
+  $hgtodo = @(Get-SCVMHostGroup -Name $hostgroup)
+  while ($hgtodo.Count -gt 0) {
+    foreach ($hg in $hgtodo) {
+      $hostclusters += Get-SCVMHostCluster -VMHostGroup $hg
+    }
+    $hgtodo = foreach ($hg in $hgtodo) {
+      Get-SCVMHostGroup -ParentHostGroup $hg
+    }
+  }
   $networkslot = 0
   foreach ($networkdevice in ($networkdevices | ConvertFrom-Json)) {
-    $VMNetwork = Get-SCVMNetwork -Name $networkdevice.VMNetwork
+    $VMNetwork = foreach ($hc in $hostclusters) {
+      Get-SCVirtualNetwork -VMHostCluster $hc | Select-Object -Expand LogicalNetworks | ForEach-Object { Get-SCVMNetwork -LogicalNetwork $_ -Name $networkdevice.VMNetwork }
+    }
+    $VMNetwork = $VMNetwork | Sort-Object -Unique
+    if ($VMNetwork.Count -lt 1) {
+      throw "No vmnetwork found with name $($networkdevice.VMNetwork) found in hostgroup $hostgroup"
+    }
+    if ($VMNetwork.Count -gt 1) {
+      throw "More than one vmnetwork found with name $($networkdevice.VMNetwork) found in hostgroup $hostgroup ($($VMNetwork.Name))"
+    }
     $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
     if ($networkslot -eq 0) {
