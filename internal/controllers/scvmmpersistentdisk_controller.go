@@ -61,30 +61,34 @@ func (r *ScvmmPersistentDiskReconciler) Reconcile(ctx context.Context, req ctrl.
 	log = log.WithValues("scvmmpersistentdisk", disk.Name)
 	ctx = ctrl.LoggerInto(ctx, log)
 	log.V(1).Info("Get provider")
-	provider, err := getProvider(disk.Spec.ProviderRef)
-	if err != nil {
-		log.Error(err, "Failed to get provider")
-		return ctrl.Result{}, err
-	}
+	/*
+		provider, err := getProvider(disk.Spec.ProviderRef)
+		if err != nil {
+			log.Error(err, "Failed to get provider")
+			return ctrl.Result{}, err
+		}
 
-	diskShare, err := getPersistentDiskFromShare(ctx, disk, provider)
-	if err != nil {
-		log.Error(err, "Failed to read persistentdisk share")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Got disk from share", "disk", disk, "diskShare", diskShare)
-	if !disk.DeletionTimestamp.IsZero() {
-		if !diskShare.Exists {
-			// Disk not found, so assume it's gone and remove the finalizer
-			log.V(1).Info("diskShare not found, remove finalizer")
-			controllerutil.RemoveFinalizer(disk, PersistentDiskFinalizer)
-			if err := client.IgnoreNotFound(r.Update(ctx, disk)); err != nil {
-				log.Error(err, "Failed to update scvmmMachine", "disk", disk)
+			diskShare, err := getPersistentDiskFromShare(ctx, disk, provider)
+			if err != nil {
+				log.Error(err, "Failed to read persistentdisk share")
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, nil
-		}
+
+			log.Info("Got disk from share", "disk", disk, "diskShare", diskShare)
+	*/
+	if !disk.DeletionTimestamp.IsZero() {
+		/*
+			if !diskShare.Exists {
+				// Disk not found, so assume it's gone and remove the finalizer
+				log.V(1).Info("diskShare not found, remove finalizer")
+				controllerutil.RemoveFinalizer(disk, PersistentDiskFinalizer)
+				if err := client.IgnoreNotFound(r.Update(ctx, disk)); err != nil {
+					log.Error(err, "Failed to update scvmmMachine", "disk", disk)
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, nil
+			}
+		*/
 		vm, err := sendWinrmCommand(log, disk.Spec.ProviderRef, "RemovePersistentDisk -VMHost '%s' -Path '%s' -Filename '%s'",
 			escapeSingleQuotes(disk.Spec.VMHost),
 			escapeSingleQuotes(disk.Spec.Path),
@@ -93,6 +97,16 @@ func (r *ScvmmPersistentDiskReconciler) Reconcile(ctx context.Context, req ctrl.
 		if err != nil {
 			log.Error(err, "Failed to run persistentdisk remove script", "disk", disk)
 			return ctrl.Result{}, err
+		}
+		if vm.Message == "Not Found" {
+			// Disk not found, so assume it's gone and remove the finalizer
+			log.V(1).Info("diskShare not found, remove finalizer")
+			controllerutil.RemoveFinalizer(disk, PersistentDiskFinalizer)
+			if err := client.IgnoreNotFound(r.Update(ctx, disk)); err != nil {
+				log.Error(err, "Failed to update scvmmMachine", "disk", disk)
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
 		}
 		log.Info("Removing persistentdisk result", "result", vm)
 		return ctrl.Result{RequeueAfter: time.Second * 10}, nil

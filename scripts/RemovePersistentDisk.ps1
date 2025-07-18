@@ -1,9 +1,15 @@
 param($vmhost, $path, $filename)
 try {
-  $JobGroupID = [GUID]::NewGuid().ToString()
-  New-SCVirtualDiskDrive -UseLocalVirtualHardDisk -Path $path -FileName $filename -IDE -BUS 0 -LUN 0 -JobGroup $JobGroupID
-  $vm = New-SCVirtualMachine -VMHost $vmhost -Path $path -Name $filename -JobGroup $JobGroupID -RunAsynchronously
-  $vm = Remove-SCVirtualMachine -VM $vm -RunAsynchronously
+  $vm = New-SCVirtualMachine -VMHost $vmhost -Path $path -Name $filename
+  try {
+	  $vd = New-SCVirtualDiskDrive -UseLocalVirtualHardDisk -Path $path -FileName $filename -IDE -BUS 0 -LUN 0 VM $vm
+  } catch {
+	  if ($_.Exception.Message -match 'could not locate the specified file') {
+		  $vm = Remove-SCVirtualMachine -VM $vm
+		  return VMToJson $vm "Not Found"
+	  }
+  }
+  $vm = Remove-SCVirtualMachine -VM $vm
   return VMToJson $vm "Removing PersistentDisk"
 } catch {
   if ($vm) {

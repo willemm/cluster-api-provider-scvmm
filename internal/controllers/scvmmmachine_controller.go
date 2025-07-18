@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sigs.k8s.io/cluster-api/util/annotations"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"sigs.k8s.io/cluster-api/util/annotations"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -322,6 +323,9 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 	if err != nil {
 		r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, "GetVM", "%v", err)
 		return VMResult{}, errors.Wrap(err, "failed to get vm")
+	}
+	if vm.Id == "" {
+		return vm, nil
 	}
 	if vm.Id != scvmmMachine.Spec.Id {
 		// Sanity check
