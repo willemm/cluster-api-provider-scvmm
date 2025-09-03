@@ -41,24 +41,16 @@ type ScvmmProviderSpec struct {
 	// Settings that define how to pass cloud-init data
 	// +optional
 	CloudInit ScvmmCloudInitSpec `json:"cloudInit,omitempty"`
-	// Active Directory server
-	// +optional
-	ADServer string `json:"adServer,omitempty"`
-	// Reference to secret containing user and password for activediractory
-	// +optional
-	ADSecret *corev1.SecretReference `json:"adSecret,omitempty"`
 	// Extra functions to run when provisioning machines
 	// +optional
 	ExtraFunctions map[string]string `json:"extraFunctions,omitempty"`
 
-	// Scvmm/AD username and Password (not serialized)
+	// Scvmm username and Password (not serialized)
 	ScvmmUsername string `json:"-"`
 	ScvmmPassword string `json:"-"`
-	ADUsername    string `json:"-"`
-	ADPassword    string `json:"-"`
 
 	// Environment variables to set for scripts
-	// Will be supplemented with scvmm and ad credentials
+	// Will be supplemented with scvmm credentials
 	// +optional
 	Env map[string]string `json:"env,omitempty"`
 

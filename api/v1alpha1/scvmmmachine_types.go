@@ -73,9 +73,6 @@ type ScvmmMachineSpec struct {
 	// Network settings
 	// +optional
 	Networking *Networking `json:"networking,omitempty"`
-	// Active Directory entry
-	// +optional
-	ActiveDirectory *ActiveDirectory `json:"activeDirectory,omitempty"`
 	// AvailabilitySet
 	// +optional
 	AvailabilitySet string `json:"availabilitySet,omitempty"`
@@ -214,20 +211,6 @@ type FibreChannel struct {
 	// Virtual SAN
 	// +optional
 	VirtualSAN string `json:"virtualSAN,omitEmpty"`
-}
-
-type ActiveDirectory struct {
-	// Domain Controller
-	// +optional
-	DomainController string `json:"domainController,omitempty"`
-	// OU Path
-	OUPath string `json:"ouPath"`
-	// Description
-	// +optional
-	Description string `json:"description,omitempty"`
-	// Group memberships
-	// +optional
-	MemberOf []string `json:"memberOf,omitempty"`
 }
 
 type DynamicMemory struct {

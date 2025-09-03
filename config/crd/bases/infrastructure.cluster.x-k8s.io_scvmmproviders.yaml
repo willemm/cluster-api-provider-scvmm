@@ -39,23 +39,6 @@ spec:
           spec:
             description: ScvmmProviderSpec defines the desired state of ScvmmProvider
             properties:
-              adSecret:
-                description: Reference to secret containing user and password for
-                  activediractory
-                properties:
-                  name:
-                    description: name is unique within a namespace to reference a
-                      secret resource.
-                    type: string
-                  namespace:
-                    description: namespace defines the space within which the secret
-                      name must be unique.
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
-              adServer:
-                description: Active Directory server
-                type: string
               cloudInit:
                 description: Settings that define how to pass cloud-init data
                 properties:
@@ -90,7 +73,7 @@ spec:
                   type: string
                 description: |-
                   Environment variables to set for scripts
-                  Will be supplemented with scvmm and ad credentials
+                  Will be supplemented with scvmm credentials
                 type: object
               execHost:
                 description: Jumphost to run scvmm scripts on, instead of directly

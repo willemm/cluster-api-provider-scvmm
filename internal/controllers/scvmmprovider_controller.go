@@ -102,9 +102,6 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 			p.CloudInit.LibraryShare = `ISOs\cloud-init`
 		}
 	}
-	if p.ADServer == "" {
-		p.ADServer = os.Getenv("ACTIVEDIRECTORY_SERVER")
-	}
 	if p.ScvmmSecret != nil {
 		log.V(1).Info("Fetching scvmm secret ref", "secret", p.ScvmmSecret)
 		creds := &corev1.Secret{}
@@ -119,41 +116,15 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 			p.ScvmmPassword = string(value)
 		}
 	}
-	if p.ADSecret != nil {
-		log.V(1).Info("Fetching AD secret ref", "secret", p.ADSecret)
-		creds := &corev1.Secret{}
-		key := client.ObjectKey{Namespace: provider.Namespace, Name: p.ADSecret.Name}
-		if err := r.Client.Get(ctx, key, creds); err != nil {
-			return nil, fmt.Errorf("Failed to get AD credential secretref: %v", err)
-		}
-		if value, ok := creds.Data["username"]; ok {
-			p.ADUsername = string(value)
-		}
-		if value, ok := creds.Data["password"]; ok {
-			p.ADPassword = string(value)
-		}
-	}
 	if p.ScvmmUsername == "" {
 		p.ScvmmUsername = os.Getenv("SCVMM_USERNAME")
 	}
 	if p.ScvmmPassword == "" {
 		p.ScvmmPassword = os.Getenv("SCVMM_PASSWORD")
 	}
-	if p.ADUsername == "" {
-		p.ADUsername = os.Getenv("ACTIVEDIRECTORY_USERNAME")
-	}
-	if p.ADPassword == "" {
-		p.ADPassword = os.Getenv("ACTIVEDIRECTORY_PASSWORD")
-	}
 	p.SensitiveEnv = map[string]string{
 		"SCVMM_USERNAME": p.ScvmmUsername,
 		"SCVMM_PASSWORD": p.ScvmmPassword,
-	}
-	if p.ADUsername != "" {
-		p.SensitiveEnv["ACTIVEDIRECTORY_USERNAME"] = p.ADUsername
-	}
-	if p.ADUsername != "" {
-		p.SensitiveEnv["ACTIVEDIRECTORY_PASSWORD"] = p.ADPassword
 	}
 	return provider, nil
 }
