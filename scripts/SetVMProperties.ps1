@@ -4,6 +4,9 @@ try {
   if (-not $vm) {
     throw "Virtual Machine with ID $id not found"
   }
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+    return VMToJson $vm "Machine is busy"
+  }
 
   if ($tag) {
     Set-SCVirtualMachine -VM $vm -Tag $tag -RunAsynchronously -ErrorAction Stop | Out-Null

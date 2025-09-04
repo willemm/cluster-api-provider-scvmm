@@ -4,6 +4,9 @@ try {
   if (-not $vm) {
     throw "Virtual Machine with ID $id not found"
   }
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+    return VMToJson $vm "Machine is busy"
+  }
   $evhd = if ($devicetype -eq "ide") {
     $eloc = "IDE:1:0"
     $vm.VirtualDiskDrives | Where-Object {

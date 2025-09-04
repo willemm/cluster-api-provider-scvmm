@@ -1,5 +1,12 @@
 param($id, $cipath, $devicetype)
 try {
+  $vm = Get-SCVirtualMachine -ID $id
+  if (-not $vm) {
+    throw "Virtual Machine with ID $id not found"
+  }
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+    return VMToJson $vm "Machine is busy"
+  }
   $shr = Get-SCLibraryShare | ?{ $cipath.StartsWith($_.Path) } | select -first 1
   if (-not $shr) {
     throw "Library share containing $cipath not found"
@@ -9,10 +16,6 @@ try {
   $ISO = Get-SCISO | Where-Object { $_.SharePath -eq $cipath } | select -first 1
   if (-not $ISO) {
     throw "Isofile $cipath not found"
-  }
-  $vm = Get-SCVirtualMachine -ID $id
-  if (-not $vm) {
-    throw "Virtual Machine with ID $id not found"
   }
   $DVDDrive = Get-SCVirtualDVDDrive -VM $vm | select -first 1
   if ($DVDDrive.ISO) {

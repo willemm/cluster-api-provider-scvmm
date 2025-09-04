@@ -5,6 +5,9 @@ try {
   if (-not $vm) {
     throw "Virtual Machine $id not found"
   }
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+    return VMToJson $vm "Machine is busy"
+  }
   $seenluns = @{}
   foreach ($vhdisk in $vm.VirtualDiskDrives) {
     $lun = $vhdisk.LUN
