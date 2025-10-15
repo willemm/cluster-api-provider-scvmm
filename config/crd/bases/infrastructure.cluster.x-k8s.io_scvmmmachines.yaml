@@ -439,6 +439,18 @@ spec:
                   - type
                   type: object
                 type: array
+              backoff:
+                description: Backoff retry in seconds
+                properties:
+                  reason:
+                    type: string
+                  seconds:
+                    format: int32
+                    type: integer
+                required:
+                - reason
+                - seconds
+                type: object
               biosGuid:
                 description: BiosGuid as reported by SVCMM
                 type: string

@@ -249,6 +249,15 @@ type ScvmmMachineStatus struct {
 	// Conditions defines current service state of the ScvmmMachine.
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	// Backoff retry in seconds
+	// +optional
+	Backoff *ScvmmMachineBackoff `json:"backoff,omitempty"`
+}
+
+// Register incremental backoff retry
+type ScvmmMachineBackoff struct {
+	Reason  string `json:"reason"`
+	Seconds int32  `json:"seconds"`
 }
 
 //+kubebuilder:object:root=true

@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: ghcr.io/willemm/cluster-api-provider-scvmm
-  newTag: v0.5.7
+  newTag: v0.5.8
