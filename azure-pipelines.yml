@@ -8,7 +8,6 @@ resources:
   - repository: templatesRepo
     type: git
     name: Stater/devops-pipelines
-    ref: refs/heads/no_python
 
 stages:
 - template: pipelines/build/docker-build-deploy.yml@templatesRepo

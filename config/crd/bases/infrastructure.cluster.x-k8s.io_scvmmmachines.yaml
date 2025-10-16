@@ -444,12 +444,16 @@ spec:
                 properties:
                   reason:
                     type: string
-                  seconds:
+                  try:
+                    format: int32
+                    type: integer
+                  wait:
                     format: int32
                     type: integer
                 required:
                 - reason
-                - seconds
+                - try
+                - wait
                 type: object
               biosGuid:
                 description: BiosGuid as reported by SVCMM

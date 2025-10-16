@@ -46,10 +46,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -97,6 +99,27 @@ var (
 		"scsi":   "AddVHDToVM",
 		"ide":    "AddVHDToVM",
 	}
+
+	scvmmCallTries = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "scvmm",
+			Subsystem: "calls",
+			Name:      "tries",
+			Help:      "Number of tries on scvmm call",
+			Buckets:   prometheus.LinearBuckets(1, 1, 10),
+		},
+		[]string{"function"},
+	)
+	scvmmCallWaits = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "scvmm",
+			Subsystem: "calls",
+			Name:      "waits",
+			Help:      "Number of waits on scvmm call",
+			Buckets:   prometheus.LinearBuckets(1, 1, 10),
+		},
+		[]string{"function"},
+	)
 )
 
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
@@ -1227,19 +1250,26 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 		if reason != "" {
 			if scvmmMachine.Status.Backoff == nil || scvmmMachine.Status.Backoff.Reason != reason {
 				scvmmMachine.Status.Backoff = &v1alpha1.ScvmmMachineBackoff{
-					Reason:  reason,
-					Seconds: requeue,
+					Reason: reason,
+					Try:    0,
+					Wait:   0,
 				}
 			} else {
-				requeue = scvmmMachine.Status.Backoff.Seconds
-				if requeue > 300 {
-					requeue = 300
+				scvmmMachine.Status.Backoff.Try += 1
+				requeue += 5 * scvmmMachine.Status.Backoff.Try
+				if requeue > 600 {
+					requeue = 600
 				}
-				scvmmMachine.Status.Backoff.Seconds = requeue
+				scvmmCallTries.WithLabelValues(reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
 			}
 		} else if scvmmMachine.Status.Backoff != nil {
 			// Keep the last backoff
-			requeue = scvmmMachine.Status.Backoff.Seconds
+			scvmmMachine.Status.Backoff.Wait += 1
+			requeue += 5 * scvmmMachine.Status.Backoff.Try
+			if requeue > 600 {
+				requeue = 600
+			}
+			scvmmCallWaits.WithLabelValues(reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
 		}
 	}
 
@@ -1386,6 +1416,7 @@ func (p ownerOrGenerationChangedPredicate) Update(e event.UpdateEvent) bool {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	metrics.Registry.MustRegister(scvmmCallTries, scvmmCallWaits)
 	extraDebug := os.Getenv("EXTRA_DEBUG")
 	if extraDebug != "" {
 		ExtraDebug = true

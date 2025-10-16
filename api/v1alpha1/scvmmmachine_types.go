@@ -256,8 +256,9 @@ type ScvmmMachineStatus struct {
 
 // Register incremental backoff retry
 type ScvmmMachineBackoff struct {
-	Reason  string `json:"reason"`
-	Seconds int32  `json:"seconds"`
+	Reason string `json:"reason"`
+	Try    int32  `json:"try"`
+	Wait   int32  `json:"wait"`
 }
 
 //+kubebuilder:object:root=true
