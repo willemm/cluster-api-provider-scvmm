@@ -1259,9 +1259,10 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 					requeue = 600
 				}
 			}
-			for _, bucket := range []int32{0, 1, 2, 3, 5, 10, 20} {
+			for _, bucket := range []int32{20, 10, 5, 3, 2, 1, 0} {
 				if scvmmMachine.Status.Backoff.Try >= bucket {
-					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(bucket)).Inc()
+					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, strconv.Itoa(int(bucket))).Inc()
+					break
 				}
 			}
 		} else if scvmmMachine.Status.Backoff != nil {
