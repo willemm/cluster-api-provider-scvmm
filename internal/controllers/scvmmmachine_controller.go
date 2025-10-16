@@ -882,7 +882,7 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	log.V(1).Info("Running, set status true")
 	scvmmMachine.Status.Ready = true
 	if scvmmMachine.Status.Backoff != nil {
-		log.Info("Observe scvmm calls %f/%f", float64(scvmmMachine.Status.Backoff.Try), float64(scvmmMachine.Status.Backoff.Wait))
+		log.Info("Observe scvmm calls", "try", float64(scvmmMachine.Status.Backoff.Try), "wait", float64(scvmmMachine.Status.Backoff.Wait))
 		scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
 		scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
 	}
@@ -1255,7 +1255,7 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 		if reason != "" {
 			if scvmmMachine.Status.Backoff == nil || scvmmMachine.Status.Backoff.Reason != reason {
 				if scvmmMachine.Status.Backoff != nil {
-					log.Info("Observe scvmm calls %f/%f", float64(scvmmMachine.Status.Backoff.Try), float64(scvmmMachine.Status.Backoff.Wait))
+					log.Info("Observe scvmm calls", "try", float64(scvmmMachine.Status.Backoff.Try), "wait", float64(scvmmMachine.Status.Backoff.Wait))
 					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
 					scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
 				}
