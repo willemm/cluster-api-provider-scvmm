@@ -106,7 +106,7 @@ var (
 			Subsystem: "calls",
 			Name:      "tries",
 			Help:      "Number of tries on scvmm call",
-			Buckets:   prometheus.LinearBuckets(1, 1, 10),
+			Buckets:   []float64{1, 2, 3, 5, 8, 13, 21},
 		},
 		[]string{"function"},
 	)
@@ -116,7 +116,7 @@ var (
 			Subsystem: "calls",
 			Name:      "waits",
 			Help:      "Number of waits on scvmm call",
-			Buckets:   prometheus.LinearBuckets(1, 1, 10),
+			Buckets:   []float64{1, 2, 3, 5, 8, 13, 21},
 		},
 		[]string{"function"},
 	)
@@ -881,6 +881,10 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	}
 	log.V(1).Info("Running, set status true")
 	scvmmMachine.Status.Ready = true
+	if scvmmMachine.Status.Backoff != nil {
+		scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
+		scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
+	}
 	scvmmMachine.Status.Backoff = nil
 	conditions.MarkTrue(scvmmMachine, VmRunning)
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
@@ -1249,6 +1253,10 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 	if requeue != 0 {
 		if reason != "" {
 			if scvmmMachine.Status.Backoff == nil || scvmmMachine.Status.Backoff.Reason != reason {
+				if scvmmMachine.Status.Backoff != nil {
+					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
+					scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
+				}
 				scvmmMachine.Status.Backoff = &v1alpha1.ScvmmMachineBackoff{
 					Reason: reason,
 					Try:    0,
@@ -1260,7 +1268,6 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 				if requeue > 600 {
 					requeue = 600
 				}
-				scvmmCallTries.WithLabelValues(reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
 			}
 		} else if scvmmMachine.Status.Backoff != nil {
 			// Keep the last backoff
@@ -1269,7 +1276,6 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 			if requeue > 600 {
 				requeue = 600
 			}
-			scvmmCallWaits.WithLabelValues(reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
 		}
 	}
 
