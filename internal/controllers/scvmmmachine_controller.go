@@ -104,30 +104,20 @@ var (
 		prometheus.CounterOpts{
 			Namespace: "scvmm",
 			Subsystem: "calls",
-			Name:      "tries",
-			Help:      "Number of tries on scvmm call",
+			Name:      "tries_total",
+			Help:      "Number of retries on scvmm call",
 		},
-		[]string{"function", "eq"},
+		[]string{"function", "ge"},
 	)
 	scvmmCallWaits = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "scvmm",
 			Subsystem: "calls",
-			Name:      "tries",
-			Help:      "Number of tries on scvmm call",
+			Name:      "waits_total",
+			Help:      "Number of waits on scvmm call",
 		},
-		[]string{"function", "eq"},
+		[]string{"function"},
 	)
-	scvmmCallBuckets = map[int32]bool{
-		0:  true,
-		1:  true,
-		2:  true,
-		3:  true,
-		5:  true,
-		8:  true,
-		13: true,
-		21: true,
-	}
 )
 
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
@@ -1269,8 +1259,10 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 					requeue = 600
 				}
 			}
-			if scvmmCallBuckets[scvmmMachine.Status.Backoff.Try] {
-				scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(scvmmMachine.Status.Backoff.Try)).Inc()
+			for _, bucket := range []int32{0, 1, 2, 3, 5, 10, 20} {
+				if scvmmMachine.Status.Backoff.Try >= bucket {
+					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(bucket)).Inc()
+				}
 			}
 		} else if scvmmMachine.Status.Backoff != nil {
 			// Keep the last backoff
@@ -1279,9 +1271,7 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 			if requeue > 600 {
 				requeue = 600
 			}
-			if scvmmCallBuckets[scvmmMachine.Status.Backoff.Wait] {
-				scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(scvmmMachine.Status.Backoff.Wait)).Inc()
-			}
+			scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Inc()
 		}
 	}
 
