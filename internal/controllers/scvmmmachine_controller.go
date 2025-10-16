@@ -100,26 +100,34 @@ var (
 		"ide":    "AddVHDToVM",
 	}
 
-	scvmmCallTries = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	scvmmCallTries = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
 			Namespace: "scvmm",
 			Subsystem: "calls",
 			Name:      "tries",
 			Help:      "Number of tries on scvmm call",
-			Buckets:   []float64{1, 2, 3, 5, 8, 13, 21},
 		},
-		[]string{"function"},
+		[]string{"function", "eq"},
 	)
-	scvmmCallWaits = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	scvmmCallWaits = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
 			Namespace: "scvmm",
 			Subsystem: "calls",
-			Name:      "waits",
-			Help:      "Number of waits on scvmm call",
-			Buckets:   []float64{1, 2, 3, 5, 8, 13, 21},
+			Name:      "tries",
+			Help:      "Number of tries on scvmm call",
 		},
-		[]string{"function"},
+		[]string{"function", "eq"},
 	)
+	scvmmCallBuckets = map[int32]bool{
+		0:  true,
+		1:  true,
+		2:  true,
+		3:  true,
+		5:  true,
+		8:  true,
+		13: true,
+		21: true,
+	}
 )
 
 // ScvmmMachineReconciler reconciles a ScvmmMachine object
@@ -881,11 +889,6 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	}
 	log.V(1).Info("Running, set status true")
 	scvmmMachine.Status.Ready = true
-	if scvmmMachine.Status.Backoff != nil {
-		log.Info("Observe scvmm calls", "try", float64(scvmmMachine.Status.Backoff.Try), "wait", float64(scvmmMachine.Status.Backoff.Wait))
-		scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
-		scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
-	}
 	scvmmMachine.Status.Backoff = nil
 	conditions.MarkTrue(scvmmMachine, VmRunning)
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
@@ -1254,11 +1257,6 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 	if requeue != 0 {
 		if reason != "" {
 			if scvmmMachine.Status.Backoff == nil || scvmmMachine.Status.Backoff.Reason != reason {
-				if scvmmMachine.Status.Backoff != nil {
-					log.Info("Observe scvmm calls", "try", float64(scvmmMachine.Status.Backoff.Try), "wait", float64(scvmmMachine.Status.Backoff.Wait))
-					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Try))
-					scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason).Observe(float64(scvmmMachine.Status.Backoff.Wait))
-				}
 				scvmmMachine.Status.Backoff = &v1alpha1.ScvmmMachineBackoff{
 					Reason: reason,
 					Try:    0,
@@ -1271,12 +1269,18 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 					requeue = 600
 				}
 			}
+			if scvmmCallBuckets[scvmmMachine.Status.Backoff.Try] {
+				scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(scvmmMachine.Status.Backoff.Try)).Inc()
+			}
 		} else if scvmmMachine.Status.Backoff != nil {
 			// Keep the last backoff
 			scvmmMachine.Status.Backoff.Wait += 1
 			requeue += 5 * scvmmMachine.Status.Backoff.Try
 			if requeue > 600 {
 				requeue = 600
+			}
+			if scvmmCallBuckets[scvmmMachine.Status.Backoff.Wait] {
+				scvmmCallWaits.WithLabelValues(scvmmMachine.Status.Backoff.Reason, string(scvmmMachine.Status.Backoff.Wait)).Inc()
 			}
 		}
 	}
@@ -1301,6 +1305,7 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 		//
 		// (If it had been done properly, you should not have been able to multiply Duration*Duration,
 		//  but only Duration*int or v.v., but I guess that's too difficult gor the go devs...)
+		log.Info("Requeue after backoff", "seconds", requeue)
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(requeue)}, nil
 	}
 	return ctrl.Result{}, nil
