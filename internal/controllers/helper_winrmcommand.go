@@ -242,14 +242,17 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 				winrmReturn(inp.output, nil, nil, err)
 				return WinrmCommand{}
 			}
+			if ExtraDebug {
+				log.V(1).Info("Got Output", "stdout", string(stdout), "stderr", string(stderr))
+			}
+			// We want all stderr output
+			stderr = append(stderr, stderrline...)
 			if len(stdout) > 0 {
 				// winrm returns line by line.
 				// Our scripts are supposed to always return something
 				// If nothing is coming, this should trigger a timeout
 				break
 			}
-			// We want all stderr output
-			stderr = append(stderr, stderrline...)
 		}
 		if ExtraDebug {
 			log.V(1).Info("return output", "stdout", string(stdout), "stderr", string(stderr))
@@ -366,7 +369,7 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 
 func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.Client, error) {
 	defer winrmTimer("CreateConnection")()
-	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 0)
+	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 60)
 	// Don't use winrm.DefaultParameters here because of concurrency issues
 	params := winrm.NewParameters("PT60S", "en-US", 153600)
 	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
