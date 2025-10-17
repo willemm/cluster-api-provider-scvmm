@@ -12,9 +12,10 @@ try {
     VMToJson $vm "Stopping"
   } else if ($vm.Status -eq 'Stopping') {
     VMToJson $vm "Stopping"
+  } else {
+    $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
+    VMToJson $vm "Removing"
   }
-  $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
-  VMToJson $vm "Removing"
 } catch {
   ErrorToJson 'Remove VM' $_
 }
