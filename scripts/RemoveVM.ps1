@@ -7,13 +7,14 @@ try {
   if (-not $vm) {
     return (@{ Message = "Removed" } | convertto-json)
   }
-  if ($vm.Status -eq 'PowerOff') {
-    $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
-    VMToJson $vm "Removing"
-  } else {
+  if ($vm.Status -eq 'Running') {
     $vm = Stop-SCVirtualmachine $vm -Force -RunAsynchronously
     VMToJson $vm "Stopping"
+  } else if ($vm.Status -eq 'Stopping') {
+    VMToJson $vm "Stopping"
   }
+  $vm = Remove-SCVirtualMachine $vm -RunAsynchronously
+  VMToJson $vm "Removing"
 } catch {
   ErrorToJson 'Remove VM' $_
 }
