@@ -238,21 +238,28 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			var stderrline []byte
 			stdout, stderrline, _, _, err = cmd.ReadOutput()
 			if err != nil {
-				log.Error(err, "winrm readoutput")
-				winrmReturn(inp.output, nil, nil, err)
+				log.Error(err, "winrm readoutput", "stderr", stderr)
+				winrmReturn(inp.output, nil, stderr, err)
 				return WinrmCommand{}
 			}
-			if ExtraDebug {
-				log.V(1).Info("Got Output", "stdout", string(stdout), "stderr", string(stderrline))
-			}
-			// We want all stderr output
-			stderr = append(stderr, stderrline...)
 			if len(stdout) > 0 {
 				// winrm returns line by line.
 				// Our scripts are supposed to always return something
 				// If nothing is coming, this should trigger a timeout
 				break
 			}
+			if len(stderrline) == 0 {
+				// Timeout apparently doesn't return an error code
+				err = fmt.Errorf("Timeout reading winrm output")
+				log.Error(err, "winrm readoutput", "stderr", stderr)
+				winrmReturn(inp.output, nil, stderr, err)
+				return WinrmCommand{}
+			}
+			if ExtraDebug {
+				log.V(1).Info("Got stderr", "stderr", string(stderrline))
+			}
+			// We want all stderr output
+			stderr = append(stderr, stderrline...)
 		}
 		if ExtraDebug {
 			log.V(1).Info("return output", "stdout", string(stdout), "stderr", string(stderr))
