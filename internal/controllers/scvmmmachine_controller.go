@@ -1254,7 +1254,7 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 				}
 			} else {
 				scvmmMachine.Status.Backoff.Try += 1
-				requeue += 5 * scvmmMachine.Status.Backoff.Try
+				requeue += 10 * scvmmMachine.Status.Backoff.Try
 				if requeue > 600 {
 					requeue = 600
 				}
@@ -1262,13 +1262,12 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 			for _, bucket := range []int32{20, 10, 5, 3, 2, 1, 0} {
 				if scvmmMachine.Status.Backoff.Try >= bucket {
 					scvmmCallTries.WithLabelValues(scvmmMachine.Status.Backoff.Reason, strconv.Itoa(int(bucket))).Inc()
-					break
 				}
 			}
 		} else if scvmmMachine.Status.Backoff != nil {
 			// Keep the last backoff
 			scvmmMachine.Status.Backoff.Wait += 1
-			requeue += 5 * scvmmMachine.Status.Backoff.Try
+			requeue += 10 * scvmmMachine.Status.Backoff.Try
 			if requeue > 600 {
 				requeue = 600
 			}
