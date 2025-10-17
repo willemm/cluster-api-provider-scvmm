@@ -243,7 +243,7 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 				return WinrmCommand{}
 			}
 			if ExtraDebug {
-				log.V(1).Info("Got Output", "stdout", string(stdout), "stderr", string(stderr))
+				log.V(1).Info("Got Output", "stdout", string(stdout), "stderr", string(stderrline))
 			}
 			// We want all stderr output
 			stderr = append(stderr, stderrline...)
