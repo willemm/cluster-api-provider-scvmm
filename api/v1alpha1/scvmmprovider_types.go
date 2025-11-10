@@ -90,7 +90,7 @@ type ScvmmProviderStatus struct {
 	ExecHosts []ScvmmExecHostStatus `json:"execHosts,omitempty"`
 }
 
-func (sts ScvmmProviderStatus) GetExecHostStatus(host string) *ScvmmExecHostStatus {
+func (sts *ScvmmProviderStatus) GetExecHostStatus(host string) *ScvmmExecHostStatus {
 	for _, s := range sts.ExecHosts {
 		if s.Host == host {
 			return &s
@@ -99,7 +99,7 @@ func (sts ScvmmProviderStatus) GetExecHostStatus(host string) *ScvmmExecHostStat
 	return nil
 }
 
-func (sts ScvmmProviderStatus) SetExecHostStatus(host, status, message string) {
+func (sts *ScvmmProviderStatus) SetExecHostStatus(host, status, message string) {
 	for i, s := range sts.ExecHosts {
 		if s.Host == host {
 			sts.ExecHosts[i].Status = status

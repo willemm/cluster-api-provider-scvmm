@@ -228,8 +228,8 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	}
 	idx := 0
 	// Find first healthy host in status
-	for i, hs := range exechosts {
-		stat := provider.Status.GetExecHostStatus(hs)
+	for i, exechost := range exechosts {
+		stat := provider.Status.GetExecHostStatus(exechost)
 		if stat == nil || stat.Status == ExecHostOK {
 			idx = i
 			break
@@ -238,8 +238,9 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	var cmd *winrm.DirectCommand
 	var err error
 	providerStatus := infrav1.ScvmmProviderStatus{}
-	for i := range provider.Spec.ExecHosts {
-		exechost := provider.Spec.ExecHosts[(i+idx)%len(provider.Spec.ExecHosts)]
+	for i := range exechosts {
+		// Loop from index idx (with wraparound)
+		exechost := exechosts[(i+idx)%len(exechosts)]
 		log.V(1).Info("Create WinrmCmd", "exechost", exechost)
 		cmd, err = createWinrmCmd(&provider.Spec, exechost, log)
 		if err == nil {
