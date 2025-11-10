@@ -32,7 +32,11 @@ type ScvmmProviderSpec struct {
 	ScvmmHost string `json:"scvmmHost"`
 	// Reference to secret containing user and password for scvmm
 	ScvmmSecret *corev1.SecretReference `json:"scvmmSecret,omitempty"`
-	// Jumphost to run scvmm scripts on, instead of directly on the scvmm server
+	// List of jumphosts to run scvmm scripts on, instead of directly on the scvmm server
+	// +optional
+	// +listType=set
+	ExecHosts []string `json:"execHosts,omitempty"`
+	// Jumphost to run scvmm scripts on, instead of directly on the scvmm server (deprecated)
 	// +optional
 	ExecHost string `json:"execHost,omitempty"`
 	// How long to keep winrm connections to scvmm alive
@@ -79,6 +83,45 @@ type ScvmmCloudInitSpec struct {
 
 // ScvmmProviderStatus defines the observed state of ScvmmProvider
 type ScvmmProviderStatus struct {
+	// Status information on different exechosts
+	// +listType=map
+	// +listMapKey=host
+	// +optional
+	ExecHosts []ScvmmExecHostStatus `json:"execHosts,omitempty"`
+}
+
+func (sts ScvmmProviderStatus) GetExecHostStatus(host string) *ScvmmExecHostStatus {
+	for _, s := range sts.ExecHosts {
+		if s.Host == host {
+			return &s
+		}
+	}
+	return nil
+}
+
+func (sts ScvmmProviderStatus) SetExecHostStatus(host, status, message string) {
+	for i, s := range sts.ExecHosts {
+		if s.Host == host {
+			sts.ExecHosts[i].Status = status
+			sts.ExecHosts[i].Message = message
+			return
+		}
+	}
+	sts.ExecHosts = append(sts.ExecHosts, ScvmmExecHostStatus{
+		Host:    host,
+		Status:  status,
+		Message: message,
+	})
+}
+
+type ScvmmExecHostStatus struct {
+	// Host that which this status applies to
+	Host string `json:"host"`
+	// Health status of this host
+	Status string `json:"status"`
+	// Message about status
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -63,10 +63,7 @@ func (r *ScvmmProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	// TODO: Verify that the scripts work and add status field
 
-	winrmProviders[providerRef] = WinrmProvider{
-		Spec:            scvmmProvider.Spec,
-		ResourceVersion: scvmmProvider.ResourceVersion,
-	}
+	winrmProviders[providerRef] = scvmmProvider
 
 	return ctrl.Result{}, nil
 }
@@ -90,7 +87,7 @@ func (r *ScvmmProviderReconciler) getProvider(ctx context.Context, providerRef i
 			return nil, fmt.Errorf("missing required value ScvmmHost")
 		}
 	}
-	if p.ExecHost == "" {
+	if p.ExecHost == "" && p.ExecHosts == nil {
 		p.ExecHost = os.Getenv("SCVMM_EXECHOST")
 		if p.ExecHost == "" {
 			p.ExecHost = p.ScvmmHost
@@ -135,10 +132,7 @@ func (r *ScvmmProviderReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 	providerRef := infrav1.ScvmmProviderReference{}
 	scvmmProvider, err := r.getProvider(ctx, providerRef)
 	if err == nil {
-		winrmProviders[providerRef] = WinrmProvider{
-			Spec:            scvmmProvider.Spec,
-			ResourceVersion: scvmmProvider.ResourceVersion,
-		}
+		winrmProviders[providerRef] = scvmmProvider
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmProvider{}).
