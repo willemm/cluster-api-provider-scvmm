@@ -23,7 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type WinrmCommand struct {
@@ -241,26 +240,37 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	}
 	var cmd *winrm.DirectCommand
 	var err error
-	providerStatus := providerStatusPatch{}
+	providerStatus := infrav1.ScvmmProviderStatus{}
 	for i := range exechosts {
 		// Loop from index idx (with wraparound)
 		exechost := exechosts[(i+idx)%len(exechosts)]
 		log.V(1).Info("Create WinrmCmd", "exechost", exechost)
 		cmd, err = createWinrmCmd(&provider.Spec, exechost, log)
 		if err == nil {
-			providerStatus.Status.SetExecHostStatus(exechost, ExecHostOK, "")
+			providerStatus.SetExecHostStatus(exechost, ExecHostOK, "")
 			break
 		}
-		providerStatus.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
+		providerStatus.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
 	}
 	log.V(1).Info("updating provider status", "status", providerStatus)
 	c, cerr := client.New(clientConfig, client.Options{})
 	if cerr == nil {
+		exechostarray := []interface{}{}
 		u := &unstructured.Unstructured{}
+		for _, eh := range providerStatus.ExecHosts {
+			exechostarray = append(exechostarray, map[string]interface{}{
+				"host":    eh.Host,
+				"status":  eh.Status,
+				"message": eh.Message,
+			})
+		}
 		u.Object = map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"name":      provider.Name,
 				"namespace": provider.Namespace,
+			},
+			"status": map[string]interface{}{
+				"exechosts": exechostarray,
 			},
 		}
 		u.SetGroupVersionKind(schema.GroupVersionKind{
@@ -268,12 +278,8 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			Version: infrav1.GroupVersion.Version,
 			Kind:    "ScvmmProvider",
 		})
-		var patch []byte
-		patch, cerr = json.Marshal(providerStatus)
-		if cerr == nil {
-			log.V(1).Info("updating provider status", "unstructured", u, "patch", patch)
-			cerr = c.Status().Patch(context.Background(), u, client.RawPatch(types.MergePatchType, patch))
-		}
+		log.V(1).Info("updating provider status", "unstructured", u)
+		cerr = c.Status().Patch(context.Background(), u, client.Apply, client.ForceOwnership, client.FieldOwner("scvmm-provider"))
 	}
 	if cerr != nil {
 		log.Error(cerr, "updating provider status", "provider", provider)
