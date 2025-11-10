@@ -271,6 +271,7 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		var patch []byte
 		patch, cerr = json.Marshal(providerStatus)
 		if cerr != nil {
+			log.V(1).Info("updating provider status", "unstructured", u, "patch", patch)
 			cerr = c.Status().Patch(context.Background(), u, client.RawPatch(types.MergePatchType, patch))
 		}
 	}
