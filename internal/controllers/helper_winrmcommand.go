@@ -244,14 +244,15 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		}
 		provider.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
 	}
+	log.Info("updating provider status", "status", provider.Status)
 	c, cerr := client.New(clientConfig, client.Options{})
 	if cerr == nil {
-		c.Status().Update(context.Background(), provider)
-	} else {
-		log.Error(cerr, "creating k8s client", "provider", provider)
+		cerr = c.Status().Update(context.Background(), provider)
 	}
-	// TODO: Save provider status
-	if err != nil {
+	if cerr != nil {
+		log.Error(cerr, "updating provider status", "provider", provider)
+	}
+	if err != nil || cmd == nil {
 		// Means we fell out of the above loop
 		log.Error(err, "creating winrm cmd", "provider", provider)
 		winrmReturn(inp.output, nil, nil, err)
