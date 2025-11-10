@@ -83,7 +83,7 @@ type VMResultDisk struct {
 }
 
 type providerStatusPatch struct {
-	Status infrav1.ScvmmProviderStatus
+	Status infrav1.ScvmmProviderStatus `json:"status"`
 }
 
 const (
