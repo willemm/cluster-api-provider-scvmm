@@ -270,7 +270,7 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 				"namespace": provider.Namespace,
 			},
 			"status": map[string]interface{}{
-				"exechosts": exechostarray,
+				"execHosts": exechostarray,
 			},
 		}
 		u.SetGroupVersionKind(schema.GroupVersionKind{
