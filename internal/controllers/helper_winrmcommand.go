@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
@@ -79,6 +82,10 @@ type VMResultDisk struct {
 const (
 	ExecHostOK     = "OK"
 	ExecHostFailed = "Failed"
+)
+
+var (
+	clientConfig = config.GetConfigOrDie()
 )
 
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult
@@ -237,6 +244,13 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		}
 		provider.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
 	}
+	c, cerr := client.New(clientConfig, client.Options{})
+	if cerr == nil {
+		c.Status().Update(context.Background(), provider)
+	} else {
+		log.Error(cerr, "creating k8s client", "provider", provider)
+	}
+	// TODO: Save provider status
 	if err != nil {
 		// Means we fell out of the above loop
 		log.Error(err, "creating winrm cmd", "provider", provider)
