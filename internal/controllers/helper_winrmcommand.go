@@ -82,6 +82,10 @@ type VMResultDisk struct {
 	IOPSMaximum int64 `json:"IOPSMaximum,omitempty"`
 }
 
+type providerStatusPatch struct {
+	Status infrav1.ScvmmProviderStatus
+}
+
 const (
 	ExecHostOK     = "OK"
 	ExecHostFailed = "Failed"
@@ -237,17 +241,17 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	}
 	var cmd *winrm.DirectCommand
 	var err error
-	providerStatus := infrav1.ScvmmProviderStatus{}
+	providerStatus := providerStatusPatch{}
 	for i := range exechosts {
 		// Loop from index idx (with wraparound)
 		exechost := exechosts[(i+idx)%len(exechosts)]
 		log.V(1).Info("Create WinrmCmd", "exechost", exechost)
 		cmd, err = createWinrmCmd(&provider.Spec, exechost, log)
 		if err == nil {
-			providerStatus.SetExecHostStatus(exechost, ExecHostOK, "")
+			providerStatus.Status.SetExecHostStatus(exechost, ExecHostOK, "")
 			break
 		}
-		providerStatus.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
+		providerStatus.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
 	}
 	log.V(1).Info("updating provider status", "status", providerStatus)
 	c, cerr := client.New(clientConfig, client.Options{})
