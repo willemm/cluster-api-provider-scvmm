@@ -240,24 +240,23 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 	}
 	var cmd *winrm.DirectCommand
 	var err error
-	providerStatus := infrav1.ScvmmProviderStatus{}
 	for i := range exechosts {
 		// Loop from index idx (with wraparound)
 		exechost := exechosts[(i+idx)%len(exechosts)]
 		log.V(1).Info("Create WinrmCmd", "exechost", exechost)
 		cmd, err = createWinrmCmd(&provider.Spec, exechost, log)
 		if err == nil {
-			providerStatus.SetExecHostStatus(exechost, ExecHostOK, "")
+			provider.Status.SetExecHostStatus(exechost, ExecHostOK, "")
 			break
 		}
-		providerStatus.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
+		provider.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
 	}
-	log.V(1).Info("updating provider status", "status", providerStatus)
+	log.V(1).Info("updating provider status", "status", provider.Status)
 	c, cerr := client.New(clientConfig, client.Options{})
 	if cerr == nil {
 		exechostarray := []interface{}{}
 		u := &unstructured.Unstructured{}
-		for _, eh := range providerStatus.ExecHosts {
+		for _, eh := range provider.Status.ExecHosts {
 			exechostarray = append(exechostarray, map[string]interface{}{
 				"host":    eh.Host,
 				"status":  eh.Status,
