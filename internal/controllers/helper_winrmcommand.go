@@ -76,6 +76,11 @@ type VMResultDisk struct {
 	IOPSMaximum int64 `json:"IOPSMaximum,omitempty"`
 }
 
+const (
+	ExecHostOK     = "OK"
+	ExecHostFailed = "Failed"
+)
+
 // GetError Implement GetError() for VMResult so it implements WinrmErrorResult
 func (V VMResult) GetError() string {
 	return V.Error
@@ -104,11 +109,6 @@ type ScriptError struct {
 
 func (e *ScriptError) Error() string {
 	return fmt.Sprintf("%s error: %s", e.function, e.message)
-}
-
-type WinrmProvider struct {
-	Spec            infrav1.ScvmmProviderSpec
-	ResourceVersion string
 }
 
 var (
@@ -142,7 +142,7 @@ var (
 		[]string{"function"},
 	)
 
-	winrmProviders = make(map[infrav1.ScvmmProviderReference]WinrmProvider)
+	winrmProviders = make(map[infrav1.ScvmmProviderReference]*infrav1.ScvmmProvider)
 )
 
 // Grab provider spec from the cache, needed for cloudinit iso generation
@@ -211,9 +211,34 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		winrmReturn(inp.output, nil, nil, err)
 		return WinrmCommand{}
 	}
-	log.V(1).Info("Create WinrmCmd")
-	cmd, err := createWinrmCmd(&provider.Spec, log)
+	exechosts := provider.Spec.ExecHosts[:]
+	if len(exechosts) == 0 {
+		// Backwards compatibility
+		exechosts = []string{provider.Spec.ExecHost}
+	}
+	idx := 0
+	// Find first healthy host in status
+	for i, hs := range exechosts {
+		stat := provider.Status.GetExecHostStatus(hs)
+		if stat == nil || stat.Status == ExecHostOK {
+			idx = i
+			break
+		}
+	}
+	var cmd *winrm.DirectCommand
+	var err error
+	for i := range provider.Spec.ExecHosts {
+		exechost := provider.Spec.ExecHosts[(i+idx)%len(provider.Spec.ExecHosts)]
+		log.V(1).Info("Create WinrmCmd", "exechost", exechost)
+		cmd, err = createWinrmCmd(&provider.Spec, exechost, log)
+		if err == nil {
+			provider.Status.SetExecHostStatus(exechost, ExecHostOK, "")
+			break
+		}
+		provider.Status.SetExecHostStatus(exechost, ExecHostFailed, err.Error())
+	}
 	if err != nil {
+		// Means we fell out of the above loop
 		log.Error(err, "creating winrm cmd", "provider", provider)
 		winrmReturn(inp.output, nil, nil, err)
 		return WinrmCommand{}
@@ -265,9 +290,10 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 			log.V(1).Info("return output", "stdout", string(stdout), "stderr", string(stderr))
 		}
 		winrmReturn(inp.output, stdout, stderr, nil)
+		// If there was something on stderr,
+		// drop the connection to be on the safe side
 		if len(stderr) > 0 {
-			// If there was something on stderr,
-			// drop the connection to be on the safe side
+			// Update provider status
 			return WinrmCommand{}
 		}
 		keepalive := provider.Spec.KeepAliveSeconds
@@ -348,12 +374,12 @@ func getFuncScript(provider *infrav1.ScvmmProviderSpec) ([]byte, error) {
 	return functionScripts.Bytes(), nil
 }
 
-func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.DirectCommand, error) {
+func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, exechost string, log logr.Logger) (*winrm.DirectCommand, error) {
 	functionScript, err := getFuncScript(provider)
 	if err != nil {
 		return &winrm.DirectCommand{}, err
 	}
-	cmd, err := createWinrmPowershell(provider, log)
+	cmd, err := createWinrmPowershell(provider, exechost, log)
 	if err != nil {
 		return &winrm.DirectCommand{}, err
 	}
@@ -374,9 +400,9 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winr
 	return cmd, nil
 }
 
-func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.Client, error) {
+func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, exechost string, log logr.Logger) (*winrm.Client, error) {
 	defer winrmTimer("CreateConnection")()
-	endpoint := winrm.NewEndpoint(provider.ExecHost, 5985, false, false, nil, nil, nil, 60)
+	endpoint := winrm.NewEndpoint(exechost, 5985, false, false, nil, nil, nil, 60)
 	// Don't use winrm.DefaultParameters here because of concurrency issues
 	params := winrm.NewParameters("PT60S", "en-US", 153600)
 	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"
@@ -391,7 +417,7 @@ func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger)
 	params.TransportDecorator = func() winrm.Transporter { return enc }
 
 	if ExtraDebug {
-		log.V(1).Info("Creating WinRM connection", "host", provider.ExecHost, "port", 5985)
+		log.V(1).Info("Creating WinRM connection", "host", exechost, "port", 5985)
 	}
 	winrmClient, err := winrm.NewClientWithParameters(endpoint, provider.ScvmmUsername, provider.ScvmmPassword, params)
 	if err != nil {
@@ -401,8 +427,8 @@ func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, log logr.Logger)
 	return winrmClient, nil
 }
 
-func createWinrmShell(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.Shell, error) {
-	winrmClient, err := createWinrmConnection(provider, log)
+func createWinrmShell(provider *infrav1.ScvmmProviderSpec, exechost string, log logr.Logger) (*winrm.Shell, error) {
+	winrmClient, err := createWinrmConnection(provider, exechost, log)
 	if err != nil {
 		return nil, err
 	}
@@ -418,8 +444,8 @@ func createWinrmShell(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*wi
 	return shell, nil
 }
 
-func createWinrmPowershell(provider *infrav1.ScvmmProviderSpec, log logr.Logger) (*winrm.DirectCommand, error) {
-	shell, err := createWinrmShell(provider, log)
+func createWinrmPowershell(provider *infrav1.ScvmmProviderSpec, exechost string, log logr.Logger) (*winrm.DirectCommand, error) {
+	shell, err := createWinrmShell(provider, exechost, log)
 	if err != nil {
 		return nil, err
 	}

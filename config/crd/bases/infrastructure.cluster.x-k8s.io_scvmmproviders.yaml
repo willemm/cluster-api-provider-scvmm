@@ -77,8 +77,15 @@ spec:
                 type: object
               execHost:
                 description: Jumphost to run scvmm scripts on, instead of directly
-                  on the scvmm server
+                  on the scvmm server (deprecated)
                 type: string
+              execHosts:
+                description: List of jumphosts to run scvmm scripts on, instead of
+                  directly on the scvmm server
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               extraFunctions:
                 additionalProperties:
                   type: string
@@ -111,6 +118,28 @@ spec:
             type: object
           status:
             description: ScvmmProviderStatus defines the observed state of ScvmmProvider
+            properties:
+              execHosts:
+                description: Status information on different exechosts
+                items:
+                  properties:
+                    host:
+                      description: Host that which this status applies to
+                      type: string
+                    message:
+                      description: Message about status
+                      type: string
+                    status:
+                      description: Health status of this host
+                      type: string
+                  required:
+                  - host
+                  - status
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - host
+                x-kubernetes-list-type: map
             type: object
         type: object
     served: true
