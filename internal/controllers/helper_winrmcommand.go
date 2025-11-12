@@ -257,11 +257,15 @@ func doWinrmWork(inputs <-chan WinrmCommand, inp WinrmCommand, log logr.Logger) 
 		exechostarray := []interface{}{}
 		u := &unstructured.Unstructured{}
 		for _, eh := range provider.Status.ExecHosts {
-			exechostarray = append(exechostarray, map[string]interface{}{
-				"host":    eh.Host,
-				"status":  eh.Status,
-				"message": eh.Message,
-			})
+			// Implement omitempty for message
+			exechoststatus := map[string]interface{}{
+				"host":   eh.Host,
+				"status": eh.Status,
+			}
+			if eh.Message != "" {
+				exechoststatus["message"] = eh.Message
+			}
+			exechostarray = append(exechostarray, exechoststatus)
 		}
 		u.Object = map[string]interface{}{
 			"metadata": map[string]interface{}{
