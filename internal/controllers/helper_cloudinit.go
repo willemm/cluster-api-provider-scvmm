@@ -139,30 +139,20 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 		return err
 	}
 	defer conn.Close()
-	var userParts []string
-
-	rawString := provider.ScvmmUsername
-
-	if strings.Contains(rawString, "\\") {
-		userParts = strings.Split(rawString, "\\")
-
-	} else if strings.Contains(rawString, "@") {
-		rawSplit := strings.Split(rawString, "@")
-		userParts = append(userParts, rawSplit[1])
-		userParts = append(userParts, rawSplit[0])
-
-	} else {
-		userParts = append(userParts, rawString)
-	}		
 
 	smbCreds := &smb2.NTLMInitiator{
-		User:     userParts[0],
+		User:     provider.ScvmmUsername,
 		Password: provider.ScvmmPassword,
 	}
-	if len(userParts) > 1 {
-		smbCreds.Domain = userParts[0]
-		smbCreds.User = userParts[1]
+
+	if domain, user, ok := strings.Cut(provider.ScvmmUsername, "\\"); ok {
+		smbCreds.Domain = domain
+		smbCreds.User = user
+	} else if user, domain, ok := strings.Cut(provider.ScvmmUsername, "@"); ok {
+		smbCreds.User = user
+		smbCreds.Domain = domain
 	}
+
 	d := &smb2.Dialer{Initiator: smbCreds}
 
 	log.V(1).Info("smb2 Dialing", "user", provider.ScvmmUsername)
