@@ -78,6 +78,7 @@ const (
 	VmUpdatingPropertiesReason = "VmUpdatingProperties"
 	VmUpdatingCloudInitReason  = "VmUpdatingCloudInit"
 	VmUpdatingDisksReason      = "VmUpdatingDisks"
+	VmUpdatingNetworkReason    = "VmUpdatingNetwork"
 	VmStartingReason           = "VmStarting"
 	VmDeletingDisksReason      = "VmDeletingDisks"
 	VmDeletingDisksDoneReason  = "VmDeletingDisksDone"
@@ -842,7 +843,7 @@ func (r *ScvmmMachineReconciler) setStaticAddresses(ctx context.Context, scvmmMa
 		}
 	}
 
-	return r.patchReasonCondition(ctx, scvmmMachine, 10, nil, VmCreated, VmUpdatingDisksReason, "Updating Disks")
+	return r.patchReasonCondition(ctx, scvmmMachine, 10, nil, VmCreated, VmUpdatingNetworkReason, "Setting Static Network")
 }
 
 func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine, vm VMResult, ciPath string) (ctrl.Result, error) {
