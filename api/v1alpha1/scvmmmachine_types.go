@@ -191,6 +191,11 @@ type NetworkDevice struct {
 	// with IPAddresses fulfilled by an IPAM provider.
 	// +optional
 	AddressesFromPools []corev1.TypedLocalObjectReference `json:"addressesFromPools,omitempty"`
+	// List of StaticIpAddressPools from scvmm server
+	// The scvmm server will auto assign addresses,
+	// which will then be used to fill the cloud-init metadata
+	// +optional
+	StaticIPAddressPools []string `json:"staticIPAddressPools,omitempty"`
 }
 
 type Networking struct {

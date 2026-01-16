@@ -43,16 +43,17 @@ type WinrmErrorResult interface {
 
 // VMResult The result (passed as json) of a call to Scvmm scripts
 type VMResult struct {
-	Cloud          string
-	Name           string
-	Hostname       string
-	Status         string
-	Memory         int
-	CpuCount       int
-	VirtualNetwork string
-	IPv4Addresses  []string
-	VirtualDisks   []VMResultDisk
-	ISOs           []struct {
+	Cloud           string
+	Name            string
+	Hostname        string
+	Status          string
+	Memory          int
+	CpuCount        int
+	VirtualNetwork  string
+	IPv4Addresses   []string
+	NetworkAdapters []VMResultNetwork
+	VirtualDisks    []VMResultDisk
+	ISOs            []struct {
 		Size     int64
 		Filename string
 	}
@@ -68,6 +69,12 @@ type VMResult struct {
 	CreationTime         metav1.Time       `json:"CreationTime,omitempty"`
 	ModifiedTime         metav1.Time       `json:"ModifiedTime,omitempty"`
 	Result               string            `json:"Result,omitempty"`
+}
+
+type VMResultNetwork struct {
+	IPv4Addresses     []string
+	IPv4PrefixLengths []int
+	DefaultIPGateways []string
 }
 
 type VMResultDisk struct {
