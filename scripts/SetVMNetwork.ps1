@@ -19,7 +19,6 @@ try {
           if (-not $ap) {
             throw "StaticIPAddressPool $apname not found"
           }
-          #Grant-SCIPAddress -GrantToObjectType "VirtualNetworkAdapter" -GrantToObjectID $vna.ID -StaticIPAddressPool $ap | Out-Null
           if ($ap.AddressFamily -eq 'InterNetwork') {
             $apv4 += $ap
           }
