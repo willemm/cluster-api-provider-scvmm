@@ -4,7 +4,7 @@ try {
   if (-not $vm) {
     throw "Virtual Machine with ID $id not found"
   }
-  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -notin 'Completed','SucceedWithInfo') {
     return VMToJson $vm "Machine is busy"
   }
   $shr = Get-SCLibraryShare | ?{ $cipath.StartsWith($_.Path) } | select -first 1

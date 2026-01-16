@@ -4,7 +4,7 @@ try {
   if (-not $vm) {
     return @{ Message = "VM $($id) not found" } | convertto-json
   }
-  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -ne 'Completed') {
+  if ($vm.MostRecentTask -and $vm.MostRecentTask.Status -notin 'Completed','SucceedWithInfo') {
     return VMToJson $vm "Machine is busy"
   }
   $vm = Start-SCVirtualMachine -VM $vm -RunAsynchronously
