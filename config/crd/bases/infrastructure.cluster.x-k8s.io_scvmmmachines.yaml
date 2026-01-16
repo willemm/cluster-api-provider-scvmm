@@ -323,6 +323,14 @@ spec:
                           items:
                             type: string
                           type: array
+                        staticIPAddressPools:
+                          description: |-
+                            List of StaticIpAddressPools from scvmm server
+                            The scvmm server will auto assign addresses,
+                            which will then be used to fill the cloud-init metadata
+                          items:
+                            type: string
+                          type: array
                         vmNetwork:
                           description: Virtual Network identifier
                           type: string

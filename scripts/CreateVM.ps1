@@ -62,30 +62,12 @@ try {
     $VMSubnet = $VMNetwork.VMSubnet | Select-Object -First 1
 
     $vnargs = @{
-	    SlotID = $networkslot
-	    VMNetwork = $VMNetwork
-	    VMSubnet = $VMSubnet
+      SlotID = $networkslot
+      VMNetwork = $VMNetwork
+      VMSubnet = $VMSubnet
     }
-    if ($networkdevice.staticIPAddressPools)  {
-	    $addresspoolsv4 = @()
-	    $addresspoolsv6 = @()
-	    foreach ($apname in $networkdevice.staticIPAddressPools) {
-		    $ap = Get-SCStaticIPAddressPool $apname
-		    if ($ap.AddressFamily -eq 'InterNetwork') { $addresspoolsv4 += $ap }
-		    if ($ap.AddressFamily -eq 'InterNetworkV6') { $addresspoolsv6 += $ap }
-	    }
-	    if ($addresspoolsv4) {
-		    $vnargs['IPv4AddressType'] = 'Static'
-		    $vnargs['IPv4AddressPools'] = $addresspoolsv4
-	    }
-	    if ($addresspoolsv6) {
-		    $vnargs['IPv6AddressType'] = 'Static'
-		    $vnargs['IPv6AddressPools'] = $addresspoolsv6
-	    }
-    }
-
     if ($networkslot -lt $VMTemplateObj.VirtualNetworkAdapters.Count) {
-      Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID @vnargs
+      Set-SCVirtualNetworkAdapter -JobGroup $JobGroupID -SlotID $networkslot -VMNetwork $VMNetwork 
     } else {
       New-SCVirtualNetworkAdapter -JobGroup $JobGroupID @vnargs
     }

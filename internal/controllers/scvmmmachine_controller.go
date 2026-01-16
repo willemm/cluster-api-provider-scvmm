@@ -283,10 +283,6 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed updating persistent disk resources")
 	}
 
-	// Check if scvmm server set static ip addresses
-	if err := getVMStaticAddresses(ctx, scvmmMachine, vm); err != nil {
-		return ctrl.Result{}, err
-	}
 	// Create IPAddressClaims after we create the VM because we need vm name
 	if err := r.reconcileIPAddressClaims(ctx, scvmmMachine); err != nil {
 		return ctrl.Result{}, err
@@ -299,6 +295,10 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	log.V(1).Info("Machine is there, fill in status")
 	conditions.MarkTrue(scvmmMachine, VmCreated)
 
+	// Check if scvmm server set static ip addresses
+	if vmNeedsStaticAddresses(scvmmMachine, vm) {
+		return r.setStaticAddresses(ctx, scvmmMachine)
+	}
 	// expandDisks also adds persistent disks if needed
 	if vmNeedsExpandDisks(scvmmMachine, vm) {
 		return r.expandDisks(ctx, scvmmMachine)
@@ -765,6 +765,21 @@ func vmNeedsExpandDisks(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
 	return false
 }
 
+// Check if the vm has ViortualNetworkAdapters that need to heva a staticippool set
+// (Assume this is the case when the spec has a static ip pool
+// but the networkdevice doesn't have an IP address set)
+func vmNeedsStaticAddresses(scvmmMachine *infrav1.ScvmmMachine, vm VMResult) bool {
+	for devIdx, vmDevice := range vm.NetworkAdapters {
+		if devIdx < len(scvmmMachine.Spec.Networking.Devices) {
+			device := scvmmMachine.Spec.Networking.Devices[devIdx]
+			if len(device.StaticIPAddressPools) > 0 && len(vmDevice.IPv4Addresses) == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	diskjson, err := makeDisksJSON(scvmmMachine.Spec.Disks)
@@ -782,6 +797,51 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, scvmmMachine *
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
 	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+	return r.patchReasonCondition(ctx, scvmmMachine, 10, nil, VmCreated, VmUpdatingDisksReason, "Updating Disks")
+}
+
+func (r *ScvmmMachineReconciler) setStaticAddresses(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	networkjson, err := json.Marshal(scvmmMachine.Spec.Networking.Devices)
+	var vm VMResult
+	if err == nil {
+		vm, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "SetVMNetwork -ID '%s' -NetworkDevices '%s'",
+			escapeSingleQuotes(scvmmMachine.Spec.Id),
+			escapeSingleQuotes(string(networkjson)))
+	}
+	if err != nil {
+		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to set static network ips")
+	}
+	scvmmMachine.Status.Ready = false
+	scvmmMachine.Status.VMStatus = vm.Status
+	scvmmMachine.Status.BiosGuid = vm.BiosGuid
+	scvmmMachine.Status.CreationTime = vm.CreationTime
+	scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
+	for devIdx, vmDevice := range vm.NetworkAdapters {
+		if devIdx < len(scvmmMachine.Spec.Networking.Devices) {
+			device := scvmmMachine.Spec.Networking.Devices[devIdx]
+			addresses := make([]string, len(vmDevice.IPv4Addresses))
+			if len(vmDevice.IPv4PrefixLengths) < len(vmDevice.IPv4Addresses) {
+				err := fmt.Errorf("GetVM returned fewer subnets than addresses")
+				log.Error(err, "Failed to check static ipaddresses", "networkadapters", vm.NetworkAdapters)
+				return ctrl.Result{}, err
+			}
+			for adIdx, address := range vmDevice.IPv4Addresses {
+				addresses[adIdx] = fmt.Sprintf("%s/%d", address, vmDevice.IPv4PrefixLengths[adIdx])
+			}
+
+			if !reflect.DeepEqual(device.IPAddresses, addresses) {
+				scvmmMachine.Spec.Networking.Devices[devIdx].IPAddresses = addresses
+			}
+			if len(vmDevice.DefaultIPGateways) > 0 {
+				gateway := vmDevice.DefaultIPGateways[0]
+				if gateway != device.Gateway {
+					scvmmMachine.Spec.Networking.Devices[devIdx].Gateway = gateway
+				}
+			}
+		}
+	}
+
 	return r.patchReasonCondition(ctx, scvmmMachine, 10, nil, VmCreated, VmUpdatingDisksReason, "Updating Disks")
 }
 
@@ -902,44 +962,6 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, VmRunningReason, "VM %s up and running", vm.Name)
 	log.V(1).Info("Done")
 	return ctrl.Result{}, nil
-}
-
-func getVMStaticAddresses(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine, vm VMResult) error {
-	log := ctrl.LoggerFrom(ctx)
-	changed := false
-	for devIdx, vmDevice := range vm.NetworkAdapters {
-		if devIdx < len(scvmmMachine.Spec.Networking.Devices) {
-			device := scvmmMachine.Spec.Networking.Devices[devIdx]
-			addresses := make([]string, len(vmDevice.IPv4Addresses))
-			if len(vmDevice.IPv4PrefixLengths) < len(vmDevice.IPv4Addresses) {
-				err := fmt.Errorf("GetVM returned fewer subnets than addresses")
-				log.Error(err, "Failed to set static ipaddresses", "networkadapters", vm.NetworkAdapters)
-				return err
-			}
-			for adIdx, address := range vmDevice.IPv4Addresses {
-				addresses[adIdx] = fmt.Sprintf("%s/%d", address, vmDevice.IPv4PrefixLengths[adIdx])
-			}
-
-			if !reflect.DeepEqual(device.IPAddresses, addresses) {
-				scvmmMachine.Spec.Networking.Devices[devIdx].IPAddresses = addresses
-				changed = true
-			}
-			if len(vmDevice.DefaultIPGateways) > 0 {
-				gateway := vmDevice.DefaultIPGateways[0]
-				if gateway != device.Gateway {
-					scvmmMachine.Spec.Networking.Devices[devIdx].Gateway = gateway
-					changed = true
-				}
-			}
-		}
-	}
-	if changed {
-		if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
-			log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
-			return err
-		}
-	}
-	return nil
 }
 
 // Check if there are persistent disks attached to the vm
