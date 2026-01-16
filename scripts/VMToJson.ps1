@@ -14,13 +14,13 @@ if ($vm.VirtualNetworkAdapters -ne $null) {
   if ($vm.VirtualNetworkAdapters.Name) {
     $vmjson.Hostname = $vm.VirtualNetworkAdapters.Name | select -first 1
   }
-  $vmjson.NetworkAdapters = foreach ($na in $vm.VirtualNetworkAdapters) {
+  $vmjson.NetworkAdapters = @( foreach ($na in $vm.VirtualNetworkAdapters) {
     @{
       IPv4Addresses = @( $na.IPv4Addresses | %{ "$_" } )
       IPv4PrefixLengths = @( $na.IPv4Subnets | %{ $_.PrefixLength } )
       DefaultIPGateways = @( $na.DefaultIPGateways | %{ "$_" } )
     }
-  }
+  } )
 }
 if ($vm.VirtualHardDisks -ne $null) {
   $vmjson.VirtualDisks = @( $vm.VirtualDiskDrives | Foreach-Object {
