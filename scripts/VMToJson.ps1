@@ -53,4 +53,4 @@ if ($vm.ModifiedTime -ne $null) { $vmjson.ModifiedTime = $vm.ModifiedTime.ToStri
 if ($vm.Tag -ne $null) { $vmjson.Tag = "$($vm.Tag)" }
 if ($vm.CustomProperty -ne $null) { $vmjson.CustomProperty = $vm.CustomProperty }
 if ($message) { $vmjson.Message = $message }
-$vmjson | convertto-json -Depth 2 -Compress
+$vmjson | convertto-json -Depth 3 -Compress
