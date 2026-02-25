@@ -54,10 +54,7 @@ type ScvmmFailureDomainSpec struct {
 type ScvmmClusterStatus struct {
 	// Initialization.Provisioned denotes that the scvmm cluster (infrastructure) is ready.
 	// +optional
-	Initialization struct {
-		// +optional
-		Provisioned bool `json:"provisioned,omitempty"`
-	} `json:"initialization,omitempty,omitzero"`
+	Initialization ScvmmClusterInitialization `json:"initialization,omitempty,omitzero"`
 
 	// Conditions defines current service state of the ScvmmCluster.
 	// +optional
@@ -66,6 +63,11 @@ type ScvmmClusterStatus struct {
 	// FailureDomains is a slice of failure domain objects copied from the spec
 	// +optional
 	FailureDomains []clusterv1.FailureDomain `json:"failureDomains,omitempty"`
+}
+
+type ScvmmClusterInitialization struct {
+	// +optional
+	Provisioned bool `json:"provisioned,omitempty"`
 }
 
 //+kubebuilder:object:root=true

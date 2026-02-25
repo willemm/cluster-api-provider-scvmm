@@ -232,10 +232,7 @@ type DynamicMemory struct {
 type ScvmmMachineStatus struct {
 	// Initialization.Provisioned denotes that the scvmm cluster (infrastructure) is ready.
 	// +optional
-	Initialization struct {
-		// +optional
-		Provisioned bool `json:"provisioned,omitempty"`
-	} `json:"initialization,omitempty,omitzero"`
+	Initialization ScvmmMachineInitialization `json:"initialization,omitempty,omitzero"`
 	// Status string as given by SCVMM
 	// +optional
 	VMStatus string `json:"vmStatus,omitempty"`
@@ -260,6 +257,11 @@ type ScvmmMachineStatus struct {
 	// Backoff retry in seconds
 	// +optional
 	Backoff *ScvmmMachineBackoff `json:"backoff,omitempty"`
+}
+
+type ScvmmMachineInitialization struct {
+	// +optional
+	Provisioned bool `json:"provisioned,omitempty"`
 }
 
 // Register incremental backoff retry

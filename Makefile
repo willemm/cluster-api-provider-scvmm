@@ -60,6 +60,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 # Generate CRD file (add labels to manifests, etc)
 .PHONY: chart
 chart: manifests $(KUSTOMIZE)
+	mkdir -p chart/crds chart/templates
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/crd > chart/crds/scvmm-crds.yaml
 	$(KUSTOMIZE) build config/default > chart/templates/scvmm-install.yaml
@@ -199,8 +200,8 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest-$(ENVTEST_VERSION)
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.3.0
-CONTROLLER_TOOLS_VERSION ?= v0.14.0
+KUSTOMIZE_VERSION ?= v5.8.1
+CONTROLLER_TOOLS_VERSION ?= v0.20.1
 ENVTEST_VERSION ?= latest
 GOLANGCI_LINT_VERSION ?= v1.54.2
 
