@@ -215,7 +215,7 @@ func (r *ScvmmPersistentDiskReconciler) SetupWithManager(ctx context.Context, mg
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmPersistentDisk{}).
 		WithEventFilter(predicate.And(
-			predicates.ResourceNotPaused(log),
+			predicates.ResourceNotPaused(mgr.GetScheme(), log),
 		)).
 		Complete(r)
 }

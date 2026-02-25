@@ -79,7 +79,7 @@ var DeviceHandlers = make(map[string]CloudInitDeviceHandler)
 func cloudInitPath(ctx context.Context, provider *infrav1.ScvmmProviderSpec, scvmmMachine *infrav1.ScvmmMachine) (string, error) {
 	extension, ok := cloudInitDeviceTypeExtensions[provider.CloudInit.DeviceType]
 	if !ok {
-		return "", fmt.Errorf("Unknown devicetype " + provider.CloudInit.DeviceType)
+		return "", fmt.Errorf("Unknown devicetype %s", provider.CloudInit.DeviceType)
 	}
 	share := provider.CloudInit.LibraryShare
 	if !strings.HasPrefix(share, "\\\\") {
@@ -127,7 +127,7 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	// Parse share path into hostname, sharename, path
 	shareParts := strings.Split(sharePath, "\\")
 	if len(shareParts) < 5 || shareParts[0] != "" || shareParts[1] != "" {
-		return fmt.Errorf("malformed library share path " + sharePath)
+		return fmt.Errorf("malformed library share path %s", sharePath)
 	}
 	host := shareParts[2]
 	share := shareParts[3]
@@ -249,11 +249,11 @@ func writeCloudInit(log logr.Logger, scvmmMachine *infrav1.ScvmmMachine, provide
 	log.V(1).Info("smb2 Writing cloud-init", "path", path)
 	handler, ok := FilesystemHandlers[provider.CloudInit.FileSystem]
 	if !ok {
-		return fmt.Errorf("Unknown filesystem " + provider.CloudInit.FileSystem)
+		return fmt.Errorf("Unknown filesystem %s", provider.CloudInit.FileSystem)
 	}
 	devHandler, ok := DeviceHandlers[provider.CloudInit.DeviceType]
 	if !ok {
-		return fmt.Errorf("Unknown device type " + provider.CloudInit.DeviceType)
+		return fmt.Errorf("Unknown device type %s", provider.CloudInit.DeviceType)
 	}
 	if err := devHandler(fh, handler, files); err != nil {
 		log.Error(err, "Writing cloud-init file", "host", host, "share", share, "path", path)

@@ -27,8 +27,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	IPAddressClaimed clusterv1.ConditionType = "IPAddressClaimed"
+	IPAddressClaimed = "IPAddressClaimed"
 
 	IPAddressClaimsBeingCreatedReason = "IPAddressClaimsBeingCreated"
 	WaitingForIPAddressReason         = "WaitingForIPAddress"
@@ -135,35 +135,52 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 
 	if len(errList) > 0 {
 		aggregatedErr := kerrors.NewAggregate(errList)
-		conditions.MarkFalse(scvmmMachine,
-			IPAddressClaimed,
-			IPAddressClaimNotFoundReason,
-			clusterv1.ConditionSeverityError,
-			aggregatedErr.Error())
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status:  metav1.ConditionFalse,
+			Type:    IPAddressClaimed,
+			Reason:  IPAddressClaimNotFoundReason,
+			Message: aggregatedErr.Error(),
+		})
 		return aggregatedErr
 	}
 
 	if len(claims) == totalClaims {
-		conditions.SetAggregate(scvmmMachine,
-			IPAddressClaimed,
+		conditions.SetAggregateCondition(
 			claims,
-			conditions.AddSourceRef(),
-			conditions.WithStepCounter())
+			scvmmMachine,
+			IPAddressClaimed,
+		)
 		return nil
 	}
 
 	// Fallback logic to calculate the state of the IPAddressClaimed condition
 	switch {
 	case totalClaims == claimsFulfilled:
-		conditions.MarkTrue(scvmmMachine, IPAddressClaimed)
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status:  metav1.ConditionTrue,
+			Type:    IPAddressClaimed,
+			Message: "Claims finished",
+		})
 	case claimsFulfilled < totalClaims && claimsCreated > 0:
-		conditions.MarkFalse(scvmmMachine, IPAddressClaimed,
-			IPAddressClaimsBeingCreatedReason, clusterv1.ConditionSeverityInfo,
-			"%d/%d claims being created", claimsCreated, totalClaims)
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status: metav1.ConditionFalse,
+			Type:   IPAddressClaimed,
+			Reason: IPAddressClaimsBeingCreatedReason,
+			Message: fmt.Sprintf(
+				"%d/%d claims being created",
+				claimsCreated,
+				totalClaims),
+		})
 	case claimsFulfilled < totalClaims && claimsCreated == 0:
-		conditions.MarkFalse(scvmmMachine, IPAddressClaimed,
-			WaitingForIPAddressReason, clusterv1.ConditionSeverityInfo,
-			"%d/%d claims being processed", totalClaims-claimsFulfilled, totalClaims)
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status: metav1.ConditionFalse,
+			Type:   IPAddressClaimed,
+			Reason: WaitingForIPAddressReason,
+			Message: fmt.Sprintf(
+				"%d/%d claims being processed",
+				totalClaims-claimsFulfilled,
+				totalClaims),
+		})
 	}
 	return nil
 }
@@ -209,7 +226,7 @@ func createOrPatchIPAddressClaim(ctx context.Context, c client.Client, scvmmMach
 		claim.Annotations[HostnameAnnotation] = hostname
 		claim.Annotations[DnsZoneAnnotation] = scvmmMachine.Spec.Networking.Domain
 
-		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup
+		claim.Spec.PoolRef.APIGroup = *poolRef.APIGroup
 		claim.Spec.PoolRef.Kind = poolRef.Kind
 		claim.Spec.PoolRef.Name = poolRef.Name
 		return nil
@@ -250,13 +267,13 @@ func (r *ScvmmMachineReconciler) deleteIPAddressClaims(ctx context.Context, scvm
 				if apierrors.IsNotFound(err) {
 					continue
 				}
-				return errors.Wrapf(err, fmt.Sprintf("failed to get IPAddressClaim %q to remove the finalizer", ipAddrClaimName))
+				return errors.Wrapf(err, "failed to get IPAddressClaim %q to remove the finalizer", ipAddrClaimName)
 			}
 
 			if controllerutil.RemoveFinalizer(ipAddrClaim, IPAddressClaimFinalizer) {
 				log.Info(fmt.Sprintf("Removing finalizer %s", IPAddressClaimFinalizer), "IPAddressClaim", klog.KObj(ipAddrClaim))
 				if err := r.Client.Update(ctx, ipAddrClaim); err != nil {
-					return errors.Wrapf(err, fmt.Sprintf("failed to update IPAddressClaim %s", klog.KObj(ipAddrClaim)))
+					return errors.Wrapf(err, "failed to update IPAddressClaim %s", klog.KObj(ipAddrClaim))
 				}
 			}
 		}

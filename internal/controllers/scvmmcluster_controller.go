@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -32,12 +33,12 @@ import (
 
 	"github.com/pkg/errors"
 	infrav1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 const (
-	ClusterCreated        clusterv1.ConditionType = "ClusterCreated"
-	ClusterDeletingReason                         = "ClusterDeleting"
+	ClusterCreated        = "ClusterCreated"
+	ClusterDeletingReason = "ClusterDeleting"
 
 	ClusterFinalizer = "scvmmcluster.finalizers.cluster.x-k8s.io"
 )
@@ -102,20 +103,11 @@ func (r *ScvmmClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 func patchScvmmCluster(ctx context.Context, patchHelper *patch.Helper, scvmmCluster *infrav1.ScvmmCluster) error {
-	// Always update the readyCondition by summarizing the state of other conditions.
-	conditions.SetSummary(scvmmCluster,
-		conditions.WithConditions(
-			ClusterCreated,
-		),
-		conditions.WithStepCounterIf(scvmmCluster.DeletionTimestamp.IsZero()),
-	)
-
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.
 	return patchHelper.Patch(
 		ctx,
 		scvmmCluster,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			clusterv1.ReadyCondition,
+		patch.WithOwnedConditions{Conditions: []string{
 			ClusterCreated,
 		}},
 	)
@@ -130,21 +122,26 @@ func (r *ScvmmClusterReconciler) reconcileNormal(ctx context.Context, scvmmClust
 		}
 	*/
 	// Copy failureDomains spec to status
-	failureDomains := make(clusterv1.FailureDomains)
+	failureDomains := make([]clusterv1.FailureDomain, 0, len(scvmmCluster.Spec.FailureDomains))
 	for key, fd := range scvmmCluster.Spec.FailureDomains {
-		failureDomains[key] = clusterv1.FailureDomainSpec{
-			ControlPlane: fd.ControlPlane,
+		failureDomains = append(failureDomains, clusterv1.FailureDomain{
+			Name:         key,
+			ControlPlane: &fd.ControlPlane,
 			Attributes: map[string]string{
 				"cloud":     fd.Cloud,
 				"hostGroup": fd.HostGroup,
 			},
-		}
+		})
 	}
 	scvmmCluster.Status.FailureDomains = failureDomains
 
 	// Mark the scvmmCluster ready
-	scvmmCluster.Status.Ready = true
-	conditions.MarkTrue(scvmmCluster, ClusterCreated)
+	scvmmCluster.Status.Initialization.Provisioned = true
+	conditions.Set(scvmmCluster, metav1.Condition{
+		Status:  metav1.ConditionTrue,
+		Type:    ClusterCreated,
+		Message: "Cluster Provisioned",
+	})
 
 	return ctrl.Result{}, nil
 }
@@ -154,7 +151,13 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	conditions.MarkFalse(scvmmCluster, ClusterCreated, ClusterDeletingReason, clusterv1.ConditionSeverityInfo, "")
+	conditions.Set(scvmmCluster, metav1.Condition{
+		Status:  metav1.ConditionFalse,
+		Type:    ClusterCreated,
+		Reason:  ClusterDeletingReason,
+		Message: "Cluster being deleted",
+	})
+
 	if err := patchScvmmCluster(ctx, patchHelper, scvmmCluster); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmCluster")
 	}
@@ -170,18 +173,19 @@ func (r *ScvmmClusterReconciler) reconcileDelete(ctx context.Context, scvmmClust
 // SetupWithManager sets up the controller with the Manager.
 func (r *ScvmmClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := ctrl.LoggerFrom(ctx)
-	clusterToScvmm, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.ScvmmClusterList{}, mgr.GetScheme())
+	scheme := mgr.GetScheme()
+	clusterToScvmm, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.ScvmmClusterList{}, scheme)
 	if err != nil {
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.ScvmmCluster{}).
 		WithOptions(options).
-		WithEventFilter(predicates.ResourceNotPaused(log)).
+		WithEventFilter(predicates.ResourceNotPaused(scheme, log)).
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToScvmm),
-			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
+			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureProvisioned(scheme, log)),
 		).
 		Complete(r)
 }

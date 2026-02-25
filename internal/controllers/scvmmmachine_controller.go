@@ -33,8 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -58,12 +58,9 @@ import (
 )
 
 const (
-	// Creation started
-	VmCreated clusterv1.ConditionType = "VmCreated"
-	// VM running
-	VmRunning clusterv1.ConditionType = "VmRunning"
-	// VM being deleted
-	VmDeleting clusterv1.ConditionType = "VmDeleting"
+	VmCreated  = "VmCreated"  // Creation started
+	VmRunning  = "VmRunning"  // VM running
+	VmDeleting = "VmDeleting" // VM being deleted
 
 	// Cluster-Api related statuses
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
@@ -204,7 +201,7 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if scvmmMachine.Spec.ProviderRef == nil || scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
 			// Fetch the Scvmm Cluster to get the providerRef.
 			scvmmClusterName := client.ObjectKey{
-				Namespace: cluster.Spec.InfrastructureRef.Namespace,
+				Namespace: cluster.Namespace,
 				Name:      cluster.Spec.InfrastructureRef.Name,
 			}
 			log.V(1).Info("Fetching scvmmcluster", "scvmmClusterName", scvmmClusterName)
@@ -216,12 +213,12 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			scvmmMachine.Spec.ProviderRef = scvmmCluster.Spec.ProviderRef
 			// Get cloud and hostgroup from failureDomains if needed
 			if scvmmMachine.Spec.Cloud == "" || scvmmMachine.Spec.HostGroup == "" {
-				if machine.Spec.FailureDomain == nil {
+				if machine.Spec.FailureDomain == "" {
 					return ctrl.Result{}, fmt.Errorf("missing failureDomain")
 				}
-				fd, ok := scvmmCluster.Spec.FailureDomains[*machine.Spec.FailureDomain]
+				fd, ok := scvmmCluster.Spec.FailureDomains[machine.Spec.FailureDomain]
 				if !ok {
-					return ctrl.Result{}, fmt.Errorf("unknown failureDomain %s", *machine.Spec.FailureDomain)
+					return ctrl.Result{}, fmt.Errorf("unknown failureDomain %s", machine.Spec.FailureDomain)
 				}
 				scvmmMachine.Spec.Cloud = fd.Cloud
 				scvmmMachine.Spec.HostGroup = fd.HostGroup
@@ -232,7 +229,8 @@ func (r *ScvmmMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
-		if !cluster.Status.InfrastructureReady {
+		if cluster.Status.Initialization.InfrastructureProvisioned == nil ||
+			*cluster.Status.Initialization.InfrastructureProvisioned == false {
 			log.Info("Waiting for ScvmmCluster Controller to create cluster infrastructure")
 			return r.patchReasonCondition(ctx, scvmmMachine, 0, nil, VmCreated, WaitingForClusterInfrastructureReason, "")
 		}
@@ -294,7 +292,11 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 		return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmCreated, "", "")
 	}
 	log.V(1).Info("Machine is there, fill in status")
-	conditions.MarkTrue(scvmmMachine, VmCreated)
+	conditions.Set(scvmmMachine, metav1.Condition{
+		Status:  metav1.ConditionTrue,
+		Type:    VmCreated,
+		Message: "VM Created",
+	})
 
 	// Check if scvmm server set static ip addresses
 	if vmNeedsStaticAddresses(scvmmMachine, vm) {
@@ -367,7 +369,7 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 	if vm.VMId != "" {
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	}
-	scvmmMachine.Status.Ready = (vm.Status == "Running")
+	scvmmMachine.Status.Initialization.Provisioned = (vm.Status == "Running")
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -400,7 +402,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, scvmmMachine *inf
 				return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to check if VMName already exists in SCVMM")
 			}
 			if len(vmIdsByName) > 0 {
-				return r.patchReasonCondition(ctx, scvmmMachine, 0, nil, VmCreated, VmFailedReason, fmt.Sprintf("VMName already exists in SCVMM, cannot use it; VMName: '%s', VMIDs: '%s'", vmName, strings.Join(vmIdsByName, ", ")))
+				return r.patchReasonCondition(ctx, scvmmMachine, 0, nil, VmCreated, VmFailedReason, "VMName already exists in SCVMM, cannot use it; VMName: '%s', VMIDs: '%s'", vmName, strings.Join(vmIdsByName, ", "))
 			}
 			scvmmMachine.Spec.VMName = vmName
 			return r.patchReasonCondition(ctx, scvmmMachine, 0, nil, VmCreated, VmCreatingReason, "Set VMName %s", vmName)
@@ -470,7 +472,7 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, scvmmMachine *inf
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	}
 	scvmmMachine.Spec.Id = vm.Id
-	scvmmMachine.Status.Ready = false
+	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -793,7 +795,7 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, scvmmMachine *
 	if err != nil {
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
 	}
-	scvmmMachine.Status.Ready = false
+	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -813,7 +815,7 @@ func (r *ScvmmMachineReconciler) setStaticAddresses(ctx context.Context, scvmmMa
 	if err != nil {
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to set static network ips")
 	}
-	scvmmMachine.Status.Ready = false
+	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -853,7 +855,7 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, cluster *
 	deviceFunction, ok := cloudInitDeviceTypeFunctions[provider.CloudInit.DeviceType]
 	if !ok {
 		log.Error(err, "Unknown devicetype "+provider.CloudInit.DeviceType)
-		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Unknown devicetype "+provider.CloudInit.DeviceType)
+		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Unknown devicetype %s", provider.CloudInit.DeviceType)
 	}
 	dataSecretName := ""
 	dataSecretNamespace := ""
@@ -866,7 +868,9 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, cluster *
 		dataSecretNamespace = scvmmMachine.Namespace
 	} else if machine != nil {
 		if machine.Spec.Bootstrap.DataSecretName == nil {
-			if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
+			if !util.IsControlPlaneMachine(machine) &&
+				(cluster.Status.Initialization.ControlPlaneInitialized == nil ||
+					*cluster.Status.Initialization.ControlPlaneInitialized == false) {
 				log.Info("Waiting for the control plane to be initialized")
 				return r.patchReasonCondition(ctx, scvmmMachine, 0, nil, VmCreated, WaitingForControlPlaneAvailableReason, "")
 			}
@@ -891,7 +895,12 @@ func (r *ScvmmMachineReconciler) addCloudInitToVM(ctx context.Context, cluster *
 		log.Error(err, "failed to create cloud init")
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, WaitingForBootstrapDataReason, "Failed to create cloud init data")
 	}
-	conditions.MarkFalse(scvmmMachine, VmRunning, VmStartingReason, clusterv1.ConditionSeverityInfo, "")
+	conditions.Set(scvmmMachine, metav1.Condition{
+		Status:  metav1.ConditionFalse,
+		Type:    VmRunning,
+		Reason:  VmStartingReason,
+		Message: "VM Starting",
+	})
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
 		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
@@ -943,9 +952,13 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 		scvmmMachine.Status.Hostname = vm.Hostname
 	}
 	log.V(1).Info("Running, set status true")
-	scvmmMachine.Status.Ready = true
+	scvmmMachine.Status.Initialization.Provisioned = true
 	scvmmMachine.Status.Backoff = nil
-	conditions.MarkTrue(scvmmMachine, VmRunning)
+	conditions.Set(scvmmMachine, metav1.Condition{
+		Status:  metav1.ConditionTrue,
+		Type:    VmRunning,
+		Message: "VM Running",
+	})
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
 		log.Error(err, "Failed to patch scvmmMachine", "scvmmmachine", scvmmMachine)
 		return ctrl.Result{}, err
@@ -989,7 +1002,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 				Name:      d.PersistentDisk.Disk.Name,
 			}
 			if err := r.Get(ctx, pdName, pd); err != nil {
-				return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to get persistent disk %d", i))
+				return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "failed to get persistent disk %d", i)
 			}
 			vd := vmDiskByLun(vm, i)
 			if vd != nil {
@@ -997,12 +1010,12 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 				pd.Spec.Path = vd.Path
 				pd.Spec.Filename = vd.Filename
 				if err := r.Update(ctx, pd); err != nil {
-					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "failed to update persistent disk %d", i)
 				}
 				if vd.Size != 0 {
 					pd.Status.Size = resource.NewQuantity(vd.Size, resource.BinarySI)
 					if err := r.Status().Update(ctx, pd); err != nil {
-						return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+						return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "failed to update persistent disk %d", i)
 					}
 				}
 				// Only run job when running or powered off
@@ -1013,7 +1026,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 				vm, err := sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "RemoveDiskFromVM -ID '%s' -LUN '%d'",
 					scvmmMachine.Spec.Id, i)
 				if err != nil {
-					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to remove persistent disk %d", i))
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "failed to remove persistent disk %d", i)
 				}
 				log.V(1).Info("Removing disk, requeue after 15 seconds")
 				return r.patchReasonCondition(ctx, scvmmMachine, 15, nil, VmDeleting, VmDeletingDisksReason, "%s %s", vm.Status, scvmmMachine.Spec.VMName)
@@ -1023,7 +1036,7 @@ func (r *ScvmmMachineReconciler) removePersistentDisks(ctx context.Context, scvm
 				scvmmMachine.Status.ModifiedTime = vm.ModifiedTime
 				pd.SetOwnerReferences(util.RemoveOwnerRef(pd.OwnerReferences, scvmmMachineOwnerReference(scvmmMachine, false)))
 				if err := r.Update(ctx, pd); err != nil {
-					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, fmt.Sprintf("failed to update persistent disk %d", i))
+					return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "failed to update persistent disk %d", i)
 				}
 				scvmmMachine.Spec.Disks[i].PersistentDisk.Disk = nil
 			}
@@ -1248,7 +1261,12 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, scvmmMachi
 		return ctrl.Result{}, nil
 	}
 	log.V(1).Info("Set running to false, doing deletion")
-	conditions.MarkFalse(scvmmMachine, VmRunning, VmDeletingReason, clusterv1.ConditionSeverityInfo, "")
+	conditions.Set(scvmmMachine, metav1.Condition{
+		Status:  metav1.ConditionFalse,
+		Type:    VmRunning,
+		Reason:  VmDeletingReason,
+		Message: "VM Deleting",
+	})
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to patch ScvmmMachine")
 	}
@@ -1291,21 +1309,31 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, scvmmMachi
 	}
 }
 
-func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine, requeue int32, err error, condition clusterv1.ConditionType, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
+func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine, requeue int32, err error, condition string, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	scvmmMachine.Status.Ready = false
+	scvmmMachine.Status.Initialization.Provisioned = false
 	if err != nil {
 		if message != "" {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, reason, message, messageargs...)
 		} else {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, reason, "%v", err)
 		}
-		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityError, message, messageargs...)
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status:  metav1.ConditionFalse,
+			Type:    condition,
+			Reason:  reason,
+			Message: fmt.Sprintf(message, messageargs...),
+		})
 	} else {
 		if message != "" {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeNormal, reason, message, messageargs...)
 		}
-		conditions.MarkFalse(scvmmMachine, condition, reason, clusterv1.ConditionSeverityInfo, message, messageargs...)
+		conditions.Set(scvmmMachine, metav1.Condition{
+			Status:  metav1.ConditionFalse,
+			Type:    condition,
+			Reason:  reason,
+			Message: fmt.Sprintf(message, messageargs...),
+		})
 	}
 
 	// Calculate incremental backoff
@@ -1367,23 +1395,12 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 }
 
 func patchScvmmMachine(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) error {
-	// Always update the readyCondition by summarizing the state of other conditions.
-	// A step counter is added to represent progress during the provisioning process (instead we are hiding the step counter during the deletion process).
-	conditions.SetSummary(scvmmMachine,
-		conditions.WithConditions(
-			VmCreated,
-			VmRunning,
-		),
-		conditions.WithStepCounterIf(scvmmMachine.DeletionTimestamp.IsZero()),
-	)
-
 	patchHelper := ctx.Value("patchHelper").(*patch.Helper)
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.
 	return patchHelper.Patch(
 		ctx,
 		scvmmMachine,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			clusterv1.ReadyCondition,
+		patch.WithOwnedConditions{Conditions: []string{
 			VmCreated,
 			VmRunning,
 		}},
@@ -1490,7 +1507,8 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		ExtraDebug = true
 	}
 	log := ctrl.LoggerFrom(ctx)
-	clusterToScvmmMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.ScvmmMachineList{}, mgr.GetScheme())
+	scheme := mgr.GetScheme()
+	clusterToScvmmMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.ScvmmMachineList{}, scheme)
 	if err != nil {
 		return err
 	}
@@ -1499,7 +1517,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		For(&infrav1.ScvmmMachine{}).
 		WithOptions(options).
 		WithEventFilter(predicate.And(
-			predicates.ResourceNotPaused(log),
+			predicates.ResourceNotPaused(scheme, log),
 			ownerOrGenerationChangedPredicate{log: log},
 		)).
 		Watches(
@@ -1513,7 +1531,7 @@ func (r *ScvmmMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToScvmmMachines),
-			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
+			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureProvisioned(scheme, log)),
 		).
 		Owns(&ipamv1.IPAddressClaim{}, builder.MatchEveryOwner).
 		Complete(r)

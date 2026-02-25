@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // ScvmmMachineSpec defines the desired state of ScvmmMachine
@@ -230,9 +230,12 @@ type DynamicMemory struct {
 
 // ScvmmMachineStatus defines the observed state of ScvmmMachine
 type ScvmmMachineStatus struct {
-	// Mandatory field, is machine ready
+	// Initialization.Provisioned denotes that the scvmm cluster (infrastructure) is ready.
 	// +optional
-	Ready bool `json:"ready,omitempty"`
+	Initialization struct {
+		// +optional
+		Provisioned bool `json:"provisioned,omitempty"`
+	} `json:"initialization,omitempty,omitzero"`
 	// Status string as given by SCVMM
 	// +optional
 	VMStatus string `json:"vmStatus,omitempty"`
@@ -253,7 +256,7 @@ type ScvmmMachineStatus struct {
 	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
 	// Conditions defines current service state of the ScvmmMachine.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// Backoff retry in seconds
 	// +optional
 	Backoff *ScvmmMachineBackoff `json:"backoff,omitempty"`
@@ -283,11 +286,11 @@ type ScvmmMachine struct {
 	Status ScvmmMachineStatus `json:"status,omitempty"`
 }
 
-func (c *ScvmmMachine) GetConditions() clusterv1.Conditions {
+func (c *ScvmmMachine) GetConditions() []metav1.Condition {
 	return c.Status.Conditions
 }
 
-func (c *ScvmmMachine) SetConditions(conditions clusterv1.Conditions) {
+func (c *ScvmmMachine) SetConditions(conditions []metav1.Condition) {
 	c.Status.Conditions = conditions
 }
 

@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // ScvmmNamePoolSpec defines the desired state of ScvmmNamePool
@@ -42,7 +41,7 @@ type VmNameRange struct {
 type ScvmmNamePoolStatus struct {
 	// Conditions defines current service state of the ScvmmNamePool.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// List of vmnames in use by ScvmmMachines
 	// +optional
 	VMNameOwners map[string]string `json:"vmNameOwners,omitempty"`

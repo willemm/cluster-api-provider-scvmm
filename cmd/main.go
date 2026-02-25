@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"os"
 
@@ -28,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/spf13/pflag"
 	infrastructurev1alpha1 "github.com/willemm/cluster-api-provider-scvmm/api/v1alpha1"
 	"github.com/willemm/cluster-api-provider-scvmm/internal/controllers"
 	//+kubebuilder:scaffold:imports
@@ -57,24 +57,16 @@ func init() {
 }
 
 func main() {
-	var diagnosticsOptions flags.DiagnosticsOptions
+	var managerOptions flags.ManagerOptions
 	var enableLeaderElection bool
 	var probeAddr string
-	var enableHTTP2 bool
 	var machineConcurrency int
 	var clusterConcurrency int
-	flag.StringVar(&diagnosticsOptions.MetricsBindAddr, "metrics-bind-address", "", "The address the metric endpoint binds to (deprecated).")
-	flag.StringVar(&diagnosticsOptions.DiagnosticsAddress, "diagnostics-address", ":8443",
-		"The address the diagnostics endpoint binds to.")
-	flag.BoolVar(&diagnosticsOptions.InsecureDiagnostics, "insecure-diagnostics", false,
-		"If set the diagnostics endpoint is served insecurely")
-
+	flags.AddManagerOptions(pflag.CommandLine, &managerOptions)
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	// Keep to 1 because of ntlm concurrency issue
 	flag.IntVar(&machineConcurrency, "machine-concurrency", 1, "The number of scvmm machines to handle concurrently.")
 	flag.IntVar(&clusterConcurrency, "cluster-concurrency", 1, "The number of scvmm cluster objects to handle concurrently.")
@@ -82,24 +74,16 @@ func main() {
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// if the enable-http2 flag is false (the default), http/2 should be disabled
-	// due to its vulnerabilities. More specifically, disabling http/2 will
-	// prevent from being vulnerable to the HTTP/2 Stream Cancelation and
-	// Rapid Reset CVEs. For more information see:
-	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
-	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	tlsOpts := []func(*tls.Config){}
-	if !enableHTTP2 {
-		tlsOpts = append(tlsOpts, disableHTTP2)
+	tlsOpts, metricsOpts, err := flags.GetManagerOptions(managerOptions)
+	if err != nil {
+		setupLog.Error(err, "unable to get manager options")
+		os.Exit(1)
 	}
 
 	webhookServer := webhook.NewServer(webhook.Options{
@@ -109,7 +93,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                flags.GetDiagnosticsOptions(diagnosticsOptions),
+		Metrics:                *metricsOpts,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
