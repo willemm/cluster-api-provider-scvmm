@@ -295,6 +295,7 @@ func (r *ScvmmMachineReconciler) reconcileNormal(ctx context.Context, cluster *c
 	conditions.Set(scvmmMachine, metav1.Condition{
 		Status:  metav1.ConditionTrue,
 		Type:    VmCreated,
+		Reason:  VmCreated,
 		Message: "VM Created",
 	})
 
@@ -957,6 +958,7 @@ func (r *ScvmmMachineReconciler) getVMInfo(ctx context.Context, scvmmMachine *in
 	conditions.Set(scvmmMachine, metav1.Condition{
 		Status:  metav1.ConditionTrue,
 		Type:    VmRunning,
+		Reason:  VmRunning,
 		Message: "VM Running",
 	})
 	if err := patchScvmmMachine(ctx, scvmmMachine); err != nil {

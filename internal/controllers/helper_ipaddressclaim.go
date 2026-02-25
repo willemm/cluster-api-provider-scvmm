@@ -159,6 +159,7 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 		conditions.Set(scvmmMachine, metav1.Condition{
 			Status:  metav1.ConditionTrue,
 			Type:    IPAddressClaimed,
+			Reason:  IPAddressClaimed,
 			Message: "Claims finished",
 		})
 	case claimsFulfilled < totalClaims && claimsCreated > 0:

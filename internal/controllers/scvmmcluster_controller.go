@@ -140,6 +140,7 @@ func (r *ScvmmClusterReconciler) reconcileNormal(ctx context.Context, scvmmClust
 	conditions.Set(scvmmCluster, metav1.Condition{
 		Status:  metav1.ConditionTrue,
 		Type:    ClusterCreated,
+		Reason:  ClusterCreated,
 		Message: "Cluster Provisioned",
 	})
 
