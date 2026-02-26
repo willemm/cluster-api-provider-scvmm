@@ -1398,7 +1398,6 @@ func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmm
 
 func patchScvmmMachine(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) error {
 	patchHelper := ctx.Value("patchHelper").(*patch.Helper)
-	scvmmMachine.SetConditions(scvmmMachine.GetConditions())
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.
 	return patchHelper.Patch(
 		ctx,

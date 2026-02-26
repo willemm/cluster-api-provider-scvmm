@@ -87,11 +87,6 @@ func (c *ScvmmCluster) GetConditions() []metav1.Condition {
 }
 
 func (c *ScvmmCluster) SetConditions(conditions []metav1.Condition) {
-	for _, c := range conditions {
-		if c.Reason == "" {
-			c.Reason = "NoReasonReported"
-		}
-	}
 	c.Status.Conditions = conditions
 }
 

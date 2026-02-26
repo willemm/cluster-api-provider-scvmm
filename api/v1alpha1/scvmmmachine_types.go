@@ -293,11 +293,6 @@ func (c *ScvmmMachine) GetConditions() []metav1.Condition {
 }
 
 func (c *ScvmmMachine) SetConditions(conditions []metav1.Condition) {
-	for _, c := range conditions {
-		if c.Reason == "" {
-			c.Reason = "NoReasonReported"
-		}
-	}
 	c.Status.Conditions = conditions
 }
 

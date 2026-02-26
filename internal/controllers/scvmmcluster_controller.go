@@ -104,7 +104,6 @@ func (r *ScvmmClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 func patchScvmmCluster(ctx context.Context, patchHelper *patch.Helper, scvmmCluster *infrav1.ScvmmCluster) error {
 	// Patch the object, ignoring conflicts on the conditions owned by this controller.
-	scvmmCluster.SetConditions(scvmmCluster.GetConditions())
 	return patchHelper.Patch(
 		ctx,
 		scvmmCluster,
