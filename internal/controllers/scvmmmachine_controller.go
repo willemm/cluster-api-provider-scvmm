@@ -370,7 +370,9 @@ func (r *ScvmmMachineReconciler) getVM(ctx context.Context, scvmmMachine *infrav
 	if vm.VMId != "" {
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	}
-	scvmmMachine.Status.Initialization.Provisioned = (vm.Status == "Running")
+	if vm.Status == "Running" {
+		scvmmMachine.Status.Initialization.Provisioned = true
+	}
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -473,7 +475,6 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, scvmmMachine *inf
 		scvmmMachine.Spec.ProviderID = "scvmm://" + vm.VMId
 	}
 	scvmmMachine.Spec.Id = vm.Id
-	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -796,7 +797,6 @@ func (r *ScvmmMachineReconciler) expandDisks(ctx context.Context, scvmmMachine *
 	if err != nil {
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to expand disks")
 	}
-	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -816,7 +816,6 @@ func (r *ScvmmMachineReconciler) setStaticAddresses(ctx context.Context, scvmmMa
 	if err != nil {
 		return r.patchReasonCondition(ctx, scvmmMachine, 0, err, VmCreated, VmFailedReason, "Failed to set static network ips")
 	}
-	scvmmMachine.Status.Initialization.Provisioned = false
 	scvmmMachine.Status.VMStatus = vm.Status
 	scvmmMachine.Status.BiosGuid = vm.BiosGuid
 	scvmmMachine.Status.CreationTime = vm.CreationTime
@@ -1313,7 +1312,6 @@ func (r *ScvmmMachineReconciler) reconcileDelete(ctx context.Context, scvmmMachi
 
 func (r *ScvmmMachineReconciler) patchReasonCondition(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine, requeue int32, err error, condition string, reason string, message string, messageargs ...interface{}) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	scvmmMachine.Status.Initialization.Provisioned = false
 	if err != nil {
 		if message != "" {
 			r.recorder.Eventf(scvmmMachine, corev1.EventTypeWarning, reason, message, messageargs...)
