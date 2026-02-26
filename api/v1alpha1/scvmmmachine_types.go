@@ -307,11 +307,11 @@ type ScvmmCondition struct {
 	// Producers of specific condition types may define expected values and meanings for this field,
 	// and whether the values are considered a guaranteed API.
 	// The value should be a CamelCase string.
-	// This field may not be empty.
+	// This field may be empty.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:validation:MinLength=0
-	// +kubebuilder:validation:Pattern=`^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$`
+	// +kubebuilder:validation:Pattern=`(^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?)?$`
 	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
 	// message is a human readable message indicating details about the transition.
 	// This may be an empty string.

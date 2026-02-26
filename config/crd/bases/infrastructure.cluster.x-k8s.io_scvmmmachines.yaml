@@ -497,10 +497,10 @@ spec:
                         Producers of specific condition types may define expected values and meanings for this field,
                         and whether the values are considered a guaranteed API.
                         The value should be a CamelCase string.
-                        This field may not be empty.
+                        This field may be empty.
                       maxLength: 1024
                       minLength: 0
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      pattern: (^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?)?$
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
