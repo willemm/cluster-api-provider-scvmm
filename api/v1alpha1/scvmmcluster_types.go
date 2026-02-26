@@ -58,7 +58,7 @@ type ScvmmClusterStatus struct {
 
 	// Conditions defines current service state of the ScvmmCluster.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions []ScvmmCondition `json:"conditions,omitempty"`
 
 	// FailureDomains is a slice of failure domain objects copied from the spec
 	// +optional
@@ -83,11 +83,19 @@ type ScvmmCluster struct {
 }
 
 func (c *ScvmmCluster) GetConditions() []metav1.Condition {
-	return c.Status.Conditions
+	mc := make([]metav1.Condition, len(c.Status.Conditions))
+	for i := range c.Status.Conditions {
+		mc[i] = metav1.Condition(c.Status.Conditions[i])
+	}
+	return mc
 }
 
 func (c *ScvmmCluster) SetConditions(conditions []metav1.Condition) {
-	c.Status.Conditions = conditions
+	sc := make([]ScvmmCondition, len(conditions))
+	for i := range conditions {
+		sc[i] = ScvmmCondition(conditions[i])
+	}
+	c.Status.Conditions = sc
 }
 
 //+kubebuilder:object:root=true
