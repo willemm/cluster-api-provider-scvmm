@@ -112,7 +112,7 @@ func (r *ScvmmMachineReconciler) reconcileIPAddressClaims(ctx context.Context, s
 					continue
 				}
 				gateway = ipAddr.Spec.Gateway
-				addresses[poolRefIdx] = fmt.Sprintf("%s/%d", ipAddr.Spec.Address, ipAddr.Spec.Prefix)
+				addresses[poolRefIdx] = fmt.Sprintf("%s/%d", ipAddr.Spec.Address, *ipAddr.Spec.Prefix)
 				claimsFulfilled++
 			}
 
