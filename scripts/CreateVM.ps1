@@ -100,7 +100,7 @@ try {
     DynamicMemoryEnabled = $false
   }
   $optionsobject = $vmoptions | ConvertFrom-Json
-  foreach ($optkey in @('Description','StartAction','StopAction','CPULimitForMigration','CPULimitFunctionality','EnableNestedVirtualization','CheckpointType')) {
+  foreach ($optkey in @('Description','StartAction','StopAction','CPULimitForMigration','CPULimitFunctionality','EnableNestedVirtualization','CheckpointType','HAVMPriority','CPURelativeWeight','CPUReserve','EnableBackup','BlockDynamicOptimization')) {
       if ($optionsobject.$optkey -ne $null) { $vmargs[$optkey] = $optionsobject.$optkey }
   }
   if ($availabilityset) {
