@@ -459,7 +459,11 @@ func createWinrmCmd(provider *infrav1.ScvmmProviderSpec, exechost string, log lo
 
 func createWinrmConnection(provider *infrav1.ScvmmProviderSpec, exechost string, log logr.Logger) (*winrm.Client, error) {
 	defer winrmTimer("CreateConnection")()
-	endpoint := winrm.NewEndpoint(exechost, 5985, false, false, nil, nil, nil, 60)
+	timeout := provider.KeepAliveSeconds
+	if timeout == 0 {
+		timeout = 60
+	}
+	endpoint := winrm.NewEndpoint(exechost, 5985, false, false, nil, nil, nil, time.Second*time.Duration(timeout))
 	// Don't use winrm.DefaultParameters here because of concurrency issues
 	params := winrm.NewParameters("PT60S", "en-US", 153600)
 	params.RequestOptions["WINRS_NOPROFILE"] = "TRUE"

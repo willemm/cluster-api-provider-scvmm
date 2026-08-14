@@ -42,6 +42,9 @@ type ScvmmProviderSpec struct {
 	// How long to keep winrm connections to scvmm alive
 	// Default 20 seconds
 	KeepAliveSeconds int `json:"keepAliveSeconds,omitempty"`
+	// Timeout setting on winrm connection
+	// Default 60 seconds
+	TimeoutSeconds int `json:"timeoutSeconds,omitempty"`
 	// Settings that define how to pass cloud-init data
 	// +optional
 	CloudInit ScvmmCloudInitSpec `json:"cloudInit,omitempty"`

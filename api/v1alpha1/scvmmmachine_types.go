@@ -130,6 +130,30 @@ type VmOptions struct {
 	// +kubebuilder:default:=Standard
 	// +kubebuilder:validation:Enum=Disabled;Production;ProductionOnly;Standard
 	CheckpointType string `json:"checkpointType,omitempty"`
+	// Virtual Machine Priority
+	// This setting assigns a priority to be used when the virtual machines
+	// are started or placed on a node
+	// +optional
+	HAVMPriority int `json:"havmPriority,omitempty"`
+	// CPU Priority
+	// Assign a priority for the virtual machine when allocating CPU resources to the host
+	// +optional
+	CPURelativeWeight int `json:"cpuRelativeWeight,omitempty"`
+	// Reserve CPU Cycles (%)
+	// Specifies the minimum percentage of the resources of a single CPU
+	// on the host to allocate to a virtual machine.
+	// The percentage of CPU capacity that is available to the virtual machine
+	// is never less than this percentage.
+	// +optional
+	CPUReserve int `json:"cpuReserve,omitempty"`
+	// Enable hyper-v service backup (volume snapshot)
+	// +optional
+	EnableBackup *bool `json:"enableBackup,omitempty"`
+	// Exclude virtual machine from optimization actions
+	// Use this option to prevent the virtual machine from being migrated
+	// by PRO or dynamic optimization
+	// +optional
+	BlockDynamicOptimization *bool `json:"blockDynamicOptimization"`
 }
 
 // TODO: Mutually exclusive required field sets

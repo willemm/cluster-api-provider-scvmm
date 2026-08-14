@@ -373,6 +373,12 @@ spec:
               vmOptions:
                 description: Options for New-SCVirtualMachine
                 properties:
+                  blockDynamicOptimization:
+                    description: |-
+                      Exclude virtual machine from optimization actions
+                      Use this option to prevent the virtual machine from being migrated
+                      by PRO or dynamic optimization
+                    type: boolean
                   checkpointType:
                     default: Standard
                     description: CheckpointType
@@ -388,12 +394,34 @@ spec:
                   cpuLimitFunctionality:
                     description: CPULimitFunctionality
                     type: boolean
+                  cpuRelativeWeight:
+                    description: |-
+                      CPU Priority
+                      Assign a priority for the virtual machine when allocating CPU resources to the host
+                    type: integer
+                  cpuReserve:
+                    description: |-
+                      Reserve CPU Cycles (%)
+                      Specifies the minimum percentage of the resources of a single CPU
+                      on the host to allocate to a virtual machine.
+                      The percentage of CPU capacity that is available to the virtual machine
+                      is never less than this percentage.
+                    type: integer
                   description:
                     description: Description
                     type: string
+                  enableBackup:
+                    description: Enable hyper-v service backup (volume snapshot)
+                    type: boolean
                   enableNestedVirtualization:
                     description: EnableNestedVirtualization
                     type: boolean
+                  havmPriority:
+                    description: |-
+                      Virtual Machine Priority
+                      This setting assigns a priority to be used when the virtual machines
+                      are started or placed on a node
+                    type: integer
                   startAction:
                     description: Start Action
                     enum:

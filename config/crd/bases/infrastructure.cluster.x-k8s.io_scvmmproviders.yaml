@@ -113,6 +113,11 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              timeoutSeconds:
+                description: |-
+                  Timeout setting on winrm connection
+                  Default 60 seconds
+                type: integer
             required:
             - scvmmHost
             type: object
