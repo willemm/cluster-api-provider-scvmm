@@ -485,11 +485,16 @@ func (r *ScvmmMachineReconciler) createVM(ctx context.Context, scvmmMachine *inf
 func (r *ScvmmMachineReconciler) setVMProperties(ctx context.Context, scvmmMachine *infrav1.ScvmmMachine) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	custompropertyjson, err := json.Marshal(scvmmMachine.Spec.CustomProperty)
+	var optionsjson []byte
 	if err == nil {
-		_, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s'",
+		optionsjson, err = json.Marshal(scvmmMachine.Spec.VMOptions)
+	}
+	if err == nil {
+		_, err = sendWinrmCommand(log, scvmmMachine.Spec.ProviderRef, "SetVMProperties -ID '%s' -CustomProperty '%s' -Tag '%s' -VMOptions '%s'",
 			escapeSingleQuotes(scvmmMachine.Spec.Id),
 			escapeSingleQuotes(string(custompropertyjson)),
 			escapeSingleQuotes(scvmmMachine.Spec.Tag),
+			escapeSingleQuotes(string(optionsjson)),
 		)
 	}
 	if err != nil {

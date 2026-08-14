@@ -145,7 +145,7 @@ type VmOptions struct {
 	// The percentage of CPU capacity that is available to the virtual machine
 	// is never less than this percentage.
 	// +optional
-	CPUReserve int `json:"cpuReserve,omitempty"`
+	CPUCyclesReservePercent int `json:"cpuCyclesReservePercent,omitempty"`
 	// Enable hyper-v service backup (volume snapshot)
 	// +optional
 	EnableBackup *bool `json:"enableBackup,omitempty"`

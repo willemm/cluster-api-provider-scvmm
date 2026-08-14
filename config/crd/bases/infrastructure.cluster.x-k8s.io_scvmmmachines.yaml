@@ -388,6 +388,14 @@ spec:
                     - ProductionOnly
                     - Standard
                     type: string
+                  cpuCyclesReservePercent:
+                    description: |-
+                      Reserve CPU Cycles (%)
+                      Specifies the minimum percentage of the resources of a single CPU
+                      on the host to allocate to a virtual machine.
+                      The percentage of CPU capacity that is available to the virtual machine
+                      is never less than this percentage.
+                    type: integer
                   cpuLimitForMigration:
                     description: CPULimitForMigration
                     type: boolean
@@ -398,14 +406,6 @@ spec:
                     description: |-
                       CPU Priority
                       Assign a priority for the virtual machine when allocating CPU resources to the host
-                    type: integer
-                  cpuReserve:
-                    description: |-
-                      Reserve CPU Cycles (%)
-                      Specifies the minimum percentage of the resources of a single CPU
-                      on the host to allocate to a virtual machine.
-                      The percentage of CPU capacity that is available to the virtual machine
-                      is never less than this percentage.
                     type: integer
                   description:
                     description: Description

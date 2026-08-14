@@ -1,4 +1,4 @@
-param($id, $tag, $customproperty)
+param($id, $tag, $customproperty, $vmoptions)
 try {
   $vm = Get-SCVirtualMachine -ID $id
   if (-not $vm) {
@@ -8,8 +8,16 @@ try {
     return VMToJson $vm "Machine is busy"
   }
 
+  $vmargs = @{}
+  $optionsobject = $vmoptions | ConvertFrom-Json
+  foreach ($optkey in @('HAVMPriority','EnableBackup')) {
+    if ($optionsobject.$optkey -ne $null) { $vmargs[$optkey] = $optionsobject.$optkey }
+  }
   if ($tag) {
-    Set-SCVirtualMachine -VM $vm -Tag $tag -RunAsynchronously -ErrorAction Stop | Out-Null
+    $vmargs['Tag'] = $tag
+  }
+  if ($vmargs) {
+    Set-SCVirtualMachine -VM $vm @vmargs -RunAsynchronously -ErrorAction Stop | Out-Null
   }
   if ($customproperty) {
     $properties = $customproperty | ConvertFrom-Json
